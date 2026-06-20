@@ -1,0 +1,23 @@
+{{ define "main" }}
+<div class="container fadeup">
+
+  <div class="blog-head">
+    <div class="section__head">
+      <h2><span class="cmt">#</span> {{ .Title | lower }}</h2>
+      <div class="rule"></div>
+    </div>
+    <div class="prompt" style="margin-bottom:6px">{{ i18n "prompt_grep" }} "#{{ .Title | lower }}" ~/blog</div>
+    <p>{{ i18n "posts_tagged" (dict "count" (len .Pages)) }} <strong style="color:var(--accent)">#{{ .Title | lower }}</strong>. <a class="back-link" href="{{ "tags/" | relLangURL }}">{{ i18n "see_all_tags" }} →</a></p>
+  </div>
+
+  {{ $paginator := .Paginate .Pages }}
+  <div class="stack" style="padding:30px 0">
+    {{ range $paginator.Pages }}
+      {{ partial "post-card.html" . }}
+    {{ end }}
+  </div>
+
+  {{ partial "pager.html" $paginator }}
+
+</div>
+{{ end }}

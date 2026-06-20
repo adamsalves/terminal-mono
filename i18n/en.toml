@@ -1,0 +1,119 @@
+# UI strings — English (default / fallback language)
+
+# nav + section labels
+[about]
+other = "about"
+[projects]
+other = "projects"
+[experience]
+other = "experience"
+[contact]
+other = "contact"
+[blog]
+other = "blog"
+[tags]
+other = "tags"
+
+# a11y
+[skip_to_content]
+other = "Skip to content"
+[menu_open]
+other = "Open menu"
+[aria_terminal]
+other = "Intro terminal"
+[aria_pagination]
+other = "Pagination"
+[aria_language]
+other = "Language"
+
+# hero
+[hero_intro]
+other = "hi, my name is"
+[view_projects]
+other = "view projects"
+
+# projects
+[featured_repositories]
+other = "featured repositories"
+[prompt_projects]
+other = "$ ls ~/projects --featured"
+[link_code]
+other = "code"
+[link_site]
+other = "site"
+[link_docs]
+other = "docs"
+[link_default]
+other = "link"
+
+# about
+[prompt_skills]
+other = "$ cat ~/skills.txt"
+
+# contact
+[contact_title]
+other = "Let's talk?"
+[prompt_contact]
+other = "$ contact --send"
+[contact_btn]
+other = "send email"
+
+# footer
+[made_with]
+other = "made with"
+
+# blog list
+[prompt_blog_posts]
+other = "$ ls ~/blog --posts"
+[blog_intro]
+other = "Notes on front-end development — JavaScript, Vue.js, React, testing, and the behind-the-scenes of my projects."
+[no_posts]
+other = "No posts published yet."
+[check_back]
+other = "check back soon."
+
+# post card / single
+[min_read]
+other = "min read"
+[read_more]
+other = "read"
+[back_to_blog]
+other = "back to blog"
+[toc_label]
+other = "$ cat toc.txt"
+[share_label]
+other = "share"
+[copy_link]
+other = "copy link"
+[copied]
+other = "copied!"
+
+# pagination
+[pager_prev]
+other = "previous"
+[pager_next]
+other = "next"
+
+# taxonomy
+[prompt_tags]
+other = "$ ls ~/tags --all"
+[prompt_grep]
+other = "$ grep -rl"
+[posts_tagged]
+other = "{{ .count }} post(s) tagged"
+[see_all_tags]
+other = "see all tags"
+[browse_by_topic]
+other = "Browse posts by topic."
+[no_tags]
+other = "No tags yet."
+
+# 404
+[nf_error]
+other = "error: the page you requested does not exist (or has moved)."
+[nf_cmd_cat]
+other = "cat page.txt"
+[nf_back_home]
+other = "back home"
+[nf_go_blog]
+other = "go to the blog"

@@ -1,0 +1,14 @@
+# Demo deploy of the exampleSite on Netlify.
+# The symlink injects the theme (repo root) into exampleSite/themes/terminal-mono,
+# so it works regardless of the cloned directory name.
+[build]
+  publish = "exampleSite/public"
+  command = "mkdir -p exampleSite/themes && ln -sfn \"$PWD\" exampleSite/themes/terminal-mono && hugo --source exampleSite --gc --minify -b \"$DEPLOY_PRIME_URL\""
+
+[build.environment]
+  HUGO_VERSION = "0.163.3"
+  HUGO_ENV = "production"
+
+[context.production.environment]
+  HUGO_ENV = "production"
+  HUGO_ENABLEGITINFO = "true"

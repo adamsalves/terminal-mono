@@ -1,0 +1,50 @@
+{{- $hero := site.Params.hero -}}
+{{- $skills := site.Params.about.skills.items -}}
+{{- $loc := site.Params.hero.location -}}
+<section id="top" class="container">
+  <div class="hero">
+
+    {{/* terminal — filled by js/terminal.js from the data-* attributes (degrades to empty without JS) */}}
+    <div class="term">
+      <div class="term__bar">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="term__title">{{ site.Params.terminalUser | default "adams@portfolio" }}: ~</span>
+      </div>
+      <pre id="hero-term" class="term__body" aria-label="{{ i18n "aria_terminal" }}"
+        data-user="{{ site.Params.terminalUser | default "adams@portfolio" }}"
+        data-name="{{ site.Params.title }}"
+        data-role="{{ $hero.subtitle }}"
+        data-loc="{{ $loc }}"
+        data-stack="{{ delimit (first 6 $skills) " · " }}"
+        data-projects="{{ range $i, $p := site.Params.projects.items }}{{ if $i }}   {{ end }}{{ $p.repo | default ($p.title | urlize) }}/{{ end }}"></pre>
+    </div>
+
+    {{/* identity */}}
+    <div class="hero__id fadeup">
+      <div class="hero__intro">// {{ $hero.intro | default (i18n "hero_intro") }}</div>
+      <h1>{{ site.Params.title }}</h1>
+      <div class="hero__role">&gt; {{ $hero.subtitle }}</div>
+      <p class="hero__bio">{{ $hero.content }}</p>
+
+      <div class="btn-row">
+        <a class="btn btn--solid" href="#projects">{{ i18n "view_projects" }} →</a>
+        {{ with site.Params.contact.btnLink }}<a class="btn btn--ghost" href="{{ . }}">email</a>{{ end }}
+      </div>
+
+      <div class="social">
+        {{ range $i, $s := $hero.socialLinks.fontAwesomeIcons }}
+          {{- $label := "link" -}}
+          {{- $ext := true -}}
+          {{- if in $s.icon "github" }}{{ $label = "github" }}{{ end -}}
+          {{- if in $s.icon "linkedin" }}{{ $label = "linkedin" }}{{ end -}}
+          {{- if in $s.icon "twitter" }}{{ $label = "twitter" }}{{ end -}}
+          {{- if or (in $s.icon "x-twitter") (eq $s.icon "fab fa-x-twitter") }}{{ $label = "x" }}{{ end -}}
+          {{- if in $s.icon "envelope" }}{{ $label = "email" }}{{ $ext = false }}{{ end -}}
+          {{ if $i }}<span class="sep" aria-hidden="true">·</span>{{ end }}
+          <a href="{{ $s.url }}"{{ if $ext }} target="_blank" rel="noopener noreferrer"{{ end }}>{{ $label }}</a>
+        {{ end }}
+      </div>
+    </div>
+
+  </div>
+</section>

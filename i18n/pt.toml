@@ -1,0 +1,119 @@
+# Strings de UI — Português
+
+# nav + rótulos de seção
+[about]
+other = "sobre"
+[projects]
+other = "projetos"
+[experience]
+other = "experiência"
+[contact]
+other = "contato"
+[blog]
+other = "blog"
+[tags]
+other = "tags"
+
+# acessibilidade
+[skip_to_content]
+other = "Pular para o conteúdo"
+[menu_open]
+other = "Abrir menu"
+[aria_terminal]
+other = "Terminal de apresentação"
+[aria_pagination]
+other = "Paginação"
+[aria_language]
+other = "Idioma"
+
+# hero
+[hero_intro]
+other = "olá, meu nome é"
+[view_projects]
+other = "ver projetos"
+
+# projetos
+[featured_repositories]
+other = "repositórios em destaque"
+[prompt_projects]
+other = "$ ls ~/projetos --featured"
+[link_code]
+other = "código"
+[link_site]
+other = "site"
+[link_docs]
+other = "docs"
+[link_default]
+other = "link"
+
+# sobre
+[prompt_skills]
+other = "$ cat ~/skills.txt"
+
+# contato
+[contact_title]
+other = "Vamos conversar?"
+[prompt_contact]
+other = "$ contato --enviar"
+[contact_btn]
+other = "enviar e-mail"
+
+# rodapé
+[made_with]
+other = "feito com"
+
+# lista do blog
+[prompt_blog_posts]
+other = "$ ls ~/blog --posts"
+[blog_intro]
+other = "Notas sobre desenvolvimento Front-End — JavaScript, Vue.js, React, testes e os bastidores dos meus projetos."
+[no_posts]
+other = "Nenhum post publicado ainda."
+[check_back]
+other = "volte em breve."
+
+# card de post / post único
+[min_read]
+other = "min de leitura"
+[read_more]
+other = "ler"
+[back_to_blog]
+other = "voltar ao blog"
+[toc_label]
+other = "$ cat sumario.txt"
+[share_label]
+other = "compartilhar"
+[copy_link]
+other = "copiar link"
+[copied]
+other = "copiado!"
+
+# paginação
+[pager_prev]
+other = "anteriores"
+[pager_next]
+other = "próximos"
+
+# taxonomia
+[prompt_tags]
+other = "$ ls ~/tags --all"
+[prompt_grep]
+other = "$ grep -rl"
+[posts_tagged]
+other = "{{ .count }} post(s) marcado(s) com"
+[see_all_tags]
+other = "ver todas as tags"
+[browse_by_topic]
+other = "Navegue pelos posts por assunto."
+[no_tags]
+other = "Nenhuma tag ainda."
+
+# 404
+[nf_error]
+other = "erro: a página que você procurou não existe (ou foi movida)."
+[nf_cmd_cat]
+other = "cat pagina.txt"
+[nf_back_home]
+other = "voltar ao início"
+[nf_go_blog]
+other = "ir para o blog"

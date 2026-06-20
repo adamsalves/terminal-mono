@@ -1,0 +1,22 @@
+{{ define "main" }}
+<div class="container fadeup">
+
+  <div class="blog-head">
+    <div class="section__head">
+      <h2><span class="cmt">//</span> {{ .Title | default (i18n "tags") | lower }}</h2>
+      <div class="rule"></div>
+    </div>
+    <div class="prompt" style="margin-bottom:6px">{{ i18n "prompt_tags" }}</div>
+    <p>{{ i18n "browse_by_topic" }}</p>
+  </div>
+
+  <div class="tag-cloud">
+    {{ range .Data.Terms.ByCount }}
+      <a class="tag-chip" href="{{ .Page.RelPermalink }}"># {{ .Page.Title | lower }} <span>{{ .Count }}</span></a>
+    {{ else }}
+      <p style="color:var(--dim)">{{ i18n "no_tags" }}</p>
+    {{ end }}
+  </div>
+
+</div>
+{{ end }}

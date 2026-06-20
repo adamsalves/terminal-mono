@@ -1,0 +1,17 @@
+{{/* Language switcher. Links to the translated page when it exists,
+     otherwise to the target language's home. Hidden on single-language sites. */}}
+{{- if gt (len hugo.Sites) 1 -}}
+{{- $page := . -}}
+<div class="lang-switch" aria-label="{{ i18n "aria_language" }}">
+  {{- range hugo.Sites -}}
+    {{- $s := . -}}
+    {{- $href := .Home.RelPermalink -}}
+    {{- range $page.AllTranslations -}}{{- if eq .Language.Lang $s.Language.Lang -}}{{- $href = .RelPermalink -}}{{- end -}}{{- end -}}
+    {{- if eq $s.Language.Lang $page.Language.Lang -}}
+      <span class="is-active" aria-current="true">{{ $s.Language.Lang | upper }}</span>
+    {{- else -}}
+      <a href="{{ $href }}" hreflang="{{ $s.Language.Lang }}">{{ $s.Language.Lang | upper }}</a>
+    {{- end -}}
+  {{- end -}}
+</div>
+{{- end -}}

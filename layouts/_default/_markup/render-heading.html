@@ -1,0 +1,4 @@
+{{- $prefix := "" -}}
+{{- if or (eq .Level 2) (eq .Level 3) }}{{ $prefix = "<span class=\"cmt\">#</span> " }}{{ end -}}
+<h{{ .Level }} id="{{ .Anchor }}"{{ with .Attributes.class }} class="{{ . }}"{{ end }}>{{ $prefix | safeHTML }}{{ .Text | safeHTML }}</h{{ .Level }}>
+{{- /* */ -}}

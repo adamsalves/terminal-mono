@@ -1,0 +1,28 @@
+{{ define "main" }}
+{{- $home := "/" | relLangURL -}}
+{{- $user := site.Params.terminalUser | default "adams@portfolio" -}}
+<div class="container">
+  <div class="notfound fadeup">
+
+    <h1>404</h1>
+    <p class="sub">$ cd ./404 &nbsp;→&nbsp; <span style="color:var(--accent)">no such file or directory</span></p>
+
+    <div class="term">
+      <div class="term__bar">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="term__title">{{ $user }}: ~</span>
+      </div>
+      <pre class="term__body" style="min-height:auto"><span style="color:#6f8f3a">{{ $user }}</span><span style="color:#8c9384">:~$ </span><span style="color:#e9e7df">{{ i18n "nf_cmd_cat" }}</span>
+<span style="color:#ff7a6b">{{ i18n "nf_error" }}</span>
+
+<span style="color:#6f8f3a">{{ $user }}</span><span style="color:#8c9384">:~$ </span><span style="color:#e9e7df">cd ~</span><span style="display:inline-block;width:9px;height:16px;background:#b6ff3c;vertical-align:-3px;margin-left:2px;animation:blink 1.1s steps(1) infinite;"></span></pre>
+    </div>
+
+    <div class="btn-row" style="justify-content:center; margin-top:28px">
+      <a class="btn btn--solid" href="{{ $home }}">← {{ i18n "nf_back_home" }}</a>
+      <a class="btn btn--ghost" href="{{ "blogs" | relLangURL }}">{{ i18n "nf_go_blog" }}</a>
+    </div>
+
+  </div>
+</div>
+{{ end }}

@@ -1,0 +1,11 @@
+{{/* Terminal-styled pagination. Context: a .Paginator. */}}
+{{ if gt .TotalPages 1 }}
+<nav class="pager" aria-label="{{ i18n "aria_pagination" }}">
+  {{ if .HasPrev }}<a href="{{ .Prev.URL }}" rel="prev">← {{ i18n "pager_prev" }}</a>{{ else }}<span class="disabled">← {{ i18n "pager_prev" }}</span>{{ end }}
+  {{ $p := . }}
+  {{ range .Pagers }}
+    <a class="page {{ if eq . $p }}active{{ end }}" href="{{ .URL }}"{{ if eq . $p }} aria-current="page"{{ end }}>{{ printf "%02d" .PageNumber }}</a>
+  {{ end }}
+  {{ if .HasNext }}<a href="{{ .Next.URL }}" rel="next">{{ i18n "pager_next" }} →</a>{{ else }}<span class="disabled">{{ i18n "pager_next" }} →</span>{{ end }}
+</nav>
+{{ end }}

@@ -1,0 +1,11 @@
+{{- $social := site.Params.footer.socialNetworks -}}
+<div class="container">
+  <footer class="footer">
+    <span><span class="cmt">&gt;_</span> © {{ now.Year }} {{ site.Params.footer.copyright | default site.Params.title }} — {{ i18n "made_with" }} <a href="https://gohugo.io/" target="_blank" rel="noopener noreferrer" style="color:inherit">Hugo</a></span>
+    <div class="social">
+      {{ with $social.github }}<a href="{{ . }}" target="_blank" rel="noopener noreferrer">github</a>{{ end }}
+      {{ with $social.linkedin }}<a href="{{ . }}" target="_blank" rel="noopener noreferrer">linkedin</a>{{ end }}
+      {{ with site.Params.contact.btnLink }}<a href="{{ . }}">email</a>{{ end }}
+    </div>
+  </footer>
+</div>

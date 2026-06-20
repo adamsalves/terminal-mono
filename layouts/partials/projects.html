@@ -1,0 +1,62 @@
+{{- $projects := site.Params.projects -}}
+<section id="projects" class="section">
+  <div class="container">
+    <div class="section__head">
+      <h2><span class="cmt">//</span> {{ i18n "projects" }}</h2>
+      <span class="muted-note">— {{ printf "%02d" (len $projects.items) }} {{ i18n "featured_repositories" }}</span>
+      <div class="rule"></div>
+    </div>
+    <div class="prompt">{{ i18n "prompt_projects" }}</div>
+
+    <div class="stack">
+      {{ range $projects.items }}
+        {{- $repo := .repo | default (.title | urlize) -}}
+        {{- $lead := .language -}}
+        {{- if and (not $lead) .badges }}{{ $lead = index .badges 0 }}{{ end -}}
+        {{- $color := "#8c9384" -}}
+        {{- with $lead -}}
+          {{- if or (in . "Vue") (in . "Nuxt") }}{{ $color = "#42b883" }}
+          {{- else if in . "Type" }}{{ $color = "#3178c6" }}
+          {{- else if in . "React" }}{{ $color = "#61dafb" }}
+          {{- else if in . "Phaser" }}{{ $color = "#8b5cf6" }}
+          {{- else if in . "Svelte" }}{{ $color = "#ff3e00" }}
+          {{- else if in . "Node" }}{{ $color = "#83cd29" }}
+          {{- else if in . "Java" }}{{ $color = "#f0db4f" }}{{ end -}}
+        {{- end -}}
+        <article class="card">
+          <div class="card__bar">
+            <div class="card__meta-left">
+              <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+              <span class="card__path">~/{{ $repo }}</span>
+            </div>
+            {{ with $lead }}<div class="card__meta"><span class="lang-dot" style="background:{{ $color }}"></span>{{ . }}</div>{{ end }}
+          </div>
+          <div class="card__body">
+            <div class="card__title">{{ .title }}</div>
+            {{ with .tagline }}<div class="card__tagline">// {{ . }}</div>{{ end }}
+            <p class="card__desc">{{ .content | markdownify }}</p>
+            {{ with .badges }}
+            <div class="hashtags">
+              {{ range . }}<span>#{{ . }}</span>{{ end }}
+            </div>
+            {{ end }}
+            <div class="links">
+              {{- $featuredLink := "" -}}
+              {{ with .featured }}{{ $featuredLink = .link }}<a href="{{ .link }}" target="_blank" rel="noopener noreferrer">→ {{ .name | lower }}</a>{{ end }}
+              {{ range .links }}
+                {{ if ne .url $featuredLink }}
+                  {{- $lbl := i18n "link_default" -}}
+                  {{- if in .icon "github" }}{{ $lbl = i18n "link_code" }}{{ end -}}
+                  {{- if in .icon "fa-link" }}{{ $lbl = i18n "link_site" }}{{ end -}}
+                  {{- if in .icon "book" }}{{ $lbl = i18n "link_docs" }}{{ end -}}
+                  {{- with .name }}{{ $lbl = . | lower }}{{ end -}}
+                  <a href="{{ .url }}" target="_blank" rel="noopener noreferrer">→ {{ $lbl }}</a>
+                {{ end }}
+              {{ end }}
+            </div>
+          </div>
+        </article>
+      {{ end }}
+    </div>
+  </div>
+</section>

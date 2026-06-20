@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="{{ or site.Language.Locale "en" }}" dir="{{ or site.Language.Direction "ltr" }}">
+<head>
+  {{ partial "head.html" . }}
+</head>
+<body>
+  <a class="skip-link" href="#main">{{ i18n "skip_to_content" }}</a>
+
+  {{ if site.Params.showScanlines | default true }}<div class="scanlines" aria-hidden="true"></div>{{ end }}
+  {{ if and (.IsPage) (site.Params.readingProgress | default true) }}<div class="progress" id="progress" aria-hidden="true"></div>{{ end }}
+
+  {{ partial "nav.html" . }}
+
+  <main id="main">
+    {{ block "main" . }}{{ end }}
+  </main>
+
+  {{ partial "footer.html" . }}
+
+  {{ with resources.Get "js/terminal.js" }}
+    {{ if hugo.IsProduction }}
+      {{ $js := . | minify | fingerprint "sha256" }}
+      <script src="{{ $js.RelPermalink }}" integrity="{{ $js.Data.Integrity }}" crossorigin="anonymous" defer></script>
+    {{ else }}
+      <script src="{{ .RelPermalink }}" defer></script>
+    {{ end }}
+  {{ end }}
+
+  {{ if templates.Exists "partials/extend-footer.html" }}{{ partial "extend-footer.html" . }}{{ end }}
+</body>
+</html>

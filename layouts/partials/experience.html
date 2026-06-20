@@ -1,0 +1,26 @@
+{{- $exp := site.Params.experience -}}
+{{ if $exp.enable }}
+<section id="experience" class="section">
+  <div class="container">
+    <div class="section__head">
+      <h2><span class="cmt">//</span> {{ i18n "experience" }}</h2>
+      <div class="rule"></div>
+    </div>
+    <div class="timeline">
+      {{ range $exp.items }}
+        {{ $company := .company }}
+        {{ range .jobs }}
+          <div class="tl-item">
+            <span class="gt" aria-hidden="true">&gt;</span>
+            <div>
+              <div class="tl-role">{{ .name }} <span>@ {{ $company }}</span></div>
+              <div class="tl-date">{{ .date }}</div>
+              <p class="tl-desc">{{ .content | markdownify }}</p>
+            </div>
+          </div>
+        {{ end }}
+      {{ end }}
+    </div>
+  </div>
+</section>
+{{ end }}

@@ -1,0 +1,19 @@
+# Hugo build output
+/public/
+/resources/_gen/
+/.hugo_build.lock
+
+# exampleSite build output
+/exampleSite/public/
+/exampleSite/resources/_gen/
+/exampleSite/.hugo_build.lock
+# theme symlink created during the demo build (Netlify)
+/exampleSite/themes/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+node_modules/

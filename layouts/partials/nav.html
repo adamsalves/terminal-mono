@@ -1,0 +1,30 @@
+{{- $home := "/" | relLangURL -}}
+{{- $blog := "blogs" | relLangURL -}}
+{{- $onBlog := eq .Section "blogs" -}}
+<nav class="nav">
+  <div class="nav__inner">
+    <a class="brand" href="{{ $home }}"><b>&gt;_</b> {{ site.Params.navbar.brandName | default site.Params.title }}<span class="cursor" aria-hidden="true">_</span></a>
+
+    <div class="nav__links">
+      <a href="{{ $home }}#about">{{ i18n "about" }}</a>
+      <a href="{{ $home }}#projects">{{ i18n "projects" }}</a>
+      <a href="{{ $home }}#experience">{{ i18n "experience" }}</a>
+      <a class="{{ if $onBlog }}is-active{{ end }}"{{ if $onBlog }} aria-current="page"{{ end }} href="{{ $blog }}">{{ i18n "blog" }}</a>
+      <a href="{{ $home }}#contact">{{ i18n "contact" }}</a>
+      {{ partial "lang-switch.html" . }}
+    </div>
+
+    <button class="hamburger" id="hamburger" type="button" aria-label="{{ i18n "menu_open" }}" aria-controls="mobile-menu" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+
+  <div class="mobile-menu" id="mobile-menu">
+    <a href="{{ $home }}#about">{{ i18n "about" }}</a>
+    <a href="{{ $home }}#projects">{{ i18n "projects" }}</a>
+    <a href="{{ $home }}#experience">{{ i18n "experience" }}</a>
+    <a class="{{ if $onBlog }}is-active{{ end }}"{{ if $onBlog }} aria-current="page"{{ end }} href="{{ $blog }}">{{ i18n "blog" }}</a>
+    <a href="{{ $home }}#contact">{{ i18n "contact" }}</a>
+    {{ partial "lang-switch.html" . }}
+  </div>
+</nav>

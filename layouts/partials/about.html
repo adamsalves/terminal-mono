@@ -1,0 +1,22 @@
+{{- $about := site.Params.about -}}
+<section id="about" class="section">
+  <div class="container">
+    <div class="section__head">
+      <h2><span class="cmt">//</span> {{ i18n "about" }}</h2>
+      <div class="rule"></div>
+    </div>
+    <div class="grid-2">
+      <div class="about">
+        {{ $about.content | markdownify }}
+      </div>
+      {{ if $about.skills.enable }}
+      <div>
+        <div class="skills-label">{{ i18n "prompt_skills" }}</div>
+        <div class="skills">
+          {{ range $about.skills.items }}<span class="skill">{{ . }}</span>{{ end }}
+        </div>
+      </div>
+      {{ end }}
+    </div>
+  </div>
+</section>

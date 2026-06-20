@@ -1,0 +1,19 @@
+{{/* Post card styled as a "terminal window". Context: a Page. */}}
+<a class="card" href="{{ .RelPermalink }}">
+  <div class="card__bar">
+    <div class="card__meta-left">
+      <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+      <span class="card__path">~/blog/{{ with .File }}{{ .ContentBaseName }}{{ else }}{{ .Slug | default (.Title | urlize) }}{{ end }}.md</span>
+    </div>
+    <span class="card__time">{{ .ReadingTime }} {{ i18n "min_read" }}</span>
+  </div>
+  <div class="card__body">
+    <div class="post-date"># {{ .Date | time.Format ":date_medium" }}</div>
+    <div class="card__title">{{ .Title }}</div>
+    <p class="card__desc">{{ with .Description }}{{ . }}{{ else }}{{ .Summary | plainify | truncate 180 }}{{ end }}</p>
+    <div class="post-card-foot">
+      <div class="hashtags">{{ range .Params.tags }}<span>#{{ . }}</span>{{ end }}</div>
+      <span class="read-more">→ {{ i18n "read_more" }}</span>
+    </div>
+  </div>
+</a>
