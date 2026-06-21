@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `params.navbar.showBlog` (optional, `true`/`false`) to force the navbar blog link on
+  or off, overriding the automatic detection.
+
+### Changed
+- The navbar blog link (desktop and mobile) now appears only when the current language
+  has at least one published post, instead of always pointing to an empty `/blogs/`. In
+  multilingual sites it shows per language.
+
+### Fixed
+- The experience timeline no longer renders an empty `<div class="tl-date">` for jobs
+  without a `date`.
+
 ## [0.1.0] — 2026-06-20
 
 ### Added

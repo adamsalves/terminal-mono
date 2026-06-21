@@ -39,6 +39,7 @@ summaryLength = 30
 
   [params.navbar]
     brandName = "adamsalves"
+    # showBlog = true   # force the nav blog link on/off; default is auto (shown when the language has posts)
 
   [params.hero.socialLinks]
     [[params.hero.socialLinks.fontAwesomeIcons]]
@@ -95,7 +96,7 @@ Right now I'm sharpening my skills in React, GraphQL and testing (TDD) in JavaSc
         company = "Current Company"
         [[languages.en.params.experience.items.jobs]]
           name = "Front-End Developer"
-          date = "Jan 2023 — present"
+          date = "Jan 2023 — present"   # optional: omit for roles with no specific period
           content = "Building interfaces with Vue.js and React, focused on performance, accessibility and design systems."
       [[languages.en.params.experience.items]]
         company = "Previous Company"

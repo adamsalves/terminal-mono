@@ -85,12 +85,12 @@ terminal-mono/
 
 | Section | Params |
 |---|---|
-| Brand/nav | `params.title`, `params.navbar.brandName`, `params.terminalUser` |
+| Brand/nav | `params.title`, `params.navbar.brandName`, `params.navbar.showBlog` (optional), `params.terminalUser` |
 | Hero | `params.hero.intro/subtitle/location/content`, `params.hero.socialLinks.fontAwesomeIcons[]` |
 | Hero — terminal | builds "whoami / cat stack.txt / ls projects/" from `title`, `subtitle`, skills and projects |
 | Projects | `params.projects.items[]` → `title`, `repo`, `language`, `tagline`, `content`, `badges[]`, `featured{name,link}`, `links[]{icon,url,name}` |
 | About + skills | `params.about.content` (markdown), `params.about.skills.enable/items[]` |
-| Experience | `params.experience.enable`, `params.experience.items[]` → `company`, `jobs[]{name,date,content}` |
+| Experience | `params.experience.enable`, `params.experience.items[]` → `company`, `jobs[]{name, date (optional), content}` |
 | Contact | `params.contact.title/content/btnName/btnLink` |
 | Footer | `params.footer.copyright`, `params.footer.socialNetworks.github/linkedin` |
 | Blog | `content/blogs/*.md` → `title`, `date`, `tags`, `description`, `image` (optional), `toc` |
@@ -111,6 +111,8 @@ hugo new blogs/my-post.md
 - `image` becomes the post banner; without it, we use the styled `~/blog/<slug>.md` banner.
 - `toc: true` forces the table of contents (by default it appears on long posts). `toc: false` disables it.
 - Tags generate the `/tags/` and `/tags/<tag>/` pages.
+- The navbar **blog link appears automatically** once a language has at least one post
+  (and hides when it has none). Override with `params.navbar.showBlog = true/false`.
 
 ## Languages (i18n)
 

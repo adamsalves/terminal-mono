@@ -14,7 +14,7 @@
             <span class="gt" aria-hidden="true">&gt;</span>
             <div>
               <div class="tl-role">{{ .name }} <span>@ {{ $company }}</span></div>
-              <div class="tl-date">{{ .date }}</div>
+              {{ with .date }}<div class="tl-date">{{ . }}</div>{{ end }}
               <p class="tl-desc">{{ .content | markdownify }}</p>
             </div>
           </div>
