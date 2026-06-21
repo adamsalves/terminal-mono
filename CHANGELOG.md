@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - `params.navbar.showBlog` (optional, `true`/`false`) to force the navbar blog link on
   or off, overriding the automatic detection.
+- Theme credit in the footer, next to the Hugo link (“made with Hugo & terminal-mono”).
 
 ### Changed
 - The navbar blog link (desktop and mobile) now appears only when the current language
