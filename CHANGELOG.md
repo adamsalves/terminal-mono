@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 - Home and in-page anchor links (nav brand/links, 404) now respect a baseURL sub-path, so
   the nav works on project sites served under a path (e.g. `…/terminal-mono/`).
+- The home page builds without portfolio params: the hero tech-stack and the projects
+  section are guarded, so the theme renders against generic content (e.g. a fresh site)
+  instead of erroring on empty `about.skills` / `projects`.
 
 ## [0.2.0] — 2026-06-21
 

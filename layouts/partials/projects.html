@@ -1,4 +1,5 @@
 {{- $projects := site.Params.projects -}}
+{{- with $projects -}}
 <section id="projects" class="section">
   <div class="container">
     <div class="section__head">
@@ -60,3 +61,4 @@
     </div>
   </div>
 </section>
+{{- end -}}

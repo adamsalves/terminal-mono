@@ -15,7 +15,7 @@
         data-name="{{ site.Params.title }}"
         data-role="{{ $hero.subtitle }}"
         data-loc="{{ $loc }}"
-        data-stack="{{ delimit (first 6 $skills) " · " }}"
+        data-stack="{{ with $skills }}{{ delimit (first 6 .) " · " }}{{ end }}"
         data-projects="{{ range $i, $p := site.Params.projects.items }}{{ if $i }}   {{ end }}{{ $p.repo | default ($p.title | urlize) }}/{{ end }}"></pre>
     </div>
 
