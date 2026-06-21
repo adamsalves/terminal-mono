@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- Docs: corrected the theme-submission instructions (open an issue at `gohugoio/hugoThemes`,
+  not a PR) and added a GitHub Pages workflow that publishes the `exampleSite/` demo.
+
+### Fixed
+- Home and in-page anchor links (nav brand/links, 404) now respect a baseURL sub-path, so
+  the nav works on project sites served under a path (e.g. `…/terminal-mono/`).
+
 ## [0.2.0] — 2026-06-21
 
 ### Added

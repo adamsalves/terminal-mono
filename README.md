@@ -2,7 +2,7 @@
 
 Personal **dark / monospace** theme for portfolio + blog. Typing terminal hero, repository-style project cards, a blog with a reading-progress bar, tag pages and a 404 — all in the same aesthetic. **No third-party JS dependencies.**
 
-![Terminal Mono](images/screenshot.png)
+![Terminal Mono](/images/screenshot.png)
 
 - 🎨 Dark-only, JetBrains Mono, lime accent — all driven by CSS variables.
 - ⌨️ Hero terminal with a typewriter effect (degrades gracefully without JS).
@@ -166,15 +166,18 @@ The theme is already a self-contained, versionable folder. To distribute it:
    ```
 2. **Tag a version** (SemVer) — this is what Hugo Modules and the submodule use:
    ```bash
-   git tag -a v0.1.0 -m "Terminal Mono v0.1.0"
-   git push origin v0.1.0
+   git tag -a v0.2.0 -m "Terminal Mono v0.2.0"
+   git push origin v0.2.0
    ```
-3. (Optional) **Live demo:** `netlify.toml` already builds the `exampleSite/`. Connect the
-   repo on Netlify and update `homepage`/`demosite` in `theme.toml`.
-4. (Optional) **Official gallery:** submit the theme to
-   [themes.gohugo.io](https://github.com/gohugoio/hugoThemesSiteBuilder) — the requirements
-   (`theme.toml`, `LICENSE`, `exampleSite/`, `images/screenshot.png` + `images/tn.png`)
-   are already met.
+3. **Live demo:** a GitHub Actions workflow (`.github/workflows/pages.yml`) builds the
+   `exampleSite/` and deploys it to GitHub Pages on every push to `main`
+   (<https://adamsalves.github.io/terminal-mono/>). `netlify.toml` is included as an
+   alternative.
+4. **Official gallery ([themes.gohugo.io](https://themes.gohugo.io)):** submit by opening an
+   **issue** at [`gohugoio/hugoThemes`](https://github.com/gohugoio/hugoThemes) with a link to
+   this repository — it is **not** a pull request. Requirements (all met): `theme.toml`, an
+   OSI `LICENSE`, `README.md`, an `exampleSite/` with `baseURL = "https://example.com"`,
+   `images/screenshot.png` (1500×1000) and `images/tn.png` (900×600).
 
 > When you move the repository, update the `module` in `go.mod`, the `licenselink` in
 > `theme.toml`, and the links in `CHANGELOG.md`/`README.md` to the new path.

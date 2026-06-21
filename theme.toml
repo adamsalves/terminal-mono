@@ -5,8 +5,8 @@ name = "Terminal Mono"
 license = "MIT"
 licenselink = "https://github.com/adamsalves/terminal-mono/blob/main/LICENSE"
 description = "Personal dark/mono theme for portfolio + blog. Animated terminal hero, repository-style cards, a blog with a reading-progress bar, tags and a 404 — all in the same aesthetic. No third-party JS dependencies."
-homepage = "https://adamsalves.dev/"
-demosite = "https://adamsalves.dev/"
+homepage = "https://github.com/adamsalves/terminal-mono"
+demosite = "https://adamsalves.github.io/terminal-mono/"
 
 tags = ["portfolio", "blog", "dark", "minimal", "monospace", "personal", "developer", "terminal"]
 features = ["portfolio", "blog", "tags", "responsive", "dark-mode", "seo", "rss", "i18n", "multilingual", "no-js-dependencies", "accessibility"]
