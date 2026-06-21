@@ -2,11 +2,11 @@
 title = "Generating chiptune audio with the Web Audio API"
 date = 2026-02-27
 draft = false
-description = "Retro 8-bit sound without a single .wav file: oscillators, envelopes and a tiny SoundGenerator for Phantom."
+description = "Retro 8-bit sound without a single .wav file: oscillators, envelopes and a tiny SoundGenerator for Neon Drift."
 tags = ["typescript", "web-audio", "games"]
 +++
 
-For Phantom, I didn't want to load dozens of audio files. The solution was to generate everything in real time with the Web Audio API — coins, jumps and the soundtrack, all synthesized.
+For Neon Drift, I didn't want to load dozens of audio files. The solution was to generate everything in real time with the Web Audio API — coins, jumps and the soundtrack, all synthesized.
 
 ## The idea
 

@@ -1,5 +1,5 @@
 +++
-title = "Migrating Pedala Sampa to Nuxt 3"
+title = "Migrating Trailhead to Nuxt 3"
 date = 2026-03-12
 draft = false
 description = "How I rewrote a Vue app to Nuxt 3 without losing SEO — routes, composables and a wayfinding redesign along the way."
@@ -7,7 +7,7 @@ tags = ["nuxt", "vue", "migration"]
 toc = true
 +++
 
-In this post I share how I approached migrating Pedala Sampa to Nuxt 3: the decisions, the stumbles and what I'd do differently next time. No fluff — straight to what matters.
+In this post I share how I approached migrating Trailhead to Nuxt 3: the decisions, the stumbles and what I'd do differently next time. No fluff — straight to what matters.
 
 ## Context
 

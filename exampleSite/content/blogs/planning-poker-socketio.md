@@ -6,7 +6,7 @@ description = "Rooms, live voting and consensus stats — the event architecture
 tags = ["vue", "socket.io", "real-time"]
 +++
 
-Real-time sounds complicated until you draw the right events. In Vue Planning Poker, everything revolves around rooms and a handful of well-defined messages.
+Real-time sounds complicated until you draw the right events. In Sprint Deck, everything revolves around rooms and a handful of well-defined messages.
 
 ## The events
 
