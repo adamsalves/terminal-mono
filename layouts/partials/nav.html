@@ -1,4 +1,4 @@
-{{- $home := "/" | relLangURL -}}
+{{- $home := site.Home.RelPermalink -}}
 {{- $blog := "blogs" | relLangURL -}}
 {{- $onBlog := eq .Section "blogs" -}}
 {{- /* Show the blog link only when the current language has at least one published
