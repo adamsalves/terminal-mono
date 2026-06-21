@@ -28,18 +28,18 @@
 
       <div class="btn-row">
         <a class="btn btn--solid" href="#projects">{{ i18n "view_projects" }} →</a>
-        {{ with site.Params.contact.btnLink }}<a class="btn btn--ghost" href="{{ . }}">email</a>{{ end }}
+        {{ with site.Params.contact.btnLink }}<a class="btn btn--ghost" href="{{ . }}">{{ i18n "email" }}</a>{{ end }}
       </div>
 
       <div class="social">
         {{ range $i, $s := $hero.socialLinks.fontAwesomeIcons }}
-          {{- $label := "link" -}}
+          {{- $label := (i18n "link_default") -}}
           {{- $ext := true -}}
           {{- if in $s.icon "github" }}{{ $label = "github" }}{{ end -}}
           {{- if in $s.icon "linkedin" }}{{ $label = "linkedin" }}{{ end -}}
           {{- if in $s.icon "twitter" }}{{ $label = "twitter" }}{{ end -}}
           {{- if or (in $s.icon "x-twitter") (eq $s.icon "fab fa-x-twitter") }}{{ $label = "x" }}{{ end -}}
-          {{- if in $s.icon "envelope" }}{{ $label = "email" }}{{ $ext = false }}{{ end -}}
+          {{- if in $s.icon "envelope" }}{{ $label = (i18n "email") }}{{ $ext = false }}{{ end -}}
           {{ if $i }}<span class="sep" aria-hidden="true">·</span>{{ end }}
           <a href="{{ $s.url }}"{{ if $ext }} target="_blank" rel="noopener noreferrer"{{ end }}>{{ $label }}</a>
         {{ end }}

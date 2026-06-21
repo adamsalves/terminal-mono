@@ -61,6 +61,8 @@ other = "send email"
 # footer
 [made_with]
 other = "made with"
+[email]
+other = "email"
 
 # blog list
 [prompt_blog_posts]
@@ -109,6 +111,8 @@ other = "Browse posts by topic."
 other = "No tags yet."
 
 # 404
+[nf_no_such_file]
+other = "no such file or directory"
 [nf_error]
 other = "error: the page you requested does not exist (or has moved)."
 [nf_cmd_cat]

@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The navbar blog link (desktop and mobile) now appears only when the current language
   has at least one published post, instead of always pointing to an empty `/blogs/`. In
   multilingual sites it shows per language.
+- Moved the last hardcoded UI labels to i18n (the `email` link label, the social-link
+  fallback, and the 404 “no such file or directory” line), so a site in any language is
+  fully localized. New keys: `email`, `nf_no_such_file`.
 
 ### Fixed
 - The experience timeline no longer renders an empty `<div class="tl-date">` for jobs

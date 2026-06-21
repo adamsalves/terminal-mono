@@ -5,7 +5,7 @@
     <div class="social">
       {{ with $social.github }}<a href="{{ . }}" target="_blank" rel="noopener noreferrer">github</a>{{ end }}
       {{ with $social.linkedin }}<a href="{{ . }}" target="_blank" rel="noopener noreferrer">linkedin</a>{{ end }}
-      {{ with site.Params.contact.btnLink }}<a href="{{ . }}">email</a>{{ end }}
+      {{ with site.Params.contact.btnLink }}<a href="{{ . }}">{{ i18n "email" }}</a>{{ end }}
     </div>
   </footer>
 </div>
