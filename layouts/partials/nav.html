@@ -1,6 +1,11 @@
 {{- $home := "/" | relLangURL -}}
 {{- $blog := "blogs" | relLangURL -}}
 {{- $onBlog := eq .Section "blogs" -}}
+{{- /* Show the blog link only when the current language has at least one published
+       post (site.RegularPages is scoped per language). An explicit
+       params.navbar.showBlog (true/false) overrides this automatic detection. */ -}}
+{{- $hasBlog := gt (len (where site.RegularPages "Section" "blogs")) 0 -}}
+{{- with site.Params.navbar }}{{ if isset . "showblog" }}{{ $hasBlog = .showBlog }}{{ end }}{{ end -}}
 <nav class="nav">
   <div class="nav__inner">
     <a class="brand" href="{{ $home }}"><b>&gt;_</b> {{ site.Params.navbar.brandName | default site.Params.title }}<span class="cursor" aria-hidden="true">_</span></a>
@@ -9,7 +14,7 @@
       <a href="{{ $home }}#about">{{ i18n "about" }}</a>
       <a href="{{ $home }}#projects">{{ i18n "projects" }}</a>
       <a href="{{ $home }}#experience">{{ i18n "experience" }}</a>
-      <a class="{{ if $onBlog }}is-active{{ end }}"{{ if $onBlog }} aria-current="page"{{ end }} href="{{ $blog }}">{{ i18n "blog" }}</a>
+      {{ if $hasBlog }}<a class="{{ if $onBlog }}is-active{{ end }}"{{ if $onBlog }} aria-current="page"{{ end }} href="{{ $blog }}">{{ i18n "blog" }}</a>{{ end }}
       <a href="{{ $home }}#contact">{{ i18n "contact" }}</a>
       {{ partial "lang-switch.html" . }}
     </div>
@@ -23,7 +28,7 @@
     <a href="{{ $home }}#about">{{ i18n "about" }}</a>
     <a href="{{ $home }}#projects">{{ i18n "projects" }}</a>
     <a href="{{ $home }}#experience">{{ i18n "experience" }}</a>
-    <a class="{{ if $onBlog }}is-active{{ end }}"{{ if $onBlog }} aria-current="page"{{ end }} href="{{ $blog }}">{{ i18n "blog" }}</a>
+    {{ if $hasBlog }}<a class="{{ if $onBlog }}is-active{{ end }}"{{ if $onBlog }} aria-current="page"{{ end }} href="{{ $blog }}">{{ i18n "blog" }}</a>{{ end }}
     <a href="{{ $home }}#contact">{{ i18n "contact" }}</a>
     {{ partial "lang-switch.html" . }}
   </div>

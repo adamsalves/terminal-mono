@@ -6,7 +6,7 @@ description = "Salas, votação ao vivo e estatísticas de consenso — a arquit
 tags = ["vue", "socket.io", "real-time"]
 +++
 
-Tempo real parece complicado até você desenhar os eventos certos. No Vue Planning Poker, tudo gira em torno de salas e de um punhado de mensagens bem definidas.
+Tempo real parece complicado até você desenhar os eventos certos. No Sprint Deck, tudo gira em torno de salas e de um punhado de mensagens bem definidas.
 
 ## Os eventos
 

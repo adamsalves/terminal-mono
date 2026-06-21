@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-06-21
+
+### Added
+- `params.navbar.showBlog` (optional, `true`/`false`) to force the navbar blog link on
+  or off, overriding the automatic detection.
+- Theme credit in the footer, next to the Hugo link (“made with Hugo & terminal-mono”).
+
+### Changed
+- The navbar blog link (desktop and mobile) now appears only when the current language
+  has at least one published post, instead of always pointing to an empty `/blogs/`. In
+  multilingual sites it shows per language.
+- Moved the last hardcoded UI labels to i18n (the `email` link label, the social-link
+  fallback, and the 404 “no such file or directory” line), so a site in any language is
+  fully localized. New keys: `email`, `nf_no_such_file`.
+
+### Fixed
+- The experience timeline no longer renders an empty `<div class="tl-date">` for jobs
+  without a `date`.
+
 ## [0.1.0] — 2026-06-20
 
 ### Added
@@ -22,5 +41,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   switcher, `hreflang` alternates and locale-aware dates.
 - Complete bilingual `exampleSite/` and Hugo Modules support.
 
-[Unreleased]: https://github.com/adamsalves/terminal-mono/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/adamsalves/terminal-mono/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/adamsalves/terminal-mono/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/adamsalves/terminal-mono/releases/tag/v0.1.0

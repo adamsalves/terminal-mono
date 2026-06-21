@@ -2,11 +2,11 @@
 title = "Gerando áudio chiptune com a Web Audio API"
 date = 2026-02-27
 draft = false
-description = "Sons retrô 8-bit sem um único arquivo .wav: osciladores, envelopes e um pequeno SoundGenerator para o Phantom."
+description = "Sons retrô 8-bit sem um único arquivo .wav: osciladores, envelopes e um pequeno SoundGenerator para o Neon Drift."
 tags = ["typescript", "web-audio", "games"]
 +++
 
-No Phantom, eu não queria carregar dezenas de arquivos de áudio. A solução foi gerar tudo em tempo real com a Web Audio API — moedas, pulos e a trilha, tudo sintetizado.
+No Neon Drift, eu não queria carregar dezenas de arquivos de áudio. A solução foi gerar tudo em tempo real com a Web Audio API — moedas, pulos e a trilha, tudo sintetizado.
 
 ## A ideia
 
