@@ -1,5 +1,5 @@
 {{ define "main" }}
-{{- $home := "/" | relLangURL -}}
+{{- $home := site.Home.RelPermalink -}}
 {{- $user := site.Params.terminalUser | default "adams@portfolio" -}}
 <div class="container">
   <div class="notfound fadeup">
