@@ -6,9 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-06-21
+
 ### Changed
-- Docs: corrected the theme-submission instructions (open an issue at `gohugoio/hugoThemes`,
-  not a PR) and added a GitHub Pages workflow that publishes the `exampleSite/` demo.
+- Docs: updated the theme-submission instructions (PR to `gohugoio/hugoThemesSiteBuilder`,
+  adding the repo to `themes.txt`) and added a GitHub Pages workflow that publishes the
+  `exampleSite/` demo.
 
 ### Fixed
 - Home and in-page anchor links (nav brand/links, 404) now respect a baseURL sub-path, so
@@ -52,6 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   switcher, `hreflang` alternates and locale-aware dates.
 - Complete bilingual `exampleSite/` and Hugo Modules support.
 
-[Unreleased]: https://github.com/adamsalves/terminal-mono/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/adamsalves/terminal-mono/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/adamsalves/terminal-mono/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/adamsalves/terminal-mono/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/adamsalves/terminal-mono/releases/tag/v0.1.0

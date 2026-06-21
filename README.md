@@ -173,11 +173,12 @@ The theme is already a self-contained, versionable folder. To distribute it:
    `exampleSite/` and deploys it to GitHub Pages on every push to `main`
    (<https://adamsalves.github.io/terminal-mono/>). `netlify.toml` is included as an
    alternative.
-4. **Official gallery ([themes.gohugo.io](https://themes.gohugo.io)):** submit by opening an
-   **issue** at [`gohugoio/hugoThemes`](https://github.com/gohugoio/hugoThemes) with a link to
-   this repository — it is **not** a pull request. Requirements (all met): `theme.toml`, an
-   OSI `LICENSE`, `README.md`, an `exampleSite/` with `baseURL = "https://example.com"`,
-   `images/screenshot.png` (1500×1000) and `images/tn.png` (900×600).
+4. **Official gallery ([themes.gohugo.io](https://themes.gohugo.io)):** submit a **pull
+   request** to [`gohugoio/hugoThemesSiteBuilder`](https://github.com/gohugoio/hugoThemesSiteBuilder)
+   adding this repo's URL to `themes.txt` (lexicographical order); the Netlify deploy preview
+   on the PR must pass. Requirements (all met): `theme.toml`, an OSI `LICENSE`, `README.md`,
+   an `exampleSite/` with `baseURL = "https://example.com"`, `images/screenshot.png`
+   (1500×1000) and `images/tn.png` (900×600).
 
 > When you move the repository, update the `module` in `go.mod`, the `licenselink` in
 > `theme.toml`, and the links in `CHANGELOG.md`/`README.md` to the new path.
