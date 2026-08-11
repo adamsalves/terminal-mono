@@ -6,6 +6,7 @@
   command = "mkdir -p exampleSite/themes && ln -sfn \"$PWD\" exampleSite/themes/terminal-mono && hugo --source exampleSite --gc --minify -b \"$DEPLOY_PRIME_URL\""
 
 [build.environment]
+  # Keep in sync with .github/workflows/ci.yml and pages.yml.
   HUGO_VERSION = "0.163.3"
   HUGO_ENV = "production"
 

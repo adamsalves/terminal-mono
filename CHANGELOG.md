@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
-- CI: a `ci.yml` workflow builds the bundled `exampleSite/` on every pull request,
-  so a broken template can no longer reach `main` (which auto-deploys the demo).
+- CI: a `ci.yml` workflow builds every pull request, which nothing did before.
+  It builds the bundled `exampleSite/` **and** a bare site with no params — the
+  path a fresh consumer takes, which the `exampleSite` never exercises — against
+  both the `min_version` declared in `theme.toml` (0.158.0) and the version
+  `pages.yml` deploys with. Warnings are fatal, missing translations included.
   Kept separate from `pages.yml` — a PR check needs none of the Pages machinery.
 
 ### Fixed
