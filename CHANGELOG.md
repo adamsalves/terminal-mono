@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.2] — 2026-08-11
+
 ### Added
 - CI: a `ci.yml` workflow builds every pull request, which nothing did before.
   It builds the bundled `exampleSite/` **and** a bare site with no params — the
@@ -69,7 +71,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   switcher, `hreflang` alternates and locale-aware dates.
 - Complete bilingual `exampleSite/` and Hugo Modules support.
 
-[Unreleased]: https://github.com/adamsalves/terminal-mono/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/adamsalves/terminal-mono/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/adamsalves/terminal-mono/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/adamsalves/terminal-mono/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/adamsalves/terminal-mono/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/adamsalves/terminal-mono/releases/tag/v0.1.0
