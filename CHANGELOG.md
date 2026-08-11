@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- CI: a `ci.yml` workflow builds the bundled `exampleSite/` on every pull request,
+  so a broken template can no longer reach `main` (which auto-deploys the demo).
+  Kept separate from `pages.yml` — a PR check needs none of the Pages machinery.
+
 ### Fixed
 - Mobile: the section heading no longer wraps mid-title. On viewports ≤760px the
   `.muted-note` annotation (e.g. "— 03 featured repositories") now takes its own line
