@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Mobile: the section heading no longer wraps mid-title. On viewports ≤760px the
+  `.muted-note` annotation (e.g. "— 03 featured repositories") now takes its own line
+  instead of competing with the `<h2>` for horizontal space, which pushed
+  "// projects" onto two lines and collapsed the rule to 0px.
+
 ## [0.2.1] — 2026-06-21
 
 ### Changed
