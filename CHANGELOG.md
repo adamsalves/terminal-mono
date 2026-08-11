@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- CI: a `ci.yml` workflow builds every pull request, which nothing did before.
+  It builds the bundled `exampleSite/` **and** a bare site with no params — the
+  path a fresh consumer takes, which the `exampleSite` never exercises — against
+  both the `min_version` declared in `theme.toml` (0.158.0) and the version
+  `pages.yml` deploys with. Warnings are fatal, missing translations included.
+  Kept separate from `pages.yml` — a PR check needs none of the Pages machinery.
+
 ### Fixed
 - Mobile: the section heading no longer wraps mid-title. On viewports ≤760px the
   `.muted-note` annotation (e.g. "— 03 featured repositories") now takes its own line

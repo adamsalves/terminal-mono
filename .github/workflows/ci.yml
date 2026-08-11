@@ -1,0 +1,65 @@
+# Builds the bundled exampleSite on every pull request, so a broken template
+# never reaches main — where pages.yml deploys the demo automatically.
+# Deliberately kept separate from pages.yml: a PR check needs none of the Pages
+# machinery (configure-pages, the pages concurrency group, pages:write).
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Successive pushes to the same PR supersede each other.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        # 0.158.0 is the min_version declared in theme.toml — without building
+        # against it, that promise to consumers is never actually checked.
+        # Keep 0.163.3 in sync with pages.yml and netlify.toml.
+        hugo-version: ['0.158.0', '0.163.3']
+    env:
+      HUGO_VERSION: ${{ matrix.hugo-version }}
+      HUGO_ENV: production
+      TZ: UTC
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Hugo (extended)
+        run: |
+          wget -O /tmp/hugo.deb "https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_extended_${HUGO_VERSION}_linux-amd64.deb"
+          sudo dpkg -i /tmp/hugo.deb
+      - name: Inject theme into exampleSite
+        run: |
+          mkdir -p exampleSite/themes
+          ln -sfn "$GITHUB_WORKSPACE" exampleSite/themes/terminal-mono
+      # Build under a sub-path: the demo is served from one, and under a root
+      # baseURL the nav/404 sub-path handling renders identically whether or
+      # not it is correct (see 33a5de8), leaving that path unexercised.
+      - name: Build exampleSite
+        run: |
+          hugo --source exampleSite --gc --minify \
+            --printI18nWarnings --panicOnWarning \
+            --baseURL "https://example.com/terminal-mono/"
+      # The exampleSite fills in every param; a fresh consumer fills in none.
+      # That path broke once already (see 41451a3), and the exampleSite build
+      # stays green through it.
+      - name: Build a bare site (no params) against the theme
+        run: |
+          mkdir -p /tmp/bare/themes
+          ln -sfn "$GITHUB_WORKSPACE" /tmp/bare/themes/terminal-mono
+          printf 'baseURL = "https://example.com/terminal-mono/"\ntitle = "Bare Site"\ntheme = "terminal-mono"\n' > /tmp/bare/hugo.toml
+          hugo --source /tmp/bare --gc --minify --panicOnWarning

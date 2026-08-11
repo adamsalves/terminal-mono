@@ -24,6 +24,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
+      # Keep in sync with ci.yml and netlify.toml — if the PR check and the
+      # deploy build on different versions, the check stops guarding the deploy.
       HUGO_VERSION: 0.163.3
       HUGO_ENV: production
       TZ: UTC
