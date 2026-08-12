@@ -28,16 +28,9 @@
          — which is how a command called --latest ends up printing the oldest
          posts and dropping the newest. */ -}}
   {{- range first $n (sort (where site.RegularPages "Section" "blogs") "Date" "desc") -}}
-    {{- /* The name is built from the title, not the filename: .File.ContentBaseName
-           strips the language suffix, so blog.pt.md and blog.md share one name and
-           a Portuguese reader would get an English listing. Slugified by hand
-           rather than with urlize, which percent-encodes accents into noise
-           (programa%C3%A7%C3%A3o). Accents are fine in a filename. */ -}}
-    {{- /* strings.Trim takes (string, cutset), so it is called outright rather
-           than piped — piping would pass the name as the cutset. */ -}}
-    {{- $name := .Title | lower | replaceRE `[^\p{L}\p{N}]+` "-" -}}
-    {{- $name = strings.Trim $name "-" -}}
-    {{- if not $name -}}{{- with .File }}{{ $name = .ContentBaseName }}{{ end -}}{{- end -}}
+    {{- /* Shared with post-card.html, so the home and the blog listing can never
+           name the same post differently. */ -}}
+    {{- $name := partial "post-filename.html" . -}}
     {{- /* Title-derived names run longer than the file slugs they replace, and a
            name that wraps puts its tail in the date column and breaks the listing
            out of its `ls` shape. Cut the stem, keep the extension; the untruncated

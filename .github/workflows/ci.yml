@@ -173,6 +173,36 @@ jobs:
               sys.exit('bare site reserves the taller terminal for a listing it does not have')
           print('bare hero listing OK: empty, no height reserved')
           PY
+      # The hero and the blog cards share partials/post-filename.html precisely so
+      # they cannot name the same post differently. Both sides get checked, and
+      # both must differ between languages — a name taken from the file on disk
+      # loses its language suffix and reads English everywhere.
+      - name: Assert blog card names follow the language
+        run: |
+          python3 - <<'PY'
+          import re, sys
+
+          def paths(path):
+              found = re.findall(r'<span class=["\']?card__path["\']?>([^<]*)</span>',
+                                 open(path).read())
+              if not found:
+                  sys.exit(f'{path}: no card paths found')
+              return found
+
+          en = paths('exampleSite/public/blogs/index.html')
+          pt = paths('exampleSite/public/pt/blogs/index.html')
+
+          if len(en) != len(pt):
+              sys.exit(f'EN lists {len(en)} cards, PT lists {len(pt)}')
+          for a, b in zip(en, pt):
+              if a == b:
+                  sys.exit(f'card name {a!r} is identical in both languages — '
+                           'names are coming from the file, not the title')
+          for p in en + pt:
+              if not p.startswith('~/blog/') or not p.endswith('.md'):
+                  sys.exit(f'card path {p!r} lost its ~/blog/….md shape')
+          print(f'card names OK: en={en[0]!r} pt={pt[0]!r}')
+          PY
       # Hugo orders pages by Weight before Date, so a site that weights its posts
       # used to get the OLDEST three from `--latest`, with the newest unweighted
       # post dropped past the cut. The exampleSite sets no weights, so the

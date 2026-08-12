@@ -3,7 +3,7 @@
   <div class="card__bar">
     <div class="card__meta-left">
       <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-      <span class="card__path">~/blog/{{ with .File }}{{ .ContentBaseName }}{{ else }}{{ .Slug | default (.Title | urlize) }}{{ end }}.md</span>
+      <span class="card__path">~/blog/{{ partial "post-filename.html" . }}.md</span>
     </div>
     <span class="card__time">{{ .ReadingTime }} {{ i18n "min_read" }}</span>
   </div>

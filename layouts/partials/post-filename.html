@@ -1,0 +1,22 @@
+{{- /* The display filename for a post — "migrando-o-trailhead-para-o-nuxt-3".
+       Context: a Page. Returns a string, without the .md extension, which the
+       caller adds.
+
+       Built from the title rather than the file on disk, because
+       .File.ContentBaseName strips the language suffix: post.md and post.pt.md
+       collapse to one name, so every language would show the English one.
+
+       Slugified by hand instead of with urlize, which percent-encodes accents
+       into noise (programa%C3%A7%C3%A3o). Accents are fine here — this is a
+       label, not a URL.
+
+       strings.Trim takes (string, cutset), so it is called outright rather than
+       piped; piping would pass the name in as the cutset and trim everything.
+
+       May return an empty string for a page with neither title nor file. The
+       hero skips such a post rather than linking to a bare ".md"; callers that
+       only display the name can print what they get. */ -}}
+{{- $name := .Title | lower | replaceRE `[^\p{L}\p{N}]+` "-" -}}
+{{- $name = strings.Trim $name "-" -}}
+{{- if not $name }}{{ with .File }}{{ $name = .ContentBaseName }}{{ end }}{{ end -}}
+{{- return $name -}}

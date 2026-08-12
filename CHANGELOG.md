@@ -27,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   desktop and mobile now render from a single partial so they cannot drift apart.
 
 ### Changed
+- Blog cards: the `~/blog/….md` label follows the reader's language. It came from
+  the file on disk, and `post.md` and `post.pt.md` collapse to one name, so every
+  language showed the English one. It is built from the post title now, sharing
+  `partials/post-filename.html` with the hero listing so the two cannot disagree.
+  A long name is ellipsized rather than wrapping into the reading time.
 - Release: `scripts/release.py` now deletes the `release/vX.Y.Z` branch from the
   remote once the tag is pushed. It already removed the local copy, so the remote
   one accumulated — one orphan per release, as `v0.2.3` left behind. The cleanup

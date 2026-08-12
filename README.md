@@ -118,7 +118,9 @@ date, newest first, regardless of any `weight` you set.
 title, not from its file on disk — `post.md` and `post.pt.md` share a filename,
 so a Portuguese reader would otherwise get an English listing. Accents are kept
 (`programação-e-café.md`), and the post's real title is the link's accessible
-name for screen readers.
+name for screen readers. The `~/blog/….md` label on the blog cards is built the
+same way, from the same partial, so the two can never disagree; in the terminal
+the name is shortened to keep the listing in one column.
 
 `params.hero.latestPosts` sets how many to show (default `3`); `0` drops the
 command entirely. Set it under `[params.hero]` for the whole site, or under
