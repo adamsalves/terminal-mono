@@ -11,6 +11,7 @@ mutates the repo.
 
 import importlib.util
 import os
+import re
 import unittest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -55,6 +56,23 @@ SAMPLE = """\
 [0.2.0]: https://github.com/o/r/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/o/r/releases/tag/v0.1.0
 """
+
+
+def seeded(changelog_text):
+    """The changelog with an [Unreleased] entry, adding one only if it is bare.
+
+    Lets a test exercise promotion against the real file without caring whether
+    a release has just emptied that section.
+    """
+    body = re.search(
+        r"^## \[Unreleased\][ \t]*\n(.*?)(?=^## \[|^\[[^\]]+\]:\s|\Z)",
+        changelog_text, re.M | re.S,
+    )
+    if body and body.group(1).strip():
+        return changelog_text
+    return changelog_text.replace(
+        "## [Unreleased]\n", "## [Unreleased]\n\n### Added\n- Seeded by the tests.\n", 1
+    )
 
 
 class PromoteChangelog(unittest.TestCase):
@@ -126,12 +144,27 @@ class PromoteChangelog(unittest.TestCase):
         self.assertIn("## [0.1.0] — 2026-02-03", out)
 
     def test_runs_against_the_real_changelog(self):
+        """The real file's shape, whatever state the release cycle left it in.
+
+        [Unreleased] is empty by design straight after a promotion — which is
+        precisely when this runs, since ci.yml tests the release PR — so seed
+        it rather than assert a state the release flow deliberately removes.
+        """
         out, previous = release.promote_changelog(
-            REAL_CHANGELOG, "9.9.9", "2026-02-03"
+            seeded(REAL_CHANGELOG), "9.9.9", "2026-02-03"
         )
         self.assertIn("## [Unreleased]\n\n## [9.9.9] — 2026-02-03\n\n###", out)
         self.assertIn(f"[9.9.9]: https://github.com/adamsalves/terminal-mono/compare/"
                       f"{previous}...v9.9.9\n", out)
+
+    def test_refuses_the_real_changelog_right_after_a_release(self):
+        """The state that broke this suite on the v0.2.3 release PR."""
+        promoted, _ = release.promote_changelog(
+            seeded(REAL_CHANGELOG), "9.9.9", "2026-02-03"
+        )
+        with self.assertRaises(SystemExit) as caught:
+            release.promote_changelog(promoted, "9.9.10", "2026-02-04")
+        self.assertIn("nothing to release", str(caught.exception))
 
 
 class NotesFor(unittest.TestCase):
@@ -171,7 +204,6 @@ class NotesFor(unittest.TestCase):
 
     def test_every_real_changelog_section_is_extractable(self):
         """Including the oldest — the case that used to fail."""
-        import re
         versions = re.findall(r"^## \[(\d+\.\d+\.\d+)\]", REAL_CHANGELOG, re.M)
         self.assertGreater(len(versions), 1)
         for version in versions:
