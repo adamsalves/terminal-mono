@@ -1,0 +1,75 @@
+# Publishes the GitHub Release when a vX.Y.Z tag is pushed, with the matching
+# CHANGELOG section as the notes.
+#
+# A git tag and a GitHub Release are different objects: the sidebar and the
+# "Latest" badge read the Release, not the tag. Creating it by hand is easy to
+# forget — v0.1.0 and v0.2.2 were both tagged and left unreleased — so this
+# makes the tag push the only step that matters.
+name: Release
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to publish (e.g. v0.2.3)'
+        required: true
+
+# Never publish the same tag twice concurrently; never cancel a publish midway.
+concurrency:
+  group: release-${{ inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+    steps:
+      # Checking out the tag by name rather than the default ref: on a manual
+      # re-run for an older tag, github.ref is the tag that was pushed, so the
+      # default checkout would rebuild the notes from the wrong commit.
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          fetch-depth: 0   # needs the tag history to find the previous version
+
+      # Same script you can run locally to preview the body, so the logic that
+      # builds the notes is not stranded inside this YAML where it never gets
+      # exercised until a tag is already pushed. ci.yml unit-tests it on
+      # every PR, which is what makes that claim true rather than aspirational.
+      - name: Build the release notes from CHANGELOG.md
+        run: |
+          python3 scripts/release-notes.py "${TAG#v}" | tee release-notes.md
+
+      # Idempotent: a re-run updates the notes instead of failing on a Release
+      # that already exists, which is what RELEASING.md tells you to do when a
+      # publish goes wrong.
+      #
+      # "Latest" is deliberately left to GitHub, which picks it by semver and
+      # date. Forcing --latest would hand the badge to an old version whenever
+      # a Release is backfilled — reintroducing the stale sidebar this
+      # workflow exists to prevent.
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG exists — updating its notes."
+            gh release edit "$TAG" --notes-file release-notes.md
+          else
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --notes-file release-notes.md \
+              --verify-tag
+          fi

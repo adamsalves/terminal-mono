@@ -13,3 +13,6 @@ trim_trailing_whitespace = false
 
 [*.{html,toml,css,js,json}]
 indent_size = 2
+
+[*.py]
+indent_size = 4
