@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   can merge. Tooling that merges to `main` and pushes tags should not be the
   one part of the repository nothing checks.
 
+### Changed
+- Docs: `images/screenshot.png` and `images/tn.png` are now captures of the bundled
+  `exampleSite/` — what the demo and the theme gallery actually serve — instead of a
+  personal site with unrelated branding and content. Both were also recaptured without
+  the browser scrollbar that had been baked into them, and the README image now uses a
+  relative path so it resolves outside github.com too.
+
 ## [0.2.2] — 2026-08-11
 
 ### Added
