@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.3] — 2026-08-12
+
 ### Added
 - Release automation: `scripts/release.py` cuts a release end to end (changelog
   promotion, release PR, CI gate, merge, annotated tag), and a `release.yml`
@@ -92,7 +94,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   switcher, `hreflang` alternates and locale-aware dates.
 - Complete bilingual `exampleSite/` and Hugo Modules support.
 
-[Unreleased]: https://github.com/adamsalves/terminal-mono/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/adamsalves/terminal-mono/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/adamsalves/terminal-mono/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/adamsalves/terminal-mono/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/adamsalves/terminal-mono/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/adamsalves/terminal-mono/compare/v0.1.0...v0.2.0
