@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   A tag and a GitHub Release are separate objects and the sidebar reads the
   Release — `v0.1.0` and `v0.2.2` were both tagged without one. `RELEASING.md`
   documents the process, including recovery when a step fails.
+- Tests: `scripts/test_release.py` covers the logic that decides what gets
+  published — changelog promotion, note extraction, tag ordering, token scoping
+  and the CI gate — against the real `CHANGELOG.md`. `ci.yml` runs it on every
+  pull request, so a release PR validates its own promoted changelog before it
+  can merge. Tooling that merges to `main` and pushes tags should not be the
+  one part of the repository nothing checks.
 
 ## [0.2.2] — 2026-08-11
 

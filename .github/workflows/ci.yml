@@ -21,6 +21,19 @@ defaults:
     shell: bash
 
 jobs:
+  # The release tooling merges to main and pushes tags, so its logic is gated
+  # here rather than discovered during a release. The suite reads the real
+  # CHANGELOG.md, which means the release PR — whose only change is that file —
+  # validates its own promoted changelog before it can merge.
+  scripts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Test the release tooling
+        run: python3 -m unittest discover -s scripts -p 'test_*.py' -v
+
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
