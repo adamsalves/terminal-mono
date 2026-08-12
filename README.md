@@ -126,12 +126,22 @@ so an existing site upgrades without touching its config.
 `identifier = "about"` renders "about" in English and "sobre" in Portuguese,
 with no need to repeat the menu per language. The precedence is:
 
-1. **`name`**, if you set one — an explicit label always wins and is never translated.
+1. **`name`**, if you set one — an explicit label wins and is never translated.
 2. **`i18n` of the `identifier`**, when the theme (or your own `i18n/` files) has that key.
 3. **The `identifier` itself**, so a link is never blank.
 
 Add your own keys to `i18n/<lang>.toml` to translate a custom entry, or give it
-a `name` if a single literal label is enough.
+a `name` if a single literal label is enough. Give every entry an `identifier`
+or a `name` — one with neither has no label to render, and is skipped rather
+than emitted as an empty link.
+
+One caveat on rule 1: an entry with `pageRef` inherits `name` from the target
+page's title when you leave it unset, and Hugo exposes no way to tell the two
+apart. So a `name` that is *identical* to that title is read as inherited, and a
+translation of the `identifier` wins instead. It only bites when both collide —
+`identifier = "blog"` plus `name = "Blogs"` pointing at a section titled
+"Blogs". Rename either side, or use `url` instead of `pageRef`, to get the
+literal label.
 
 **Use `pageRef` for internal pages, not `url`.** `pageRef = "/blogs"` resolves
 per language (`/pt/blogs/` in Portuguese); `url = "/blogs/"` would point every
@@ -141,6 +151,10 @@ written as `url`.
 **The blog entry stays conditional.** An entry with `identifier = "blog"` still
 follows the automatic rule below — ordering it by weight does not turn it into a
 permanent link to an empty section.
+
+**The nav is a single row, so submenus are not rendered.** An entry with a
+`parent` is dropped — the theme has no dropdown to put it in. Keep every entry
+at the top level.
 
 Menu order and the order the home page renders its sections are independent:
 this controls the nav only.
