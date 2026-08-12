@@ -90,6 +90,13 @@ a{color:inherit}
 .dot.r{background:#ff5f57}.dot.y{background:#febc2e}.dot.g{background:#28c840}
 .term__title{margin-left:10px; font-size:12px; color:var(--dim)}
 .term__body{margin:0; padding:22px; font-family:var(--mono); font-size:14px; line-height:1.85; white-space:pre-wrap; word-break:break-word; min-height:260px}
+/* The typewriter grows the <pre> line by line and .hero centers its columns, so
+   without a reserved height the identity column drifts down for the whole
+   animation. Only sites that actually list posts pay for the taller box. */
+.term__body--posts{min-height:430px}
+.term__body a{text-decoration:none; border-bottom:1px solid transparent; transition:border-color .18s}
+.term__body a:hover,.term__body a:focus-visible{border-bottom-color:currentColor}
+.term__body a:focus-visible{outline-offset:3px}
 .hero__intro{font-size:14px; color:var(--accent-dim); margin-bottom:10px}
 .hero h1{font-size:46px; line-height:1.04; margin:0 0 8px; font-weight:800; letter-spacing:-.035em}
 .hero__role{font-size:18px; color:var(--accent); margin-bottom:18px}
@@ -281,6 +288,7 @@ a{color:inherit}
   .hero__id{order:-1}
   .hero h1{font-size:36px}
   .term__body{font-size:12px; padding:18px 16px; min-height:220px}
+  .term__body--posts{min-height:380px}
   .grid-2{grid-template-columns:1fr; gap:30px}
   .section__head{flex-wrap:wrap; row-gap:4px}
   .section__head h2{font-size:24px}

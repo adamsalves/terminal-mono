@@ -1,6 +1,28 @@
 {{- $hero := site.Params.hero -}}
 {{- $skills := site.Params.about.skills.items -}}
 {{- $loc := site.Params.hero.location -}}
+{{- /* The newest posts, listed by the terminal's `ls ~/blog --latest`. Empty when
+       the language has no posts, so the command is skipped entirely rather than
+       printing an empty listing. site.RegularPages is scoped per language, so the
+       PT home lists PT posts on its own. params.hero.latestPosts sets how many;
+       0 turns the whole thing off. */ -}}
+{{- /* `default` would swallow a configured 0, since Hugo counts it as empty —
+       hence isset, the same way nav.html reads params.navbar.showBlog. */ -}}
+{{- $n := 3 -}}
+{{- with $hero }}{{ if isset . "latestposts" }}{{ $n = int .latestPosts }}{{ end }}{{ end -}}
+{{- $posts := slice -}}
+{{- if gt $n 0 -}}
+  {{- range first $n (where site.RegularPages "Section" "blogs") -}}
+    {{- /* Same filename idiom as post-card.html, so the home and the blog cards
+           can never name the same post differently. */ -}}
+    {{- $name := "" -}}
+    {{- with .File }}{{ $name = .ContentBaseName }}{{ else }}{{ $name = (.Slug | default (.Title | urlize)) }}{{ end -}}
+    {{- $posts = $posts | append (dict
+          "d" (.Date | time.Format "2006-01-02")
+          "f" (printf "%s.md" $name)
+          "u" .RelPermalink) -}}
+  {{- end -}}
+{{- end -}}
 <section id="top" class="container">
   <div class="hero">
 
@@ -10,13 +32,14 @@
         <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
         <span class="term__title">{{ site.Params.terminalUser | default "adams@portfolio" }}: ~</span>
       </div>
-      <pre id="hero-term" class="term__body" aria-label="{{ i18n "aria_terminal" }}"
+      <pre id="hero-term" class="term__body{{ if $posts }} term__body--posts{{ end }}" aria-label="{{ i18n "aria_terminal" }}"
         data-user="{{ site.Params.terminalUser | default "adams@portfolio" }}"
         data-name="{{ site.Params.title }}"
         data-role="{{ $hero.subtitle }}"
         data-loc="{{ $loc }}"
         data-stack="{{ with $skills }}{{ delimit (first 6 .) " · " }}{{ end }}"
-        data-projects="{{ range $i, $p := site.Params.projects.items }}{{ if $i }}   {{ end }}{{ $p.repo | default ($p.title | urlize) }}/{{ end }}"></pre>
+        data-projects="{{ range $i, $p := site.Params.projects.items }}{{ if $i }}   {{ end }}{{ $p.repo | default ($p.title | urlize) }}/{{ end }}"
+        data-posts="{{ $posts | jsonify }}"></pre>
     </div>
 
     {{/* identity */}}

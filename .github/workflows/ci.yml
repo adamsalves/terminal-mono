@@ -105,3 +105,52 @@ jobs:
 
           print(f'fallback nav OK: {found}')
           PY
+      # The hero terminal's post listing is built server-side into data-posts and
+      # only becomes visible once JS types it out, so a rendering bug here is
+      # invisible to a build that merely succeeds. Assert both directions: the
+      # exampleSite has posts and must carry them with per-language URLs, and the
+      # bare site has none and must not reserve the taller terminal for nothing.
+      - name: Assert the hero post listing
+        run: |
+          python3 - <<'PY'
+          import html as htmllib, json, re, sys
+
+          def hero(path):
+              raw = open(path).read()
+              pre = re.search(r'<pre id=["\']?hero-term["\']?[ >][^>]*>', raw)
+              if not pre:
+                  sys.exit(f'{path}: no #hero-term in the output')
+              tag = pre.group(0)
+              attr = re.search(r'data-posts=("[^"]*"|\'[^\']*\'|[^\s>]+)', tag)
+              if not attr:
+                  sys.exit(f'{path}: #hero-term has no data-posts attribute')
+              return tag, json.loads(htmllib.unescape(attr.group(1).strip('"\'')))
+
+          for path, lang, prefix in [
+              ('exampleSite/public/index.html', 'en', '/terminal-mono/blogs/'),
+              ('exampleSite/public/pt/index.html', 'pt', '/terminal-mono/pt/blogs/'),
+          ]:
+              tag, posts = hero(path)
+              if len(posts) != 3:
+                  sys.exit(f'{path}: expected 3 posts in data-posts, got {len(posts)}')
+              if 'term__body--posts' not in tag:
+                  sys.exit(f'{path}: listing present but the height-reserving class is missing')
+              for p in posts:
+                  if not p.get('u', '').startswith(prefix):
+                      sys.exit(f'{path}: {lang} post URL {p.get("u")!r} does not start with {prefix!r}')
+                  if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', p.get('d', '')):
+                      sys.exit(f'{path}: bad date {p.get("d")!r}')
+                  if not p.get('f', '').endswith('.md'):
+                      sys.exit(f'{path}: bad filename {p.get("f")!r}')
+              dates = [p['d'] for p in posts]
+              if dates != sorted(dates, reverse=True):
+                  sys.exit(f'{path}: posts are not newest-first: {dates}')
+              print(f'{lang} hero listing OK: {[p["f"] for p in posts]}')
+
+          tag, posts = hero('/tmp/bare/public/index.html')
+          if posts:
+              sys.exit(f'bare site has no content but listed {posts}')
+          if 'term__body--posts' in tag:
+              sys.exit('bare site reserves the taller terminal for a listing it does not have')
+          print('bare hero listing OK: empty, no height reserved')
+          PY
