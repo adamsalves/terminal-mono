@@ -76,3 +76,32 @@ jobs:
           ln -sfn "$GITHUB_WORKSPACE" /tmp/bare/themes/terminal-mono
           printf 'baseURL = "https://example.com/terminal-mono/"\ntitle = "Bare Site"\ntheme = "terminal-mono"\n' > /tmp/bare/hugo.toml
           hugo --source /tmp/bare --gc --minify --panicOnWarning
+      # A green build only proves the templates ran, not what they emitted. The
+      # bare site is where the nav's fallback order lives — the promise that a
+      # site with no [[menu.main]] upgrades untouched — so assert it rather than
+      # trust it. The blank-link check guards the other direction: an entry that
+      # resolves to no label has to be dropped, never shipped as an <a> a screen
+      # reader cannot announce.
+      - name: Assert the fallback nav
+        run: |
+          python3 - <<'PY'
+          import re, sys
+
+          html = open('/tmp/bare/public/index.html').read()
+          nav = re.search(r'<nav class=["\']?nav["\']?[ >].*?</nav>', html, re.S)
+          if not nav:
+              sys.exit('no <nav> in the bare site output')
+
+          links = re.findall(r'<a\b[^>]*>(.*?)</a>', nav.group(0), re.S)
+          blank = [l for l in links if not re.sub(r'<[^>]*>|\s', '', l)]
+          if blank:
+              sys.exit(f'nav has {len(blank)} link(s) with no text: {blank}')
+
+          # Desktop bar and mobile menu render the same partial, hence twice.
+          expected = ['about', 'projects', 'experience', 'contact'] * 2
+          found = [l for l in links if l in set(expected)]
+          if found != expected:
+              sys.exit(f'fallback nav order changed:\n  found    {found}\n  expected {expected}')
+
+          print(f'fallback nav OK: {found}')
+          PY

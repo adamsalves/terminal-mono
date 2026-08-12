@@ -6,6 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Nav: the menu order is configurable through Hugo's native `[[menu.main]]`, sorted by
+  `weight`, instead of being hardcoded in the partial. Labels are translated from each
+  entry's `identifier`, so **one block serves every language** — an explicit `name` wins
+  when you want a literal label. Anchors resolve against the current language's home, so
+  they keep working from inside a blog post, and `pageRef` keeps internal links on the
+  right language. Sites without `[[menu.main]]` render exactly as before: the default
+  order is the fallback, and the minified output is byte-identical. The blog entry stays
+  conditional on the language having posts, `params.navbar.showBlog` still overrides, and
+  desktop and mobile now render from a single partial so they cannot drift apart.
+
 ### Changed
 - Release: `scripts/release.py` now deletes the `release/vX.Y.Z` branch from the
   remote once the tag is pushed. It already removed the local copy, so the remote

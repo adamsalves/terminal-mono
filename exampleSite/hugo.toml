@@ -28,6 +28,46 @@ summaryLength = 30
 # ============================================================
 #  Shared (non-translatable) params — merged into every language.
 # ============================================================
+# ============================================================
+#  Nav menu — optional. Delete this whole block and the theme falls back to
+#  its default order (about, projects, experience, blog, contact).
+#
+#  Ordered by `weight`. One block serves every language: the `identifier` is
+#  used as an i18n key, so "about" renders as "about" in English and "sobre"
+#  in Portuguese without repeating the menu per language.
+#
+#  Set `name` to override the label with a literal string — it always wins
+#  over the translation, and disables translation for that entry.
+#
+#  The order below matches the order the home page renders its sections
+#  (projects, about, experience, contact), which the theme's default nav
+#  order does not. Section order is set in the layout and is independent of
+#  this menu — reordering here does not move the sections.
+# ============================================================
+[[menu.main]]
+  identifier = "projects"
+  url = "#projects"        # anchors resolve against the language's home
+  weight = 10
+[[menu.main]]
+  identifier = "about"
+  url = "#about"
+  weight = 20
+[[menu.main]]
+  identifier = "experience"
+  url = "#experience"
+  weight = 30
+[[menu.main]]
+  identifier = "blog"
+  pageRef = "/blogs"       # pageRef, not url: it resolves per language, so PT
+                           # links to /pt/blogs/. A url = "/blogs/" would send
+                           # every language to the English section.
+                           # Still hidden when the language has no posts.
+  weight = 40
+[[menu.main]]
+  identifier = "contact"
+  url = "#contact"
+  weight = 50
+
 [params]
   showScanlines = true       # CRT scanline overlay
   readingProgress = true     # reading-progress bar on posts
