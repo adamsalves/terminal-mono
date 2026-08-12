@@ -2,7 +2,10 @@
 
 Personal **dark / monospace** theme for portfolio + blog. Typing terminal hero, repository-style project cards, a blog with a reading-progress bar, tag pages and a 404 — all in the same aesthetic. **No third-party JS dependencies.**
 
-![Terminal Mono](/images/screenshot.png)
+![Terminal Mono](images/screenshot.png)
+
+**[Live demo →](https://adamsalves.github.io/terminal-mono/)** — the screenshot above is
+the bundled `exampleSite/`, which is exactly what the demo serves.
 
 - 🎨 Dark-only, JetBrains Mono, lime accent — all driven by CSS variables.
 - ⌨️ Hero terminal with a typewriter effect (degrades gracefully without JS).
