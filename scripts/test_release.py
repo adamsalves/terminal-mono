@@ -389,6 +389,62 @@ class WaitForChecks(unittest.TestCase):
         self.assertIn("netlify/deploy-preview", str(caught.exception))
 
 
+class EmptyAPIResponse(unittest.TestCase):
+    """DELETE answers 204 with no body, which json.load alone would choke on."""
+
+    def fake_urlopen(self, payload):
+        import io
+        real = release.urllib.request.urlopen
+        self.addCleanup(setattr, release.urllib.request, "urlopen", real)
+        release.urllib.request.urlopen = lambda request, timeout=None: io.BytesIO(payload)
+
+    def test_returns_none_for_an_empty_body(self):
+        self.fake_urlopen(b"")
+        self.assertIsNone(release.api("/repos/o/r/git/refs/heads/x", "DELETE", tok="t"))
+
+    def test_returns_none_for_a_whitespace_body(self):
+        self.fake_urlopen(b"\n")
+        self.assertIsNone(release.api("/repos/o/r/git/refs/heads/x", "DELETE", tok="t"))
+
+    def test_still_parses_a_json_body(self):
+        self.fake_urlopen(b'{"sha": "abc"}')
+        self.assertEqual(release.api("/repos/o/r/pulls/1", tok="t"), {"sha": "abc"})
+
+
+class DeleteRemoteBranch(unittest.TestCase):
+    def setUp(self):
+        real = release.api
+        self.addCleanup(setattr, release, "api", real)
+
+    def test_deletes_the_branch_via_the_refs_endpoint(self):
+        calls = []
+
+        def fake(path, method="GET", body=None, tok=None):
+            calls.append((method, path))
+            return None
+
+        release.api = fake
+        release.delete_remote_branch("o/r", "release/v1.0.0", "tok")
+        self.assertEqual(
+            calls, [("DELETE", "/repos/o/r/git/refs/heads/release/v1.0.0")]
+        )
+
+    def test_tolerates_a_branch_that_is_already_gone(self):
+        def fake(path, method="GET", body=None, tok=None):
+            raise release.NotFound(path)
+
+        release.api = fake
+        release.delete_remote_branch("o/r", "release/v1.0.0", "tok")
+
+    def test_never_fails_the_release_over_a_leftover_branch(self):
+        """The tag is already pushed by this point — litter is not a failure."""
+        def fake(path, method="GET", body=None, tok=None):
+            raise release.Abort("HTTP 403\nforbidden")
+
+        release.api = fake
+        release.delete_remote_branch("o/r", "release/v1.0.0", "tok")
+
+
 class Rollback(unittest.TestCase):
     """Exercises the failure path against a real git repo.
 

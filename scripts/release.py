@@ -140,7 +140,9 @@ def api(path, method="GET", body=None, tok=None):
     )
     try:
         with urllib.request.urlopen(request, timeout=API_TIMEOUT_SECONDS) as response:
-            return json.load(response)
+            payload = response.read()
+        # DELETE answers 204 No Content; there is nothing to parse.
+        return json.loads(payload) if payload.strip() else None
     except urllib.error.HTTPError as error:
         if error.code == 404:
             raise NotFound(path)
@@ -348,6 +350,23 @@ def verify_mergeable(slug, number, tok):
     raise Abort(f"GitHub never reported a mergeable state for PR #{number}")
 
 
+def delete_remote_branch(slug, branch, tok):
+    """Remove the merged release branch from the remote.
+
+    Best effort by design. It runs only after the tag is pushed, so the release
+    is already complete and a branch that outlives it is litter, not a failure
+    — worth reporting, never worth aborting over. Without this the local copy
+    gets cleaned up and the remote one accumulates, one per release.
+    """
+    try:
+        api(f"/repos/{slug}/git/refs/heads/{branch}", "DELETE", tok=tok)
+        note(f"deleted {branch} from {slug}")
+    except NotFound:
+        note(f"{branch} was already gone from {slug}")
+    except Abort:
+        note(f"could not delete {branch} from {slug} — remove it by hand")
+
+
 # ------------------------------------------------------------------ recovery
 
 def rollback(branch, pushed, remote):
@@ -488,6 +507,9 @@ def main():
         raise Abort(f"main is at {head[:7]}, expected the merge commit {merge['sha'][:7]}")
     git("tag", "-a", tag, "-m", f"Terminal Mono {tag}")
     git("push", remote, tag)
+
+    # The release is complete from here on; tidying cannot fail it.
+    delete_remote_branch(slug, branch, tok)
 
     step("Waiting for the Release workflow")
     deadline = time.time() + RELEASE_TIMEOUT_SECONDS
