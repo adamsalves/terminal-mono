@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- Release: `scripts/release.py` now deletes the `release/vX.Y.Z` branch from the
+  remote once the tag is pushed. It already removed the local copy, so the remote
+  one accumulated — one orphan per release, as `v0.2.3` left behind. The cleanup
+  runs after the release is complete and only reports if it fails, since a
+  leftover branch is litter rather than a broken release.
+
 ## [0.2.3] — 2026-08-12
 
 ### Added

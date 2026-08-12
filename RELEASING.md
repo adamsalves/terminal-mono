@@ -68,7 +68,10 @@ CSS class a consumer might override is breaking, even if the theme still builds.
    If anything fails it stops and leaves the branch and PR open.
 5. **Merges** the PR with a merge commit, matching the existing history.
 6. **Tags** the merge commit with an annotated `vX.Y.Z` and pushes it.
-7. **`release.yml` publishes the GitHub Release**, using that version's
+7. **Deletes the release branch**, locally and on the remote. This runs after
+   the tag is pushed, so a failure here only prints a warning — the release is
+   already done and a leftover branch is litter, not a broken release.
+8. **`release.yml` publishes the GitHub Release**, using that version's
    changelog section as the body plus a compare link.
 
 Preview the changelog diff and every step without writing anything:
