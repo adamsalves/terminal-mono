@@ -105,20 +105,26 @@ and lists the newest ones:
 
 ```
 robin@portfolio:~$ ls ~/blog --latest
-2026-03-12  trailhead-nuxt-3.md
-2026-02-27  chiptune-web-audio-api.md
-2026-02-08  planning-poker-socketio.md
+2026-03-12  migrating-trailhead-to-nuxt-3.md
+2026-02-27  a-chiptune-with-the-web-audio-api.md
+2026-02-08  planning-poker-with-socket-io.md
 ```
 
 Each filename is a link to the post. There is nothing to switch on — the listing
-appears when posts exist and disappears when they don't, and every language lists
-its own posts and links to its own translations.
+appears when posts exist and disappears when they don't. Posts are ordered by
+date, newest first, regardless of any `weight` you set.
+
+**The names follow the reader's language.** They are built from each post's
+title, not from its file on disk — `post.md` and `post.pt.md` share a filename,
+so a Portuguese reader would otherwise get an English listing. Accents are kept
+(`programação-e-café.md`), and the post's real title is the link's accessible
+name for screen readers.
 
 `params.hero.latestPosts` sets how many to show (default `3`); `0` drops the
-command entirely. It is not translatable, so put it in the shared `[params]`
-block rather than under a `[languages.*]` one.
+command entirely. Set it under `[params.hero]` for the whole site, or under
+`[languages.<lang>.params.hero]` to vary it per language.
 
-The links land in the DOM when the typing animation finishes. Readers with
+Links become clickable as each name finishes typing. Readers with
 `prefers-reduced-motion` get the whole terminal, links included, immediately.
 
 ### Nav menu order

@@ -10,9 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Hero: the terminal lists the newest posts as a fourth command, `ls ~/blog --latest`,
   with each filename linking to its post. The home page gave no sign a blog existed
   unless you read the nav; this surfaces it without adding a section or touching the
-  order of the existing ones. It appears on its own once a language has posts and
-  lists that language's posts, `params.hero.latestPosts` sets how many (`0` disables),
-  and `prefers-reduced-motion` gets the links immediately instead of after the typing.
+  order of the existing ones. It appears on its own once a language has posts, and
+  the names are built from post titles so they follow the reader's language rather
+  than the file on disk — `post.md` and `post.pt.md` would otherwise both read as
+  English. Ordered by date newest-first regardless of `weight`. Each post's title is
+  the link's accessible name. `params.hero.latestPosts` sets how many (`0` disables),
+  per site or per language, and `prefers-reduced-motion` gets the links immediately.
 - Nav: the menu order is configurable through Hugo's native `[[menu.main]]`, sorted by
   `weight`, instead of being hardcoded in the partial. Labels are translated from each
   entry's `identifier`, so **one block serves every language** — an explicit `name` wins
