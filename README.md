@@ -88,7 +88,7 @@ terminal-mono/
 
 | Section | Params |
 |---|---|
-| Brand/nav | `params.title`, `params.navbar.brandName`, `params.navbar.showBlog` (optional), `params.terminalUser` |
+| Brand/nav | `params.title`, `params.navbar.brandName`, `params.navbar.showBlog` (optional), `params.terminalUser`; order via [`[[menu.main]]`](#nav-menu-order) (optional) |
 | Hero | `params.hero.intro/subtitle/location/content`, `params.hero.socialLinks.fontAwesomeIcons[]` |
 | Hero — terminal | builds "whoami / cat stack.txt / ls projects/" from `title`, `subtitle`, skills and projects |
 | Projects | `params.projects.items[]` → `title`, `repo`, `language`, `tagline`, `content`, `badges[]`, `featured{name,link}`, `links[]{icon,url,name}` |
@@ -97,6 +97,53 @@ terminal-mono/
 | Contact | `params.contact.title/content/btnName/btnLink` |
 | Footer | `params.footer.copyright`, `params.footer.socialNetworks.github/linkedin` |
 | Blog | `content/blogs/*.md` → `title`, `date`, `tags`, `description`, `image` (optional), `toc` |
+
+### Nav menu order
+
+The nav renders `about, projects, experience, blog, contact` by default. Define
+`[[menu.main]]` to choose the order yourself — Hugo's native menu, sorted by
+`weight`:
+
+```toml
+[[menu.main]]
+  identifier = "projects"
+  url = "#projects"     # anchors resolve against the language's home
+  weight = 10
+[[menu.main]]
+  identifier = "about"
+  url = "#about"
+  weight = 20
+[[menu.main]]
+  identifier = "blog"
+  pageRef = "/blogs"    # pageRef, not url — see below
+  weight = 30
+```
+
+Omit the block entirely and nothing changes: the default order is the fallback,
+so an existing site upgrades without touching its config.
+
+**Labels are translated from `identifier`.** One block serves every language —
+`identifier = "about"` renders "about" in English and "sobre" in Portuguese,
+with no need to repeat the menu per language. The precedence is:
+
+1. **`name`**, if you set one — an explicit label always wins and is never translated.
+2. **`i18n` of the `identifier`**, when the theme (or your own `i18n/` files) has that key.
+3. **The `identifier` itself**, so a link is never blank.
+
+Add your own keys to `i18n/<lang>.toml` to translate a custom entry, or give it
+a `name` if a single literal label is enough.
+
+**Use `pageRef` for internal pages, not `url`.** `pageRef = "/blogs"` resolves
+per language (`/pt/blogs/` in Portuguese); `url = "/blogs/"` would point every
+language at the English section. Anchors (`#about`) and external links are
+written as `url`.
+
+**The blog entry stays conditional.** An entry with `identifier = "blog"` still
+follows the automatic rule below — ordering it by weight does not turn it into a
+permanent link to an empty section.
+
+Menu order and the order the home page renders its sections are independent:
+this controls the nav only.
 
 ### Project colors
 

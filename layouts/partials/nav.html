@@ -3,20 +3,36 @@
 {{- $onBlog := eq .Section "blogs" -}}
 {{- /* Show the blog link only when the current language has at least one published
        post (site.RegularPages is scoped per language). An explicit
-       params.navbar.showBlog (true/false) overrides this automatic detection. */ -}}
+       params.navbar.showBlog (true/false) overrides this automatic detection.
+       This applies to a configured menu too: an entry with identifier "blog"
+       stays conditional, so ordering it by weight does not turn it into a
+       permanent link to an empty section. */ -}}
 {{- $hasBlog := gt (len (where site.RegularPages "Section" "blogs")) 0 -}}
 {{- with site.Params.navbar }}{{ if isset . "showblog" }}{{ $hasBlog = .showBlog }}{{ end }}{{ end -}}
+{{- /* Nav entries come from [[menu.main]] when the site defines one, ordered by
+       weight; otherwise from the theme's default order below. Both paths build
+       the same shape, so a site that never touches its config renders exactly
+       what it rendered before the menu became configurable. */ -}}
+{{- $entries := slice -}}
+{{- with site.Menus.main -}}
+  {{- range . -}}
+    {{- $entries = $entries | append (dict "id" .Identifier "name" .Name "url" .URL "page" .Page) -}}
+  {{- end -}}
+{{- else -}}
+  {{- $entries = slice
+        (dict "id" "about"      "name" "" "url" "#about"      "page" false)
+        (dict "id" "projects"   "name" "" "url" "#projects"   "page" false)
+        (dict "id" "experience" "name" "" "url" "#experience" "page" false)
+        (dict "id" "blog"       "name" "" "url" $blog         "page" false)
+        (dict "id" "contact"    "name" "" "url" "#contact"    "page" false) -}}
+{{- end -}}
+{{- $links := dict "page" . "entries" $entries "home" $home "hasBlog" $hasBlog "onBlog" $onBlog -}}
 <nav class="nav">
   <div class="nav__inner">
     <a class="brand" href="{{ $home }}"><b>&gt;_</b> {{ site.Params.navbar.brandName | default site.Params.title }}<span class="cursor" aria-hidden="true">_</span></a>
 
     <div class="nav__links">
-      <a href="{{ $home }}#about">{{ i18n "about" }}</a>
-      <a href="{{ $home }}#projects">{{ i18n "projects" }}</a>
-      <a href="{{ $home }}#experience">{{ i18n "experience" }}</a>
-      {{ if $hasBlog }}<a class="{{ if $onBlog }}is-active{{ end }}"{{ if $onBlog }} aria-current="page"{{ end }} href="{{ $blog }}">{{ i18n "blog" }}</a>{{ end }}
-      <a href="{{ $home }}#contact">{{ i18n "contact" }}</a>
-      {{ partial "lang-switch.html" . }}
+      {{- partial "nav-links.html" $links }}
     </div>
 
     <button class="hamburger" id="hamburger" type="button" aria-label="{{ i18n "menu_open" }}" aria-controls="mobile-menu" aria-expanded="false">
@@ -25,11 +41,6 @@
   </div>
 
   <div class="mobile-menu" id="mobile-menu">
-    <a href="{{ $home }}#about">{{ i18n "about" }}</a>
-    <a href="{{ $home }}#projects">{{ i18n "projects" }}</a>
-    <a href="{{ $home }}#experience">{{ i18n "experience" }}</a>
-    {{ if $hasBlog }}<a class="{{ if $onBlog }}is-active{{ end }}"{{ if $onBlog }} aria-current="page"{{ end }} href="{{ $blog }}">{{ i18n "blog" }}</a>{{ end }}
-    <a href="{{ $home }}#contact">{{ i18n "contact" }}</a>
-    {{ partial "lang-switch.html" . }}
+    {{- partial "nav-links.html" $links }}
   </div>
 </nav>
