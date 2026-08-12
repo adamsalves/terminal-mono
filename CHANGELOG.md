@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Release automation: `scripts/release.py` cuts a release end to end (changelog
+  promotion, release PR, CI gate, merge, annotated tag), and a `release.yml`
+  workflow publishes the GitHub Release from the changelog section on tag push.
+  A tag and a GitHub Release are separate objects and the sidebar reads the
+  Release — `v0.1.0` and `v0.2.2` were both tagged without one. `RELEASING.md`
+  documents the process, including recovery when a step fails.
+
 ## [0.2.2] — 2026-08-11
 
 ### Added

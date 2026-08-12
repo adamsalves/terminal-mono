@@ -164,11 +164,13 @@ The theme is already a self-contained, versionable folder. To distribute it:
    ```bash
    git push -u origin main
    ```
-2. **Tag a version** (SemVer) — this is what Hugo Modules and the submodule use:
+2. **Cut a version** (SemVer) — this is what Hugo Modules and the submodule use:
    ```bash
-   git tag -a v0.2.0 -m "Terminal Mono v0.2.0"
-   git push origin v0.2.0
+   ./scripts/release.py 0.2.3
    ```
+   That promotes the changelog, opens and merges the release PR, pushes the annotated
+   tag, and publishes the GitHub Release. See **[RELEASING.md](RELEASING.md)** for the
+   prerequisites, how to pick the number, and how to recover if a step fails.
 3. **Live demo:** a GitHub Actions workflow (`.github/workflows/pages.yml`) builds the
    `exampleSite/` and deploys it to GitHub Pages on every push to `main`
    (<https://adamsalves.github.io/terminal-mono/>). `netlify.toml` is included as an
