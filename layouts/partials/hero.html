@@ -1,6 +1,55 @@
 {{- $hero := site.Params.hero -}}
 {{- $skills := site.Params.about.skills.items -}}
 {{- $loc := site.Params.hero.location -}}
+{{- /* The newest posts, listed by the terminal's `ls ~/blog --latest`. Empty when
+       the language has no posts, so the command is skipped entirely rather than
+       printing an empty listing. site.RegularPages is scoped per language, so the
+       PT home lists PT posts on its own. params.hero.latestPosts sets how many;
+       0 turns the whole thing off. */ -}}
+{{- /* `default` would swallow a configured 0, since Hugo counts it as empty —
+       hence isset, the same way nav.html reads params.navbar.showBlog. try()
+       keeps a non-numeric value from taking the build down with a template
+       error; the warning still stops CI, which runs --panicOnWarning. */ -}}
+{{- $n := 3 -}}
+{{- with $hero -}}
+  {{- if isset . "latestposts" -}}
+    {{- $parsed := try (int .latestPosts) -}}
+    {{- with $parsed.Err -}}
+      {{- warnf "params.hero.latestPosts is not a number (%v) — falling back to 3" . -}}
+    {{- else -}}
+      {{- $n = $parsed.Value -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $posts := slice -}}
+{{- if gt $n 0 -}}
+  {{- /* Sorted explicitly: Hugo's default page order is Weight first, so on a
+         site that weights its posts `first` would hand back the lowest weights
+         — which is how a command called --latest ends up printing the oldest
+         posts and dropping the newest. */ -}}
+  {{- range first $n (sort (where site.RegularPages "Section" "blogs") "Date" "desc") -}}
+    {{- /* Shared with post-card.html, so the home and the blog listing can never
+           name the same post differently. */ -}}
+    {{- $name := partial "post-filename.html" . -}}
+    {{- /* Title-derived names run longer than the file slugs they replace, and a
+           name that wraps puts its tail in the date column and breaks the listing
+           out of its `ls` shape. Cut the stem, keep the extension; the untruncated
+           title is still the link's accessible name. RuneCount, not len, so an
+           accented name is not measured in bytes and cut short. */ -}}
+    {{- if gt (strings.RuneCount $name) 36 -}}
+      {{- $name = printf "%s…" (substr $name 0 35) -}}
+    {{- end -}}
+    {{- /* No usable name means no readable link text, so skip rather than ship
+           an anchor called ".md". */ -}}
+    {{- if $name -}}
+      {{- $posts = $posts | append (dict
+            "d" (cond .Date.IsZero "" (.Date | time.Format "2006-01-02"))
+            "f" (printf "%s.md" $name)
+            "t" .LinkTitle
+            "u" .RelPermalink) -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
 <section id="top" class="container">
   <div class="hero">
 
@@ -10,13 +59,15 @@
         <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
         <span class="term__title">{{ site.Params.terminalUser | default "adams@portfolio" }}: ~</span>
       </div>
-      <pre id="hero-term" class="term__body" aria-label="{{ i18n "aria_terminal" }}"
+      <pre id="hero-term" class="term__body{{ if $posts }} term__body--posts{{ end }}" aria-label="{{ i18n "aria_terminal" }}"
+        {{- with $posts }} style="--hero-posts:{{ len . }}"{{ end }}
         data-user="{{ site.Params.terminalUser | default "adams@portfolio" }}"
         data-name="{{ site.Params.title }}"
         data-role="{{ $hero.subtitle }}"
         data-loc="{{ $loc }}"
         data-stack="{{ with $skills }}{{ delimit (first 6 .) " · " }}{{ end }}"
-        data-projects="{{ range $i, $p := site.Params.projects.items }}{{ if $i }}   {{ end }}{{ $p.repo | default ($p.title | urlize) }}/{{ end }}"></pre>
+        data-projects="{{ range $i, $p := site.Params.projects.items }}{{ if $i }}   {{ end }}{{ $p.repo | default ($p.title | urlize) }}/{{ end }}"
+        data-posts="{{ $posts | jsonify }}"></pre>
     </div>
 
     {{/* identity */}}

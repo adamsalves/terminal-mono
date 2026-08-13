@@ -81,6 +81,13 @@ summaryLength = 30
     brandName = "robin.dev"
     # showBlog = true   # force the nav blog link on/off; default is auto (shown when the language has posts)
 
+  [params.hero]
+    # How many of the newest posts the hero terminal lists, as a fourth command
+    # (`ls ~/blog --latest`). Set 0 to drop the command entirely. Nothing to turn
+    # on: the listing appears once a language has posts and disappears when it
+    # has none, and each language lists its own.
+    latestPosts = 3
+
   [params.hero.socialLinks]
     [[params.hero.socialLinks.fontAwesomeIcons]]
       icon = "fab fa-github"

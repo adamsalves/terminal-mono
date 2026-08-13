@@ -90,13 +90,44 @@ terminal-mono/
 |---|---|
 | Brand/nav | `params.title`, `params.navbar.brandName`, `params.navbar.showBlog` (optional), `params.terminalUser`; order via [`[[menu.main]]`](#nav-menu-order) (optional) |
 | Hero | `params.hero.intro/subtitle/location/content`, `params.hero.socialLinks.fontAwesomeIcons[]` |
-| Hero — terminal | builds "whoami / cat stack.txt / ls projects/" from `title`, `subtitle`, skills and projects |
+| Hero — terminal | builds "whoami / cat stack.txt / ls projects/" from `title`, `subtitle`, skills and projects; adds [`ls ~/blog --latest`](#latest-posts-in-the-hero-terminal) when the language has posts — `params.hero.latestPosts` (optional, default 3) |
 | Projects | `params.projects.items[]` → `title`, `repo`, `language`, `tagline`, `content`, `badges[]`, `featured{name,link}`, `links[]{icon,url,name}` |
 | About + skills | `params.about.content` (markdown), `params.about.skills.enable/items[]` |
 | Experience | `params.experience.enable`, `params.experience.items[]` → `company`, `jobs[]{name, date (optional), content}` |
 | Contact | `params.contact.title/content/btnName/btnLink` |
 | Footer | `params.footer.copyright`, `params.footer.socialNetworks.github/linkedin` |
 | Blog | `content/blogs/*.md` → `title`, `date`, `tags`, `description`, `image` (optional), `toc` |
+
+### Latest posts in the hero terminal
+
+Once a language has published posts, the hero terminal types a fourth command
+and lists the newest ones:
+
+```
+robin@portfolio:~$ ls ~/blog --latest
+2026-03-12  migrating-trailhead-to-nuxt-3.md
+2026-02-27  a-chiptune-with-the-web-audio-api.md
+2026-02-08  planning-poker-with-socket-io.md
+```
+
+Each filename is a link to the post. There is nothing to switch on — the listing
+appears when posts exist and disappears when they don't. Posts are ordered by
+date, newest first, regardless of any `weight` you set.
+
+**The names follow the reader's language.** They are built from each post's
+title, not from its file on disk — `post.md` and `post.pt.md` share a filename,
+so a Portuguese reader would otherwise get an English listing. Accents are kept
+(`programação-e-café.md`), and the post's real title is the link's accessible
+name for screen readers. The `~/blog/….md` label on the blog cards is built the
+same way, from the same partial, so the two can never disagree; in the terminal
+the name is shortened to keep the listing in one column.
+
+`params.hero.latestPosts` sets how many to show (default `3`); `0` drops the
+command entirely. Set it under `[params.hero]` for the whole site, or under
+`[languages.<lang>.params.hero]` to vary it per language.
+
+Links become clickable as each name finishes typing. Readers with
+`prefers-reduced-motion` get the whole terminal, links included, immediately.
 
 ### Nav menu order
 

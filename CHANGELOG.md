@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Hero: the terminal lists the newest posts as a fourth command, `ls ~/blog --latest`,
+  with each filename linking to its post. The home page gave no sign a blog existed
+  unless you read the nav; this surfaces it without adding a section or touching the
+  order of the existing ones. It appears on its own once a language has posts, and
+  the names are built from post titles so they follow the reader's language rather
+  than the file on disk — `post.md` and `post.pt.md` would otherwise both read as
+  English. Ordered by date newest-first regardless of `weight`. Each post's title is
+  the link's accessible name. `params.hero.latestPosts` sets how many (`0` disables),
+  per site or per language, and `prefers-reduced-motion` gets the links immediately.
 - Nav: the menu order is configurable through Hugo's native `[[menu.main]]`, sorted by
   `weight`, instead of being hardcoded in the partial. Labels are translated from each
   entry's `identifier`, so **one block serves every language** — an explicit `name` wins
@@ -18,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   desktop and mobile now render from a single partial so they cannot drift apart.
 
 ### Changed
+- Blog cards: the `~/blog/….md` label follows the reader's language. It came from
+  the file on disk, and `post.md` and `post.pt.md` collapse to one name, so every
+  language showed the English one. It is built from the post title now, sharing
+  `partials/post-filename.html` with the hero listing so the two cannot disagree.
+  A long name is ellipsized rather than wrapping into the reading time.
 - Release: `scripts/release.py` now deletes the `release/vX.Y.Z` branch from the
   remote once the tag is pushed. It already removed the local copy, so the remote
   one accumulated — one orphan per release, as `v0.2.3` left behind. The cleanup
