@@ -4,59 +4,58 @@
        Expects a dict:
          page     the current page, for the language switcher
          entries  slice of dicts: id (identifier), name (explicit label), url
+                  — already filtered by sections.html, which decides what belongs
+                  in the nav; everything here is about how an entry renders, not
+                  whether it should
          home     the current language's home, for resolving anchors
-         hasBlog  whether the blog entry should render at all
          onBlog   whether the current page sits inside the blog section */ -}}
 {{- $home := .home -}}
-{{- $hasBlog := .hasBlog -}}
 {{- $onBlog := .onBlog -}}
 {{- range .entries }}
       {{ $id := .id -}}
-      {{- if or (ne $id "blog") $hasBlog -}}
-        {{- /* Label precedence: an explicit `name` always wins, so what the
-               config says is what renders. With no name, translate the
-               identifier — that is what lets a single [[menu.main]] block
-               serve every language. The identifier itself is the last resort,
-               so a link is never blank.
+      {{- /* Label precedence: an explicit `name` always wins, so what the
+             config says is what renders. With no name, translate the
+             identifier — that is what lets a single [[menu.main]] block
+             serve every language. The identifier itself is the last resort,
+             so a link is never blank.
 
-               try() is not optional here: with --printI18nWarnings and
-               --panicOnWarning together (what ci.yml runs the exampleSite
-               under) a missing key makes i18n return an error rather than an
-               empty string, so a plain `i18n .id | default .name` would abort
-               the build at the lookup instead of falling back. */ -}}
-        {{- /* A pageRef entry gets .Name filled in from the target page's
-               title, so .Name alone cannot tell "the config said this" from
-               "Hugo derived this". Treat it as explicit only when it differs
-               from the page title, otherwise a translated identifier would
-               lose to an auto-generated "Blogs". */ -}}
-        {{- $explicit := .name -}}
-        {{- with .page -}}
-          {{- if eq $explicit .LinkTitle -}}{{- $explicit = "" -}}{{- end -}}
+             try() is not optional here: with --printI18nWarnings and
+             --panicOnWarning together (what ci.yml runs the exampleSite
+             under) a missing key makes i18n return an error rather than an
+             empty string, so a plain `i18n .id | default .name` would abort
+             the build at the lookup instead of falling back. */ -}}
+      {{- /* A pageRef entry gets .Name filled in from the target page's
+             title, so .Name alone cannot tell "the config said this" from
+             "Hugo derived this". Treat it as explicit only when it differs
+             from the page title, otherwise a translated identifier would
+             lose to an auto-generated "Blogs". */ -}}
+      {{- $explicit := .name -}}
+      {{- with .page -}}
+        {{- if eq $explicit .LinkTitle -}}{{- $explicit = "" -}}{{- end -}}
+      {{- end -}}
+      {{- $label := $explicit -}}
+      {{- if and (not $label) $id -}}
+        {{- with try (i18n $id) -}}
+          {{- if not .Err -}}{{- $label = .Value -}}{{- end -}}
         {{- end -}}
-        {{- $label := $explicit -}}
-        {{- if and (not $label) $id -}}
-          {{- with try (i18n $id) -}}
-            {{- if not .Err -}}{{- $label = .Value -}}{{- end -}}
-          {{- end -}}
-        {{- end -}}
-        {{- if not $label -}}{{- $label = .name -}}{{- end -}}
-        {{- if not $label -}}{{- $label = $id -}}{{- end -}}
-        {{- /* An anchor written in config resolves against the page it renders
-               on, so "#about" would point at /blogs/<post>/#about from a post.
-               Resolve it against the language's home instead. Hugo has already
-               applied the baseURL to non-anchor URLs. */ -}}
-        {{- $href := .url -}}
-        {{- if hasPrefix $href "#" -}}{{- $href = printf "%s%s" $home $href -}}{{- end -}}
-        {{- /* A pageRef pointing at a section that does not exist resolves to
-               an empty URL — showBlog = true on a site with no posts is the
-               way in. An entry with neither identifier nor name leaves every
-               step of the label chain empty, the last one included. Skip both
-               rather than ship <a href=""> or a link with no accessible
-               name. */ -}}
-        {{- if and $href $label -}}
-          {{- $active := and (eq $id "blog") $onBlog -}}
-          <a{{ if $active }} class="is-active" aria-current="page"{{ end }} href="{{ $href }}">{{ $label }}</a>
-        {{- end -}}
+      {{- end -}}
+      {{- if not $label -}}{{- $label = .name -}}{{- end -}}
+      {{- if not $label -}}{{- $label = $id -}}{{- end -}}
+      {{- /* An anchor written in config resolves against the page it renders
+             on, so "#about" would point at /blogs/<post>/#about from a post.
+             Resolve it against the language's home instead. Hugo has already
+             applied the baseURL to non-anchor URLs. */ -}}
+      {{- $href := .url -}}
+      {{- if hasPrefix $href "#" -}}{{- $href = printf "%s%s" $home $href -}}{{- end -}}
+      {{- /* A pageRef pointing at a section that does not exist resolves to
+             an empty URL — showBlog = true on a site with no posts is the
+             way in. An entry with neither identifier nor name leaves every
+             step of the label chain empty, the last one included. Skip both
+             rather than ship <a href=""> or a link with no accessible
+             name. */ -}}
+      {{- if and $href $label -}}
+        {{- $active := and (eq $id "blog") $onBlog -}}
+        <a{{ if $active }} class="is-active" aria-current="page"{{ end }} href="{{ $href }}">{{ $label }}</a>
       {{- end -}}
 {{- end }}
       {{ partial "lang-switch.html" .page -}}

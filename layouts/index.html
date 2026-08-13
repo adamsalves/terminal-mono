@@ -1,7 +1,15 @@
 {{ define "main" }}
+  {{- /* Section order comes from sections.html, never from this file — see that
+         partial for how the menu, params.sections.order and the enable switches
+         resolve. The hero is the page's header, not a section, so it stays put.
+
+         Dispatch is an explicit whitelist and not `partial (printf "%s.html" $id)`:
+         an identifier from a consumer's config must never be able to name a
+         partial. Unknown ids never reach here anyway — sections.html drops them
+         with a warning — and this is the second lock on the same door. */ -}}
+  {{- $plan := partialCached "sections.html" . site.Language.Lang }}
   {{ partial "hero.html" . }}
-  {{ partial "projects.html" . }}
-  {{ partial "about.html" . }}
-  {{ partial "experience.html" . }}
-  {{ partial "contact.html" . }}
+  {{- range $plan.order }}
+  {{ $ctx := dict "last" (eq . $plan.last) }}{{ if eq . "projects" }}{{ partial "projects.html" $ctx }}{{ else if eq . "about" }}{{ partial "about.html" $ctx }}{{ else if eq . "experience" }}{{ partial "experience.html" $ctx }}{{ else if eq . "contact" }}{{ partial "contact.html" $ctx }}{{ end }}
+  {{- end }}
 {{ end }}

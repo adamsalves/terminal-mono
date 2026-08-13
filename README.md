@@ -88,13 +88,13 @@ terminal-mono/
 
 | Section | Params |
 |---|---|
-| Brand/nav | `params.title`, `params.navbar.brandName`, `params.navbar.showBlog` (optional), `params.terminalUser`; order via [`[[menu.main]]`](#nav-menu-order) (optional) |
+| Brand/nav | `params.title`, `params.navbar.brandName`, `params.navbar.showBlog` (optional), `params.terminalUser`; the nav links **and** the section order come from [`[[menu.main]]`](#the-menu-and-the-sections) (optional) |
 | Hero | `params.hero.intro/subtitle/location/content`, `params.hero.socialLinks.fontAwesomeIcons[]` |
 | Hero — terminal | builds "whoami / cat stack.txt / ls projects/" from `title`, `subtitle`, skills and projects; adds [`ls ~/blog --latest`](#latest-posts-in-the-hero-terminal) when the language has posts — `params.hero.latestPosts` (optional, default 3) |
-| Projects | `params.projects.items[]` → `title`, `repo`, `language`, `tagline`, `content`, `badges[]`, `featured{name,link}`, `links[]{icon,url,name}` |
-| About + skills | `params.about.content` (markdown), `params.about.skills.enable/items[]` |
-| Experience | `params.experience.enable`, `params.experience.items[]` → `company`, `jobs[]{name, date (optional), content}` |
-| Contact | `params.contact.title/content/btnName/btnLink` |
+| Projects | `params.projects.items[]` → `title`, `repo`, `language`, `tagline`, `content`, `badges[]`, `featured{name,link}`, `links[]{icon,url,name}`; `params.projects.enable` (optional) |
+| About + skills | `params.about.content` (markdown), `params.about.skills.enable/items[]`; `params.about.enable` (optional — the section, not the skills block) |
+| Experience | `params.experience.items[]` → `company`, `jobs[]{name, date (optional), content}`; `params.experience.enable` (optional) |
+| Contact | `params.contact.title/content/btnName/btnLink`; `params.contact.enable` (optional) |
 | Footer | `params.footer.copyright`, `params.footer.socialNetworks.github/linkedin` |
 | Blog | `content/blogs/*.md` → `title`, `date`, `tags`, `description`, `image` (optional), `toc` |
 
@@ -129,11 +129,40 @@ command entirely. Set it under `[params.hero]` for the whole site, or under
 Links become clickable as each name finishes typing. Readers with
 `prefers-reduced-motion` get the whole terminal, links included, immediately.
 
-### Nav menu order
+### The menu and the sections
 
-The nav renders `about, projects, experience, blog, contact` by default. Define
-`[[menu.main]]` to choose the order yourself — Hugo's native menu, sorted by
-`weight`:
+`[[menu.main]]` is the page's index. It sets the order of the nav links **and**
+the order the home page renders its sections in — one list, so the two can never
+disagree about what the page contains.
+
+A section renders when all three of these say yes:
+
+| Gate | Where it lives | A section loses it when |
+|---|---|---|
+| The switch | `[params.<section>] enable` | you set it to `false` |
+| The index | `[[menu.main]]` (or `params.sections.order`) | its block is not there |
+| The content | the section's own params | you filled nothing in |
+
+The four sections are `about`, `projects`, `experience` and `contact`. The hero
+is the page's header rather than a section: always first, not movable, not
+removable. Any other identifier — `blog`, an external link — is nav-only.
+
+"Content of its own" means:
+
+| Section | Has content when |
+|---|---|
+| `about` | `content` is set, or `skills.enable` with a non-empty `skills.items` |
+| `projects` | `items` is not empty |
+| `experience` | `items` is not empty |
+| `contact` | any of `title`, `content`, `btnLink` |
+
+The built-in translations dress a section; they do not justify one. So a site
+that fills nothing in gets no sections — and no links pointing at them, which is
+the whole point: a link to a section that does not render is a dead link.
+
+#### 1. Order — the nav and the page, together
+
+Hugo's native menu, sorted by `weight`:
 
 ```toml
 [[menu.main]]
@@ -146,12 +175,85 @@ The nav renders `about, projects, experience, blog, contact` by default. Define
   weight = 20
 [[menu.main]]
   identifier = "blog"
-  pageRef = "/blogs"    # pageRef, not url — see below
+  pageRef = "/blogs"    # nav-only: the blog is not a section
   weight = 30
+[[menu.main]]
+  identifier = "contact"
+  url = "#contact"
+  weight = 40
 ```
 
-Omit the block entirely and nothing changes: the default order is the fallback,
-so an existing site upgrades without touching its config.
+The home page now renders `projects`, `about`, `contact` in that order, and the
+nav lists them with the blog in between.
+
+Omit `[[menu.main]]` entirely and nothing changes from before this feature
+existed: the nav falls back to `about, projects, experience, blog, contact` and
+the page to `projects, about, experience, contact`. The two defaults are not the
+same list, and they stay that way — defining a menu is what makes them agree.
+
+#### 2. Remove a section
+
+Delete its block. The section and its nav link both go, with nothing else to
+set: the absence is the configuration.
+
+#### 3. Turn a section off without touching the menu
+
+```toml
+[params.experience]
+  enable = false
+```
+
+Same result, and the section's config stays where it is for the day you want it
+back. Use whichever says what you mean: **delete the block** when the section is
+not part of this site, **`enable = false`** when it is, just not right now.
+
+`enable` is a veto, never a summons. `false` removes the section whatever the
+menu says; `true` grants nothing the index and the content do not already grant,
+so it cannot pull back a section you deleted from the menu or one you never
+filled in. It is an ordinary param, so
+`[languages.pt.params.experience] enable = true` turns a section on for one
+language while it stays off in the other.
+
+#### 4. Keep a section, drop its nav link
+
+```toml
+[[menu.main]]
+  identifier = "about"
+  url = "#about"
+  weight = 20
+  [menu.main.params]
+    showInNav = false
+```
+
+The section still renders in its menu position; only the link is gone.
+
+#### 5. Menus per language
+
+Menus are language-scoped in Hugo, so a site that wants different sections in
+each language defines `[languages.<lang>.menu.main]`. Labels resolve from the
+`identifier` either way (see below), so a single shared menu is usually enough.
+
+#### 6. Escape hatch — nav and page in different orders on purpose
+
+```toml
+[params.sections]
+  order = ["about", "projects", "experience", "contact"]
+```
+
+This beats the menu for the page while the nav keeps following the menu. It is
+also the migration path if you adopted `[[menu.main]]` in v0.3.0 with a nav order
+that differs from the layout: pin the old section order here and nothing moves.
+
+It still drops nav links to sections that do not render — gate three outranks it,
+because a dead link is not a layout choice.
+
+#### When the config is wrong
+
+An unknown section name, a duplicate, a list that is not a list, an empty list,
+or a menu entry whose `url` does not match its `identifier`: the theme prints a
+warning and falls back. None of it can fail your build.
+
+
 
 **Labels are translated from `identifier`.** One block serves every language —
 `identifier = "about"` renders "about" in English and "sobre" in Portuguese,
@@ -186,9 +288,6 @@ permanent link to an empty section.
 **The nav is a single row, so submenus are not rendered.** An entry with a
 `parent` is dropped — the theme has no dropdown to put it in. Keep every entry
 at the top level.
-
-Menu order and the order the home page renders its sections are independent:
-this controls the nav only.
 
 ### Project colors
 
