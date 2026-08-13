@@ -144,9 +144,15 @@ def api(path, method="GET", body=None, tok=None):
         # DELETE answers 204 No Content; there is nothing to parse.
         return json.loads(payload) if payload.strip() else None
     except urllib.error.HTTPError as error:
+        detail = redact(error.read().decode(errors="replace")[:400])
         if error.code == 404:
             raise NotFound(path)
-        detail = redact(error.read().decode(errors="replace")[:400])
+        # Deleting a ref that is already gone answers 422, not 404 — GitHub
+        # spends 404 on a repository the token cannot see at all. Without this
+        # the branch cleanup reports failure every time the merge already
+        # removed the branch, which is every time on a repo that auto-deletes.
+        if error.code == 422 and "Reference does not exist" in detail:
+            raise NotFound(path)
         raise Abort(f"{method} {path} -> HTTP {error.code}\n{detail}")
     except urllib.error.URLError as error:
         raise Abort(f"{method} {path} -> network error: {error.reason}")

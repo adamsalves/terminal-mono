@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Release: the branch cleanup no longer reports failure for a branch that is
+  already gone. GitHub answers a delete of an absent ref with 422 "Reference
+  does not exist", not 404, and only 404 was mapped to the already-gone case —
+  so every release on a repo that deletes the head branch on merge printed
+  "remove it by hand" for a branch the merge had already removed. `v0.3.0` did.
+  The cleanup itself was never reached, which is why nothing accumulated.
+
 ## [0.3.0] — 2026-08-13
 
 ### Added

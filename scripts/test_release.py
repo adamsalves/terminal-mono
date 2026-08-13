@@ -411,6 +411,57 @@ class EmptyAPIResponse(unittest.TestCase):
         self.assertEqual(release.api("/repos/o/r/pulls/1", tok="t"), {"sha": "abc"})
 
 
+class MissingRefStatus(unittest.TestCase):
+    """A ref that is already gone answers 422, not 404.
+
+    GitHub spends 404 on a repository the token cannot see at all, so the
+    delete-a-ref endpoint reports an absent branch as 422 "Reference does not
+    exist". The cleanup hits this on every release of a repo that deletes the
+    head branch on merge: the branch is gone before the cleanup asks. Mapping
+    only 404 sent that straight to the generic abort, and the release printed
+    "remove it by hand" for a branch that was already removed.
+
+    These drive release.api itself rather than injecting NotFound, which is
+    what the delete tests below do — the mapping is the part that was wrong,
+    so a mock that starts from NotFound cannot see the bug.
+    """
+
+    def fake_error(self, code, body):
+        import io
+        real = release.urllib.request.urlopen
+        self.addCleanup(setattr, release.urllib.request, "urlopen", real)
+
+        def raise_error(request, timeout=None):
+            raise release.urllib.error.HTTPError(
+                "https://api.github.com", code, "err", {}, io.BytesIO(body)
+            )
+
+        release.urllib.request.urlopen = raise_error
+
+    def test_maps_the_absent_ref_422_to_not_found(self):
+        self.fake_error(422, b'{"message": "Reference does not exist"}')
+        with self.assertRaises(release.NotFound):
+            release.api("/repos/o/r/git/refs/heads/x", "DELETE", tok="t")
+
+    def test_still_maps_404_to_not_found(self):
+        self.fake_error(404, b'{"message": "Not Found"}')
+        with self.assertRaises(release.NotFound):
+            release.api("/repos/o/r/pulls/1", tok="t")
+
+    def test_any_other_422_still_aborts(self):
+        """Only the absent-ref message is benign; a rejected write is not."""
+        self.fake_error(422, b'{"message": "Validation Failed: base is invalid"}')
+        with self.assertRaises(SystemExit):
+            release.api("/repos/o/r/pulls", "POST", body={}, tok="t")
+
+    def test_the_abort_still_carries_the_response_body(self):
+        """Reading the body moved ahead of the 404 check; it must still land."""
+        self.fake_error(403, b'{"message": "Resource not accessible"}')
+        with self.assertRaises(SystemExit) as caught:
+            release.api("/repos/o/r/pulls", "POST", body={}, tok="t")
+        self.assertIn("Resource not accessible", str(caught.exception))
+
+
 class DeleteRemoteBranch(unittest.TestCase):
     def setUp(self):
         real = release.api
