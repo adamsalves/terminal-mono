@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-08-13
+
 ### Added
 - Hero: the terminal lists the newest posts as a fourth command, `ls ~/blog --latest`,
   with each filename linking to its post. The home page gave no sign a blog existed
@@ -126,7 +128,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   switcher, `hreflang` alternates and locale-aware dates.
 - Complete bilingual `exampleSite/` and Hugo Modules support.
 
-[Unreleased]: https://github.com/adamsalves/terminal-mono/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/adamsalves/terminal-mono/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/adamsalves/terminal-mono/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/adamsalves/terminal-mono/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/adamsalves/terminal-mono/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/adamsalves/terminal-mono/compare/v0.2.0...v0.2.1
