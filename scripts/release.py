@@ -54,7 +54,12 @@ class Abort(SystemExit):
 
 
 class NotFound(Exception):
-    """A 404 from the API — a state to poll past, not a failure to report."""
+    """The thing is not there — a state to poll past, not a failure to report.
+
+    Usually a 404. Endpoints that have to distinguish a missing sub-resource
+    from a repository the token cannot see at all answer 422 instead; `api`
+    takes an `absent` message for those.
+    """
 
 
 def redact(text):
@@ -125,7 +130,16 @@ def token():
     )
 
 
-def api(path, method="GET", body=None, tok=None):
+def api(path, method="GET", body=None, tok=None, absent=None):
+    """Call the API, mapping "it is not there" onto NotFound.
+
+    `absent` names the 422 message that means the thing is already gone, for
+    the endpoints that answer that way instead of 404 — GitHub spends 404 on a
+    repository the token cannot see at all, so deleting a ref that is already
+    gone comes back 422 "Reference does not exist". Only the caller knows which
+    message means absence for its endpoint, so it passes the phrase in; every
+    other call leaves `absent` unset and keeps 422 fatal.
+    """
     request = urllib.request.Request(
         f"{API}{path}",
         method=method,
@@ -144,9 +158,14 @@ def api(path, method="GET", body=None, tok=None):
         # DELETE answers 204 No Content; there is nothing to parse.
         return json.loads(payload) if payload.strip() else None
     except urllib.error.HTTPError as error:
+        # Read the body only once past 404, and only where it is needed. An
+        # exception raised in here skips the sibling excepts below and escapes
+        # api() raw, so a 404 whose body arrives truncated must not touch it.
         if error.code == 404:
             raise NotFound(path)
         detail = redact(error.read().decode(errors="replace")[:400])
+        if absent and error.code == 422 and absent in detail:
+            raise NotFound(path)
         raise Abort(f"{method} {path} -> HTTP {error.code}\n{detail}")
     except urllib.error.URLError as error:
         raise Abort(f"{method} {path} -> network error: {error.reason}")
@@ -359,7 +378,12 @@ def delete_remote_branch(slug, branch, tok):
     gets cleaned up and the remote one accumulates, one per release.
     """
     try:
-        api(f"/repos/{slug}/git/refs/heads/{branch}", "DELETE", tok=tok)
+        api(
+            f"/repos/{slug}/git/refs/heads/{branch}",
+            "DELETE",
+            tok=tok,
+            absent="Reference does not exist",
+        )
         note(f"deleted {branch} from {slug}")
     except NotFound:
         note(f"{branch} was already gone from {slug}")

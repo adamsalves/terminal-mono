@@ -411,6 +411,133 @@ class EmptyAPIResponse(unittest.TestCase):
         self.assertEqual(release.api("/repos/o/r/pulls/1", tok="t"), {"sha": "abc"})
 
 
+class MissingRefStatus(unittest.TestCase):
+    """A ref that is already gone answers 422, not 404.
+
+    GitHub spends 404 on a repository the token cannot see at all, so the
+    delete-a-ref endpoint reports an absent branch as 422 "Reference does not
+    exist". The cleanup hits this on every release of a repo that deletes the
+    head branch on merge: the branch is gone before the cleanup asks. Mapping
+    only 404 sent that straight to the generic abort, and the release printed
+    "remove it by hand" for a branch that was already removed.
+
+    These drive release.api itself rather than injecting NotFound, which is
+    what the delete tests below do — the mapping is the part that was wrong,
+    so a mock that starts from NotFound cannot see the bug.
+    """
+
+    def fake_error(self, code, body):
+        import io
+        real = release.urllib.request.urlopen
+        self.addCleanup(setattr, release.urllib.request, "urlopen", real)
+
+        def raise_error(request, timeout=None):
+            raise release.urllib.error.HTTPError(
+                "https://api.github.com", code, "err", {}, io.BytesIO(body)
+            )
+
+        release.urllib.request.urlopen = raise_error
+
+    ABSENT = "Reference does not exist"
+
+    def delete_ref(self):
+        return release.api(
+            "/repos/o/r/git/refs/heads/x", "DELETE", tok="t", absent=self.ABSENT
+        )
+
+    def test_maps_the_absent_ref_422_to_not_found(self):
+        self.fake_error(422, b'{"message": "Reference does not exist"}')
+        with self.assertRaises(release.NotFound):
+            self.delete_ref()
+
+    def test_still_maps_404_to_not_found(self):
+        self.fake_error(404, b'{"message": "Not Found"}')
+        with self.assertRaises(release.NotFound):
+            release.api("/repos/o/r/pulls/1", tok="t")
+
+    def test_a_neighbouring_ref_message_still_aborts(self):
+        """Creating a ref that exists is a real 422 from the same endpoint
+        family, and it shares words with the absent one — "Reference", "exist".
+        Matching on either would read a rejected write as success.
+        """
+        self.fake_error(
+            422,
+            b'{"message": "Reference already exists", "errors": '
+            b'[{"resource": "Reference", "code": "already_exists"}]}',
+        )
+        with self.assertRaises(SystemExit):
+            self.delete_ref()
+
+    def test_the_phrase_alone_does_not_excuse_another_status(self):
+        """422 is what means absence here. A 500 carrying the same words is
+        the API failing, not the branch being gone."""
+        self.fake_error(500, b'{"message": "Reference does not exist"}')
+        with self.assertRaises(SystemExit):
+            self.delete_ref()
+
+    def test_a_caller_that_names_no_absent_message_keeps_422_fatal(self):
+        """Every endpoint other than the ref delete passes no `absent`, so the
+        allowance cannot leak to the five call sites that never catch
+        NotFound — there it would surface as a traceback, not an abort."""
+        self.fake_error(422, b'{"message": "Reference does not exist"}')
+        with self.assertRaises(SystemExit):
+            release.api("/repos/o/r/pulls", "POST", body={}, tok="t")
+
+    def test_the_abort_carries_the_response_body(self):
+        self.fake_error(403, b'{"message": "Resource not accessible"}')
+        with self.assertRaises(SystemExit) as caught:
+            release.api("/repos/o/r/pulls", "POST", body={}, tok="t")
+        self.assertIn("Resource not accessible", str(caught.exception))
+
+    def test_a_credential_in_the_error_body_never_reaches_the_terminal(self):
+        """detail is now built on every HTTP error path, so the redaction that
+        keeps a tokenised remote URL out of the output has to hold here too."""
+        self.fake_error(
+            403,
+            b'{"message": "cannot push to '
+            b'https://adamsalves:ghp_S3CRETVALUE@github.com/o/r"}',
+        )
+        with self.assertRaises(SystemExit) as caught:
+            release.api("/repos/o/r/pulls", "POST", body={}, tok="t")
+        self.assertNotIn("ghp_S3CRETVALUE", str(caught.exception))
+        self.assertIn("***@github.com", str(caught.exception))
+
+    def test_a_runaway_error_body_is_truncated(self):
+        """The body is attacker-adjacent text going to a terminal; the cap is
+        what keeps a megabyte of it from becoming the abort message."""
+        self.fake_error(500, b'{"message": "' + b"x" * 5000 + b'"}')
+        with self.assertRaises(SystemExit) as caught:
+            release.api("/repos/o/r/pulls", "POST", body={}, tok="t")
+        self.assertLess(len(str(caught.exception)), 600)
+
+    def test_a_404_body_that_cannot_be_read_is_still_not_found(self):
+        """The 404 path must not touch the body.
+
+        An exception raised inside an except clause skips that try's sibling
+        handlers, so reading a truncated body there would escape api() raw —
+        and the caller that eats 404s in bulk is the release-tag poll, which
+        runs after the tag is already pushed.
+        """
+        import http.client
+        import io
+
+        class Truncated(io.BytesIO):
+            def read(self, *args):
+                raise http.client.IncompleteRead(b"12", 40)
+
+        real = release.urllib.request.urlopen
+        self.addCleanup(setattr, release.urllib.request, "urlopen", real)
+
+        def raise_error(request, timeout=None):
+            raise release.urllib.error.HTTPError(
+                "https://api.github.com", 404, "nf", {}, Truncated(b"")
+            )
+
+        release.urllib.request.urlopen = raise_error
+        with self.assertRaises(release.NotFound):
+            release.api("/repos/o/r/releases/tags/v1.0.0", tok="t")
+
+
 class DeleteRemoteBranch(unittest.TestCase):
     def setUp(self):
         real = release.api
@@ -419,18 +546,23 @@ class DeleteRemoteBranch(unittest.TestCase):
     def test_deletes_the_branch_via_the_refs_endpoint(self):
         calls = []
 
-        def fake(path, method="GET", body=None, tok=None):
-            calls.append((method, path))
+        def fake(path, method="GET", body=None, tok=None, absent=None):
+            calls.append((method, path, absent))
             return None
 
         release.api = fake
         release.delete_remote_branch("o/r", "release/v1.0.0", "tok")
         self.assertEqual(
-            calls, [("DELETE", "/repos/o/r/git/refs/heads/release/v1.0.0")]
+            calls,
+            [(
+                "DELETE",
+                "/repos/o/r/git/refs/heads/release/v1.0.0",
+                "Reference does not exist",
+            )],
         )
 
     def test_tolerates_a_branch_that_is_already_gone(self):
-        def fake(path, method="GET", body=None, tok=None):
+        def fake(path, method="GET", body=None, tok=None, absent=None):
             raise release.NotFound(path)
 
         release.api = fake
@@ -438,11 +570,38 @@ class DeleteRemoteBranch(unittest.TestCase):
 
     def test_never_fails_the_release_over_a_leftover_branch(self):
         """The tag is already pushed by this point — litter is not a failure."""
-        def fake(path, method="GET", body=None, tok=None):
+        def fake(path, method="GET", body=None, tok=None, absent=None):
             raise release.Abort("HTTP 403\nforbidden")
 
         release.api = fake
         release.delete_remote_branch("o/r", "release/v1.0.0", "tok")
+
+    def test_a_branch_the_merge_already_removed_reads_as_gone(self):
+        """End to end over the real api(), on the case that prompted the fix.
+
+        A repo with delete_branch_on_merge has no branch left by the time the
+        cleanup asks — it runs after the tag push — so this is what every
+        release hits. Reporting it as a failure sent the user to clean up
+        nothing, which is the symptom, so it is what gets asserted.
+        """
+        import contextlib
+        import io
+
+        real = release.urllib.request.urlopen
+        self.addCleanup(setattr, release.urllib.request, "urlopen", real)
+
+        def raise_error(request, timeout=None):
+            raise release.urllib.error.HTTPError(
+                "https://api.github.com", 422, "err", {},
+                io.BytesIO(b'{"message": "Reference does not exist"}'),
+            )
+
+        release.urllib.request.urlopen = raise_error
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            release.delete_remote_branch("o/r", "release/v1.0.0", "tok")
+        self.assertIn("was already gone", out.getvalue())
+        self.assertNotIn("by hand", out.getvalue())
 
 
 class Rollback(unittest.TestCase):
