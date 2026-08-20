@@ -139,6 +139,33 @@ check('the other three commands still render', () => {
   return html.includes('whoami') && html.includes('cat stack.txt') && html.includes('ls projects/');
 });
 
+/* A command with nothing under it is not typed at all — the rule the blog
+   listing already followed, now covering the other two. The check above is the
+   other half of it: a command that DOES have output must still render, or an
+   over-eager skip would empty the terminal and every check here would agree. */
+check('an empty stack drops cat stack.txt', () => {
+  const { html } = run({ ...BASE, stack: '', posts: '[]' });
+  return !html.includes('cat stack.txt') && html.includes('ls projects/');
+});
+
+check('empty projects drops ls projects/', () => {
+  const { html } = run({ ...BASE, projects: '', posts: '[]' });
+  return !html.includes('ls projects/') && html.includes('cat stack.txt');
+});
+
+check('with nothing to list, only whoami and the trailing prompt are typed', () => {
+  const { html } = run({ ...BASE, stack: '', projects: '', posts: '[]' });
+  // Asserted as the whole script, not as three absences: an extra blank line or
+  // a stray prompt is exactly the kind of thing `includes` would not notice.
+  return html.replace(/<[^>]*>/g, '') === 'a@b:~$ whoami\nN — R · L\n\na@b:~$ ';
+});
+
+check('the blog listing still renders when the other two are gone', () => {
+  const { html } = run({ ...BASE, stack: '', projects: '', posts: JSON.stringify(POSTS) });
+  return html.includes('ls ~/blog --latest') && html.includes('migrando-o-trailhead-para-o-nuxt-3.md') &&
+    !html.includes('cat stack.txt') && !html.includes('ls projects/');
+});
+
 check('a post with no date renders without a date column', () => {
   const { html } = run({ ...BASE, posts: JSON.stringify([{ d: '', f: 'x.md', t: 'X', u: '/x/' }]) });
   return html.includes('x.md') && !html.includes('0001-01-01');

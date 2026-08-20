@@ -6,6 +6,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Hero terminal: the section switch reaches the terminal. v0.4.0 taught the hero
+  that its "view projects" button must not point at a section that does not
+  render, but the terminal directly above it went on typing `ls projects/` and
+  listing the repositories of a section the reader could not scroll to. Both
+  remaining commands now follow the plan: `ls projects/` follows the `projects`
+  section, and `cat stack.txt` follows `about`, which is where the skills live.
+- Hero terminal: a command with no output is no longer typed at all. Only the
+  blog listing had ever followed that rule; `cat stack.txt` and `ls projects/`
+  were unconditional, so a site that filled nothing in — the one CI has been
+  building all along — greeted its reader with two commands and two blank lines
+  under them. This half is fixed in the script rather than the template, so an
+  empty value produces no command whatever put it there. `whoami` is the stated
+  exception and always runs: its output is the page's own identity, not a
+  section's data, so no switch can empty it.
+- Hero terminal: the reserved height follows the commands that actually render.
+  It was a constant `12` lines plus one per post, which was right only while all
+  three commands always rendered; drop one and the box reserved three lines it
+  never filled, leaving a block of dead space under the hero — the same class of
+  bug as `section--last` sitting on a section that was no longer last. The
+  template now counts the lines it is about to emit and passes them as
+  `--hero-lines`, replacing the `--hero-posts` variable and the
+  `.term__body--posts` class, which are gone. CI recomputes the count from the
+  rendered `data-*` attributes and holds the variable to it.
+
+### Changed
+- Hero terminal: `cat stack.txt` now follows `[params.about.skills] enable`,
+  which has to be an explicit `true` — an absent key counts as off, the same
+  reading the skills block inside the about section and the section index have
+  always used. The switch used to hide that block while the terminal above kept
+  announcing the same list — one switch that meant two different things
+  depending on where you looked. Sites that write `enable = true`, the
+  exampleSite among them, are unaffected. A site that lists `items` **without**
+  an `enable` key does lose `cat stack.txt`: it was already not rendering the
+  skills block, and the terminal now agrees with the page instead of announcing
+  a list the reader cannot find.
+
 ## [0.4.0] — 2026-08-20
 
 ### Added

@@ -537,13 +537,17 @@ jobs:
           PY
       # The hero terminal's post listing is built server-side into data-posts and
       # only becomes visible once JS types it out, so a rendering bug here is
-      # invisible to a build that merely succeeds. Assert both directions: the
-      # exampleSite has posts and must carry them with per-language URLs, and the
-      # bare site has none and must not reserve the taller terminal for nothing.
+      # invisible to a build that merely succeeds. Four fixtures, one per shape
+      # the terminal can take: the exampleSite carries every command with
+      # per-language URLs, bare carries none, toggle loses one to the index, and
+      # orphan loses two while listing a single post. Each also holds the height
+      # it reserves to the commands it emitted.
       - name: Assert the hero post listing
         run: |
           python3 - <<'PY'
           import html as htmllib, json, re, sys
+
+          ATTR = r'("[^"]*"|\'[^\']*\'|[^\s>]+)'
 
           def hero(path):
               raw = open(path).read()
@@ -551,10 +555,38 @@ jobs:
               if not pre:
                   sys.exit(f'{path}: no #hero-term in the output')
               tag = pre.group(0)
-              attr = re.search(r'data-posts=("[^"]*"|\'[^\']*\'|[^\s>]+)', tag)
+              attr = re.search(r'data-posts=' + ATTR, tag)
               if not attr:
                   sys.exit(f'{path}: #hero-term has no data-posts attribute')
               return tag, json.loads(htmllib.unescape(attr.group(1).strip('"\'')))
+
+          def data(tag, name):
+              m = re.search(r'\b' + name + '=' + ATTR, tag)
+              return htmllib.unescape(m.group(1).strip('"\'')) if m else ''
+
+          # terminal.js types a command only when it has output, so the height the
+          # box reserves depends on which commands the template emitted. Recompute
+          # the count from the tag's own data-* and hold --hero-lines to it: the
+          # template does this arithmetic in Go, this does it again in Python, and
+          # an off-by-a-command shows up as a mismatch rather than as dead space
+          # under the hero that no test can see.
+          def lines(path, tag, posts):
+              want = 4
+              if data(tag, 'data-stack'):
+                  want += 3
+              if data(tag, 'data-projects'):
+                  want += 3
+              if posts:
+                  want += 2 + len(posts)
+              got = re.search(r'--hero-lines:\s*(\d+)', tag)
+              if not got:
+                  sys.exit(f'{path}: #hero-term has no --hero-lines to reserve its height with')
+              if int(got.group(1)) != want:
+                  sys.exit(f'{path}: --hero-lines is {got.group(1)}, but the commands '
+                           f'emitted add up to {want} lines')
+              if 'term__body--posts' in tag or '--hero-posts' in tag:
+                  sys.exit(f'{path}: still carries the retired --hero-posts/term__body--posts pair')
+              return want
 
           seen = {}
           for path, lang in [
@@ -564,10 +596,9 @@ jobs:
               tag, posts = hero(path)
               if not posts:
                   sys.exit(f'{path}: the exampleSite has posts but {lang} listed none')
-              if 'term__body--posts' not in tag:
-                  sys.exit(f'{path}: listing present but the height-reserving class is missing')
-              if f'--hero-posts:{len(posts)}' not in tag:
-                  sys.exit(f'{path}: --hero-posts does not match the {len(posts)} posts listed')
+              # All three commands plus three posts: 4 + 3 + 3 + (2 + 3).
+              if lines(path, tag, posts) != 15:
+                  sys.exit(f'{path}: the exampleSite fills everything in, so its terminal is 15 lines')
               for p in posts:
                   # Language scoping asserted as a property, not against a literal
                   # baseURL, so changing the CI --baseURL cannot fail this falsely.
@@ -591,12 +622,48 @@ jobs:
           if seen['en'] == seen['pt']:
               sys.exit(f'PT listing is identical to EN ({seen["pt"]}) — names are not following the language')
 
+          # A site that fills nothing in has nothing for two of the three commands
+          # to print, so it must not type them — and must not reserve their lines.
+          # Four: whoami, its output, the blank after it, and the closing prompt.
           tag, posts = hero('/tmp/bare/public/index.html')
           if posts:
               sys.exit(f'bare site has no content but listed {posts}')
-          if 'term__body--posts' in tag:
-              sys.exit('bare site reserves the taller terminal for a listing it does not have')
+          for attr in ['data-stack', 'data-projects']:
+              if data(tag, attr):
+                  sys.exit(f'bare site has no content but {attr} carries {data(tag, attr)!r}')
+          if lines('/tmp/bare/public/index.html', tag, posts) != 4:
+              sys.exit('bare site reserves lines for commands it will not type')
           print('bare hero listing OK: empty, no height reserved')
+
+          # The switch has to reach the terminal, not stop at the section: toggle
+          # keeps projects out of the index, so `ls projects/` loses its output and
+          # the reserved height drops the three lines that went with it.
+          tag, posts = hero('/tmp/toggle/public/index.html')
+          if data(tag, 'data-projects'):
+              sys.exit(f'toggle: projects is not in the index, but the terminal still lists '
+                       f'{data(tag, "data-projects")!r}')
+          if not data(tag, 'data-stack'):
+              sys.exit('toggle: about is in the index and has skills, so cat stack.txt should render')
+          if lines('/tmp/toggle/public/index.html', tag, posts) != 7:
+              sys.exit('toggle: dropping ls projects/ should take its three lines with it')
+          print('toggle hero listing OK: ls projects/ gone with its section')
+
+          # Every fixture above lists three posts or none, so a per-post term
+          # hardcoded to 3 would satisfy all of them and the listing would only
+          # reserve the right height on a site with exactly three posts. orphan is
+          # the fixture that varies it: its menu names no section, so both other
+          # commands go, and its single post makes the block 2 + 1 rather than
+          # 2 + 3. It is also the other half of toggle — the index removing a
+          # command, asserted from the side where it removes two.
+          tag, posts = hero('/tmp/orphan/public/index.html')
+          if len(posts) != 1:
+              sys.exit(f'orphan: the per-post term is pinned by its single post, but it listed {len(posts)}')
+          for attr in ['data-stack', 'data-projects']:
+              if data(tag, attr):
+                  sys.exit(f'orphan: the menu names no section, but {attr} carries {data(tag, attr)!r}')
+          if lines('/tmp/orphan/public/index.html', tag, posts) != 7:
+              sys.exit('orphan: one post reserves 2 + 1 lines for the listing, not 2 + 3')
+          print('orphan hero listing OK: one post, both other commands gone with their sections')
           PY
       # The hero and the blog cards share partials/post-filename.html precisely so
       # they cannot name the same post differently. Both sides get checked, and

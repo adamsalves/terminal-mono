@@ -54,14 +54,27 @@
      a is the link's accessible name, since the visible text is a filename. */
   function s(t, c, u, a) { return { t: t, c: c, u: u, a: a }; }
 
+  /* whoami is the one command that always runs, and the rule below does not
+     apply to it: its output is the page's own identity, not a section's data, so
+     no switch can empty it and there is nothing to test. A site that fills
+     nothing in still gets the em dash on its own line. */
   var segs = [
     s(prompt, C.prompt), s(':~$ ', C.sep), s('whoami\n', C.cmd),
-    s(name + ' — ' + role + (loc ? ' · ' + loc : '') + '\n\n', C.out1),
-    s(prompt, C.prompt), s(':~$ ', C.sep), s('cat stack.txt\n', C.cmd),
-    s(stack + '\n\n', C.out2),
-    s(prompt, C.prompt), s(':~$ ', C.sep), s('ls projects/\n', C.cmd),
-    s(projects + '\n\n', C.out2)
+    s(name + ' — ' + role + (loc ? ' · ' + loc : '') + '\n\n', C.out1)
   ];
+
+  /* Every other command whose output is empty is not typed at all — the rule the
+     blog listing below has always followed, applied to the other two. Without it
+     a site that has no skills or no projects, or that turned those sections off,
+     still got the command and a blank line under it. */
+  if (stack) {
+    segs.push(s(prompt, C.prompt), s(':~$ ', C.sep), s('cat stack.txt\n', C.cmd),
+      s(stack + '\n\n', C.out2));
+  }
+  if (projects) {
+    segs.push(s(prompt, C.prompt), s(':~$ ', C.sep), s('ls projects/\n', C.cmd),
+      s(projects + '\n\n', C.out2));
+  }
 
   /* The blog listing, when the site has posts. data-posts is JSON rather than a
      delimited string like data-stack: each entry is a filename paired with its
