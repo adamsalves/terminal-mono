@@ -1,5 +1,7 @@
+{{- /* Whether this section renders at all is sections.html's call, not this
+       file's — see it for the three gates. Expects a dict: last (bool). */ -}}
 {{- $about := site.Params.about -}}
-<section id="about" class="section">
+<section id="about" class="section{{ if .last }} section--last{{ end }}">
   <div class="container">
     <div class="section__head">
       <h2><span class="cmt">//</span> {{ i18n "about" }}</h2>

@@ -1,6 +1,12 @@
 {{- $hero := site.Params.hero -}}
 {{- $skills := site.Params.about.skills.items -}}
 {{- $loc := site.Params.hero.location -}}
+{{- /* The hero is the page's header, not a section, so it is never in the plan
+       itself — but its call-to-action links at one, and a button pointing at a
+       section that does not render is the same dead anchor the nav used to
+       ship. */ -}}
+{{- $plan := partialCached "sections.html" . site.Language.Lang -}}
+{{- $hasProjects := in $plan.order "projects" -}}
 {{- /* The newest posts, listed by the terminal's `ls ~/blog --latest`. Empty when
        the language has no posts, so the command is skipped entirely rather than
        printing an empty listing. site.RegularPages is scoped per language, so the
@@ -78,7 +84,7 @@
       <p class="hero__bio">{{ $hero.content }}</p>
 
       <div class="btn-row">
-        <a class="btn btn--solid" href="#projects">{{ i18n "view_projects" }} →</a>
+        {{ if $hasProjects }}<a class="btn btn--solid" href="#projects">{{ i18n "view_projects" }} →</a>{{ end }}
         {{ with site.Params.contact.btnLink }}<a class="btn btn--ghost" href="{{ . }}">{{ i18n "email" }}</a>{{ end }}
       </div>
 

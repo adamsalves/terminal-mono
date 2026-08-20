@@ -29,8 +29,16 @@ summaryLength = 30
 #  Shared (non-translatable) params — merged into every language.
 # ============================================================
 # ============================================================
-#  Nav menu — optional. Delete this whole block and the theme falls back to
-#  its default order (about, projects, experience, blog, contact).
+#  Nav menu — optional, and the page's index. This menu sets the order of the
+#  nav links AND the order the home page renders its sections in. Reordering
+#  here moves the sections; deleting an entry removes the section along with
+#  its link.
+#
+#  Delete the whole block and the theme falls back to what it did before the
+#  two were connected: the nav in its own default order (about, projects,
+#  experience, blog, contact) and the page in the layout's (projects, about,
+#  experience, contact). The two defaults are different lists, and defining a
+#  menu is what makes them agree.
 #
 #  Ordered by `weight`. One block serves every language: the `identifier` is
 #  used as an i18n key, so "about" renders as "about" in English and "sobre"
@@ -39,10 +47,24 @@ summaryLength = 30
 #  Set `name` to override the label with a literal string — it always wins
 #  over the translation, and disables translation for that entry.
 #
-#  The order below matches the order the home page renders its sections
-#  (projects, about, experience, contact), which the theme's default nav
-#  order does not. Section order is set in the layout and is independent of
-#  this menu — reordering here does not move the sections.
+#  Known sections are about, projects, experience and contact. Any other
+#  identifier (blog, an external link) is nav-only. The hero is the page's
+#  header, not a section: it is always first.
+#
+#  Two more switches, both commented out here so the demo stays put:
+#
+#    [menu.main.params]
+#      showInNav = false      # keep the section, drop only its nav link
+#
+#    [params.sections]
+#      order = ["about", "projects", "experience", "contact"]
+#                             # the escape hatch: this wins for the page while
+#                             # the nav keeps following the menu
+#
+#  And per section, [params.<section>] enable = false turns one off without
+#  touching the menu — see [params.experience] far below, which sets it to
+#  true. That is now the default for every section, so the line is redundant;
+#  it is kept because it is the natural place to flip to false.
 # ============================================================
 [[menu.main]]
   identifier = "projects"

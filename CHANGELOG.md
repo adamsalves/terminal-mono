@@ -6,7 +6,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Sections: `[[menu.main]]` now drives the order the home page renders its
+  sections in, not just the nav. The menu is the page's index — a reader who
+  sees "projects · about · experience" at the top expects the page in that
+  order — and keeping two lists that are allowed to disagree is an invitation
+  for them to. Delete an entry and the section goes with the link, which is the
+  answer to "I don't want the experience section" that used to require
+  overriding a layout in the consuming site. Non-section identifiers (`blog`,
+  external links) stay nav-only, and the hero stays the page header rather than
+  a section, so it cannot be moved or removed.
+- Sections: every section takes an `enable` switch — `[params.about] enable`,
+  `[params.projects]`, `[params.experience]`, `[params.contact]`. It is a veto
+  and never a summons: `false` removes the section and its nav link whatever the
+  menu says, `true` grants nothing the menu and the section's own content do not
+  already grant. Forcing inclusion would rebuild the two defects this release
+  closes — a section outside the index, and a section rendered empty. Being an
+  ordinary param, it is language-scoped: a section can be on in one language and
+  off in the other without a second menu.
+- Sections: `[menu.main.params] showInNav = false` keeps a section on the page
+  and takes only its link out of the nav, and `[params.sections] order = [...]`
+  is the escape hatch for a site that wants the nav and the page in different
+  orders on purpose. Order resolves as `params.sections.order`, then the menu,
+  then the previous default.
+- Sections: **no configuration can fail a build.** Every misconfiguration warns
+  and falls back — an unknown section name, a duplicate, an `order` that is not a
+  list or is empty, `params.sections` or `[params.<section>]` written as
+  something other than a table, and `enable` or `showInNav` set to something that
+  is not a boolean (`enable = "false"` is a string, and used to be read as "on"
+  in silence). A menu entry whose `url` is the wrong anchor for the section it
+  names — `url = "#sobre"` on `identifier = "about"` — warns and has its link
+  pointed at the right anchor, because the section's id is fixed by the theme and
+  the typo has exactly one possible fix. One naming a section but linking
+  somewhere else entirely (a page, an external URL) warns and is left alone: that
+  may well be a real destination.
+- Sections: the theme warns when a section has content configured, is not turned
+  off, and nothing in the index renders it — naming the section and the two ways
+  to resolve it. This is the shape of a `[[menu.main]]` written for v0.3.0, where
+  the menu drove only the nav: such a menu can now leave a home page with no
+  sections at all, and this warning is what keeps that from happening quietly.
+  `[params.<section>] enable = false` states that the omission is deliberate and
+  silences it; so does deleting the section's params.
+
 ### Fixed
+- Sections: a site that fills nothing in no longer ships links to sections that
+  are not there. Each section decided to exist a different way — `projects`
+  behind a `with`, `experience` behind `enable`, `about` and `contact` behind
+  nothing at all — so an unconfigured site rendered `about` and `contact` as
+  empty shells (heading, rule, nothing) while the nav offered `#projects` and
+  `#experience`, two anchors that scrolled nowhere and announced normally to a
+  screen reader. A fourth dead link, the hero's own "view projects" button, went
+  the same way. All four now answer to one resolution, and CI walks every page of
+  every build asserting that no link points at an anchor that is not on the page
+  it targets — run against the previous release's bare output, that check reports
+  17 dead anchors.
+- Sections: `section--last` follows the last section that actually renders. It
+  was hardcoded onto `contact`, which was only correct while contact was
+  guaranteed to be last; with contact removed or reordered, the page lost the
+  96px of breathing room at its end.
+- Nav: a site with no links and one language no longer ships a hamburger button
+  and an empty mobile menu for it to open.
 - Release: the branch cleanup no longer reports failure for a branch that is
   already gone. GitHub answers a delete of an absent ref with 422 "Reference
   does not exist", not 404, and only 404 was mapped to the already-gone case —
@@ -15,6 +74,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   Nothing ever accumulated on the remote — the merge had done the work; only
   the report was wrong. The allowance is scoped to the caller that asks for it,
   so an unexplained 422 stays fatal everywhere else.
+
+### Changed
+- Sections: **the menu now moves and removes the sections.** A site that adopted
+  `[[menu.main]]` in v0.3.0 — where the menu drove only the nav, and the README
+  said so — will see its sections move on upgrade if its nav order differs from
+  the layout order, and **lose any section the menu does not name**. A menu
+  written for the nav alone, listing say `about` and an external link, now leaves
+  the home page with one section instead of four; one naming no section at all
+  leaves it with none. Both cases warn, naming each section that went missing.
+  Set `[params.sections] order = [...]` to pin the previous layout and section
+  set; the nav keeps following the menu.
+- Sections: the four section partials (`about`, `projects`, `experience`,
+  `contact`) now expect a context of `dict "last" <bool>` and no longer decide
+  for themselves whether to render — `sections.html` does. A site that overrode
+  `layouts/index.html` and calls them with the page (`{{ partial "about.html" . }}`)
+  has to pass the dict instead, or read the plan the way the theme's own
+  `index.html` does.
+- Experience: the section is now opt-out like the other three, where it used to
+  be opt-in. `[params.experience] enable` was the only switch of its kind in the
+  theme, and making all four consistent meant picking one default for all of
+  them; a section that has `items` filled in and no explicit `enable` now
+  renders rather than staying hidden. If that is your config and you want it
+  hidden, set `enable = false`. Sites that already set `enable = true` — the
+  exampleSite among them — are unaffected: their minified output is byte-identical.
 
 ## [0.3.0] — 2026-08-13
 

@@ -1,0 +1,263 @@
+{{- /* The one resolution of "which sections exist, in what order, and which nav
+       links point at them". The home page, the nav and the hero all read this
+       partial, so they cannot disagree — which is the whole reason it exists.
+
+       Returns a dict:
+         order    slice of section ids that render, in order
+         last     the last id in order, or "" when nothing renders
+         entries  nav entries, already filtered: dicts of id/name/url/page,
+                  the shape nav-links.html consumes
+
+       A section exists when all three gates say yes:
+         1. the switch  — [params.<section>] enable is not false
+         2. the index   — it is in the resolved order
+         3. the content — it has content of its own
+
+       enable is a veto, never a summons: false removes the section whatever the
+       menu says, true grants nothing the other two gates do not already grant.
+       Letting it force inclusion would rebuild the two defects this partial
+       closes — a section outside the index, and a section rendered empty.
+
+       No configuration may fail the build. Every read below tolerates the wrong
+       type, warns, and falls back — this runs on every page through nav.html,
+       so an unguarded dereference would take a whole site down, not one page.
+
+       Nothing here may print: this partial returns a value, so every action is
+       whitespace-trimmed. An untrimmed line breaks `return`. */ -}}
+
+{{- $known := slice "about" "projects" "experience" "contact" -}}
+{{- $defaultOrder := slice "projects" "about" "experience" "contact" -}}
+{{- $empty := dict -}}
+
+{{- /* ---- the section params, normalised -------------------------------------
+       Every gate below reads [params.<section>] as a table. A consumer who
+       writes one as a scalar would otherwise abort the build on the first
+       `isset` or field access, so substitute an empty table and let the section
+       fall out through gate 3 instead. */ -}}
+{{- $params := dict -}}
+{{- range $known -}}
+  {{- $name := . -}}
+  {{- $table := index site.Params $name -}}
+  {{- if not (reflect.IsMap $table) -}}
+    {{- with $table -}}
+      {{- warnf "terminal-mono: [params.%s] must be a table, got %#v — ignoring it" $name . -}}
+    {{- end -}}
+    {{- $table = $empty -}}
+  {{- end -}}
+  {{- $params = merge $params (dict $name $table) -}}
+{{- end -}}
+
+{{- /* ---- gate 1: the switch ------------------------------------------------
+       Only an explicit `false` turns a section off, so the veto has to be
+       deliberate. Anything that is not a boolean is a typo — `enable = "false"`
+       is a string and would otherwise be read as "on" in silence — so it warns
+       rather than guessing which way the author meant it.
+       [params.experience] enable predates this and keeps working unchanged; it
+       stopped being a special case and became the general rule. */ -}}
+{{- $enabled := dict -}}
+{{- range $known -}}
+  {{- $name := . -}}
+  {{- $on := true -}}
+  {{- $table := index $params $name -}}
+  {{- if isset $table "enable" -}}
+    {{- $v := index $table "enable" -}}
+    {{- if eq (printf "%T" $v) "bool" -}}
+      {{- if not $v -}}{{- $on = false -}}{{- end -}}
+    {{- else -}}
+      {{- warnf "terminal-mono: [params.%s] enable must be true or false, got %#v — ignoring it" $name $v -}}
+    {{- end -}}
+  {{- end -}}
+  {{- $enabled = merge $enabled (dict $name $on) -}}
+{{- end -}}
+
+{{- /* ---- gate 3: the content ------------------------------------------------
+       Content of the section's own, not what i18n would dress it with: the
+       default headings make a section look filled while saying nothing, which
+       is exactly how `about` and `contact` used to render as empty shells.
+       Nested `with` throughout, so a missing params table is absence and not a
+       nil dereference. */ -}}
+{{- $filled := dict -}}
+{{- $has := false -}}
+{{- with index $params "about" -}}
+  {{- if .content -}}{{- $has = true -}}{{- end -}}
+  {{- with .skills -}}
+    {{- if reflect.IsMap . -}}
+      {{- if and .enable .items -}}{{- $has = true -}}{{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $filled = merge $filled (dict "about" $has) -}}
+{{- $has = false -}}
+{{- with index $params "projects" -}}
+  {{- if .items -}}{{- $has = true -}}{{- end -}}
+{{- end -}}
+{{- $filled = merge $filled (dict "projects" $has) -}}
+{{- $has = false -}}
+{{- with index $params "experience" -}}
+  {{- if .items -}}{{- $has = true -}}{{- end -}}
+{{- end -}}
+{{- $filled = merge $filled (dict "experience" $has) -}}
+{{- $has = false -}}
+{{- with index $params "contact" -}}
+  {{- if or .title .content .btnLink -}}{{- $has = true -}}{{- end -}}
+{{- end -}}
+{{- $filled = merge $filled (dict "contact" $has) -}}
+
+{{- /* ---- the index: read the menu once, for order and for links -------------
+       One pass over [[menu.main]] produces both the candidate order (known
+       identifiers, in weight order) and the raw nav entries, so the two can
+       never be built from different readings of the same menu. */ -}}
+{{- $blog := "blogs" | relLangURL -}}
+{{- $menuOrder := slice -}}
+{{- $raw := slice -}}
+{{- $hasMenu := false -}}
+{{- with site.Menus.main -}}
+  {{- $hasMenu = true -}}
+  {{- range . -}}
+    {{- $id := lower .Identifier -}}
+    {{- $url := .URL -}}
+    {{- if in $known $id -}}
+      {{- $anchor := printf "#%s" $id -}}
+      {{- /* A known section written without url or pageRef still knows where it
+             points — fill the anchor in rather than dropping it as linkless. */ -}}
+      {{- if and (not $url) (not .Page) -}}{{- $url = $anchor -}}{{- end -}}
+      {{- /* The section's id is a literal in its own partial, so a mismatched
+             anchor can never resolve — it is a typo with one possible fix, and
+             leaving it in place would ship the very dead link this partial
+             exists to prevent. Rewrite it. A pageRef or an absolute URL is a
+             different case: it may well be a real page the author wants in the
+             nav, so warn about the divergence and leave the link alone. */ -}}
+      {{- if and (hasPrefix $url "#") (ne $url $anchor) -}}
+        {{- warnf "terminal-mono: menu entry %q names section %q but links to %q — that anchor does not exist on the page; pointing it at %q instead" .Identifier $id $url $anchor -}}
+        {{- $url = $anchor -}}
+      {{- else if and $url (not (hasPrefix $url "#")) -}}
+        {{- warnf "terminal-mono: menu entry %q names section %q but links to %q rather than its anchor %q — the section still renders on the home page, and this link does not reach it; use url = %q if it should" .Identifier $id $url $anchor $anchor -}}
+      {{- end -}}
+      {{- /* Hugo merges menu entries by identifier and warns about the duplicate
+             itself, so this cannot currently fire — it stays as an invariant, not
+             as a diagnostic: whatever the menu holds, `order` must never name a
+             section twice, or index.html would emit the same DOM id twice. */ -}}
+      {{- if not (in $menuOrder $id) -}}
+        {{- $menuOrder = $menuOrder | append $id -}}
+      {{- end -}}
+    {{- end -}}
+    {{- /* showInNav = false is falsy, so isset is the only way to see it — the
+           same shape hero.html uses for params.hero.latestPosts. Held to the
+           same rule as `enable`: a boolean, or a warning. */ -}}
+    {{- $hide := false -}}
+    {{- with .Params -}}
+      {{- if isset . "showinnav" -}}
+        {{- $v := index . "showinnav" -}}
+        {{- if eq (printf "%T" $v) "bool" -}}
+          {{- $hide = not $v -}}
+        {{- else -}}
+          {{- warnf "terminal-mono: [menu.main.params] showInNav must be true or false, got %#v — ignoring it" $v -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+    {{- $raw = $raw | append (dict "id" $id "name" .Name "url" $url "page" .Page "hide" $hide) -}}
+  {{- end -}}
+{{- else -}}
+  {{- /* No menu: the v0.3.0 nav, whose order differs from the section order
+         below and stays different. The two defaults were never the same, and
+         the menu is what makes them agree — not the fallback.
+
+         An explicitly empty menu (`[menu] main = []`) cannot be told apart from
+         no menu at all and so gets no warning of its own: Hugo drops the key
+         rather than keeping an empty one, leaving site.Menus itself empty. */ -}}
+  {{- $raw = slice
+        (dict "id" "about"      "name" "" "url" "#about"      "page" false "hide" false)
+        (dict "id" "projects"   "name" "" "url" "#projects"   "page" false "hide" false)
+        (dict "id" "experience" "name" "" "url" "#experience" "page" false "hide" false)
+        (dict "id" "blog"       "name" "" "url" $blog         "page" false "hide" false)
+        (dict "id" "contact"    "name" "" "url" "#contact"    "page" false "hide" false) -}}
+{{- end -}}
+
+{{- /* ---- the index: params.sections.order beats the menu --------------------
+       The escape hatch, for a site that wants the nav and the page to disagree
+       on purpose. Any fault rejects the whole list rather than honouring half
+       of it: a partially-applied order is harder to debug than an ignored one.
+       Never an error — a bad config must not take a consumer's build down, and
+       that includes writing `sections` as anything other than a table. */ -}}
+{{- $order := $defaultOrder -}}
+{{- if $hasMenu -}}{{- $order = $menuOrder -}}{{- end -}}
+{{- with site.Params.sections -}}
+  {{- if not (reflect.IsMap .) -}}
+    {{- warnf "terminal-mono: params.sections must be a table — write [params.sections] with order = [...] inside it, not sections = %#v — ignoring it" . -}}
+  {{- else if isset . "order" -}}
+    {{- $list := index . "order" -}}
+    {{- if not (reflect.IsSlice $list) -}}
+      {{- warnf "terminal-mono: params.sections.order must be a list of section names — ignoring it" -}}
+    {{- else if not $list -}}
+      {{- warnf "terminal-mono: params.sections.order is empty — ignoring it. To render no sections at all, leave the sections out of [[menu.main]] instead" -}}
+    {{- else -}}
+      {{- $clean := slice -}}
+      {{- $ok := true -}}
+      {{- range $list -}}
+        {{- $id := lower (printf "%v" .) -}}
+        {{- if not (in $known $id) -}}
+          {{- $ok = false -}}
+          {{- warnf "terminal-mono: params.sections.order names %q, which is not a section (%s) — ignoring the whole list" $id (delimit $known ", ") -}}
+        {{- else if in $clean $id -}}
+          {{- $ok = false -}}
+          {{- warnf "terminal-mono: params.sections.order names %q twice — ignoring the whole list" $id -}}
+        {{- else -}}
+          {{- $clean = $clean | append $id -}}
+        {{- end -}}
+      {{- end -}}
+      {{- if $ok -}}{{- $order = $clean -}}{{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* ---- apply gates 1 and 3 ------------------------------------------------
+       Order was resolved without consulting them, so a disabled or empty
+       section leaves no hole in the sequence behind it. */ -}}
+{{- $final := slice -}}
+{{- range $order -}}
+  {{- if and (index $enabled .) (index $filled .) -}}
+    {{- $final = $final | append . -}}
+  {{- end -}}
+{{- end -}}
+{{- $last := "" -}}
+{{- with $final -}}{{- $last = index . (sub (len .) 1) -}}{{- end -}}
+
+{{- /* ---- content configured for a section that never renders ----------------
+       The index is what removes a section, and removing one is a supported
+       thing to want — but a site that still carries the section's content has
+       not necessarily chosen that. This is the shape of a menu written when
+       [[menu.main]] only drove the nav: the config looks complete and the page
+       silently is not. Warn, and name the switch that says "yes, deliberately",
+       so an intentional omission has a way to be stated rather than merely
+       tolerated. Deleting [params.<section>] silences it too — with nothing
+       left to render, there is nothing left to report. */ -}}
+{{- range $known -}}
+  {{- if and (index $enabled .) (index $filled .) (not (in $final .)) -}}
+    {{- warnf "terminal-mono: [params.%s] has content and is not turned off, but nothing renders it — add %q to [[menu.main]] (or to params.sections.order), or set [params.%s] enable = false to say the omission is deliberate" . . . -}}
+  {{- end -}}
+{{- end -}}
+
+{{- /* ---- the nav entries ----------------------------------------------------
+       A section that does not render loses its link here, through the same test
+       that decided it does not render — never a second rule that could drift.
+       The blog is not a section: it is nav-only, and stays conditional on the
+       language actually having posts so ordering it by weight cannot turn it
+       into a permanent link to an empty listing. */ -}}
+{{- $hasBlog := gt (len (where site.RegularPages "Section" "blogs")) 0 -}}
+{{- with site.Params.navbar -}}
+  {{- if reflect.IsMap . -}}
+    {{- if isset . "showblog" -}}{{- $hasBlog = index . "showblog" -}}{{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $entries := slice -}}
+{{- range $raw -}}
+  {{- $keep := true -}}
+  {{- if .hide -}}{{- $keep = false -}}{{- end -}}
+  {{- if and (in $known .id) (not (in $final .id)) -}}{{- $keep = false -}}{{- end -}}
+  {{- if and (eq .id "blog") (not $hasBlog) -}}{{- $keep = false -}}{{- end -}}
+  {{- if $keep -}}
+    {{- $entries = $entries | append (dict "id" .id "name" .name "url" .url "page" .page) -}}
+  {{- end -}}
+{{- end -}}
+
+{{- return dict "order" $final "last" $last "entries" $entries -}}

@@ -81,34 +81,459 @@ jobs:
           ln -sfn "$GITHUB_WORKSPACE" /tmp/bare/themes/terminal-mono
           printf 'baseURL = "https://example.com/terminal-mono/"\ntitle = "Bare Site"\ntheme = "terminal-mono"\n' > /tmp/bare/hugo.toml
           hugo --source /tmp/bare --gc --minify --panicOnWarning
-      # A green build only proves the templates ran, not what they emitted. The
-      # bare site is where the nav's fallback order lives — the promise that a
-      # site with no [[menu.main]] upgrades untouched — so assert it rather than
-      # trust it. The blank-link check guards the other direction: an entry that
+      # One config contract, one fixture per promise it makes. Together these are
+      # why "the menu drives the sections" is a checked claim and not a sentence
+      # in a changelog. The params block is shared so that only the menu, the
+      # switches and params.sections differ between them — whatever a fixture
+      # proves, it proves about the index, not about missing content.
+      - name: Build the section fixtures
+        run: |
+          set -e
+          cat > /tmp/params.toml <<'TOML'
+
+          [params]
+            [params.about]
+              content = "About the site owner."
+              [params.about.skills]
+                enable = true
+                items = ["Go", "Hugo"]
+            [params.projects]
+              [[params.projects.items]]
+                title = "Alpha"
+                repo = "alpha"
+                content = "A project."
+            [params.experience]
+              [[params.experience.items]]
+                company = "ACME"
+                [[params.experience.items.jobs]]
+                  name = "Developer"
+                  content = "Did things."
+            [params.contact]
+              title = "Let's talk?"
+              content = "Reach out."
+              btnLink = "mailto:hi@example.com"
+          TOML
+
+          mk() {
+            mkdir -p "/tmp/$1/themes"
+            ln -sfn "$GITHUB_WORKSPACE" "/tmp/$1/themes/terminal-mono"
+            printf 'baseURL = "https://example.com/terminal-mono/"\ntitle = "Fixture %s"\ntheme = "terminal-mono"\n' "$1" > "/tmp/$1/hugo.toml"
+          }
+
+          # params, no menu — the v0.3.0 layout, which must not move
+          mk fallback
+          cat /tmp/params.toml >> /tmp/fallback/hugo.toml
+
+          # menu reordered, projects deleted, about kept but taken out of the nav.
+          # projects also gets enable = false: dropping a section from the menu
+          # while its params stay filled is the shape of a menu written back when
+          # [[menu.main]] only drove the nav, so the theme warns about it (see the
+          # orphan fixture). enable = false is how a config says the omission is
+          # deliberate — which is exactly what this fixture means.
+          mk custom
+          cat >> /tmp/custom/hugo.toml <<'TOML'
+
+          [[menu.main]]
+            identifier = "contact"
+            url = "#contact"
+            weight = 10
+          [[menu.main]]
+            identifier = "about"
+            url = "#about"
+            weight = 20
+            [menu.main.params]
+              showInNav = false
+          [[menu.main]]
+            identifier = "experience"
+            url = "#experience"
+            weight = 30
+          TOML
+          cat /tmp/params.toml >> /tmp/custom/hugo.toml
+          sed -i 's/^  \[params.projects\]$/  [params.projects]\n    enable = false/' /tmp/custom/hugo.toml
+
+          # the escape hatch: params.sections.order beats the menu for the page,
+          # while the nav keeps following the menu. projects is left out of the
+          # order on purpose, so it carries the same enable = false as custom.
+          mk hatch
+          cat >> /tmp/hatch/hugo.toml <<'TOML'
+
+          [[menu.main]]
+            identifier = "about"
+            url = "#about"
+            weight = 10
+          [[menu.main]]
+            identifier = "contact"
+            url = "#contact"
+            weight = 20
+          TOML
+          cat /tmp/params.toml >> /tmp/hatch/hugo.toml
+          printf '  [params.sections]\n    order = ["contact", "about", "experience"]\n' >> /tmp/hatch/hugo.toml
+          sed -i 's/^  \[params.projects\]$/  [params.projects]\n    enable = false/' /tmp/hatch/hugo.toml
+
+          # menus and enable are both language-scoped, and one partialCached
+          # entry per language is what keeps them apart. Two languages that
+          # disagree about which sections exist is the assertion that a shared
+          # cache would fail — and nothing else here would notice.
+          mk i18n
+          cat >> /tmp/i18n/hugo.toml <<'TOML'
+
+          defaultContentLanguage = "en"
+          [languages]
+            [languages.en]
+              weight = 1
+            [languages.pt]
+              weight = 2
+              [languages.pt.params]
+                [languages.pt.params.experience]
+                  enable = false
+          TOML
+          cat /tmp/params.toml >> /tmp/i18n/hugo.toml
+          sed -i 's/^  \[params.projects\]$/  [params.projects]\n    enable = false/' /tmp/i18n/hugo.toml
+
+          for f in fallback custom hatch i18n; do
+            hugo --source "/tmp/$f" --gc --minify --panicOnWarning
+          done
+      # A questionable config must warn and fall back, never take a consumer's
+      # build down — so these are built WITHOUT --panicOnWarning, and the warning
+      # itself is the assertion. Two of them are not user error at all:
+      #
+      #   toggle  enable = true on a section the menu leaves out. The switch
+      #           grants nothing, so the section does not render — and a config
+      #           asking for a section it will not get is worth saying out loud.
+      #   orphan  a menu that names no section while every section has content.
+      #           This is the v0.3.0 menu, written when [[menu.main]] drove only
+      #           the nav; without the warning the whole home page silently
+      #           empties out on upgrade. The one this release exists to catch.
+      #
+      # scalar/list guard the namespace itself: params.sections written as
+      # anything but a table used to abort the build inside isset, which is the
+      # one thing no configuration is allowed to do.
+      - name: Assert a questionable config warns and still builds
+        run: |
+          set -e
+          WARNS="invalid-unknown invalid-dup invalid-type invalid-empty invalid-anchor
+                 invalid-scalar invalid-list orphan toggle"
+          for f in $WARNS; do
+            mkdir -p "/tmp/$f/themes"
+            ln -sfn "$GITHUB_WORKSPACE" "/tmp/$f/themes/terminal-mono"
+            printf 'baseURL = "https://example.com/terminal-mono/"\ntitle = "Fixture %s"\ntheme = "terminal-mono"\n' "$f" > "/tmp/$f/hugo.toml"
+            cat /tmp/params.toml >> "/tmp/$f/hugo.toml"
+          done
+          printf '  [params.sections]\n    order = ["about", "bogus"]\n' >> /tmp/invalid-unknown/hugo.toml
+          printf '  [params.sections]\n    order = ["about", "about"]\n' >> /tmp/invalid-dup/hugo.toml
+          printf '  [params.sections]\n    order = "about"\n'            >> /tmp/invalid-type/hugo.toml
+          printf '  [params.sections]\n    order = []\n'                 >> /tmp/invalid-empty/hugo.toml
+          printf '\n[[menu.main]]\n  identifier = "about"\n  url = "#sobre"\n  weight = 10\n' >> /tmp/invalid-anchor/hugo.toml
+          # params.sections as a scalar and as a list: the [params] table is
+          # already open, so these go in as plain keys inside it.
+          sed -i '0,/^\[params\]$/s//[params]\n  sections = "about"/'               /tmp/invalid-scalar/hugo.toml
+          sed -i '0,/^\[params\]$/s//[params]\n  sections = ["about", "projects"]/' /tmp/invalid-list/hugo.toml
+          # orphan: the menu is real, and names nothing the page can render. The
+          # post is what makes the blog entry survive, so the nav is not empty
+          # for some other reason than the one under test.
+          mkdir -p /tmp/orphan/content/blogs
+          printf -- '---\ntitle: "A post"\ndate: 2026-01-01\n---\nx\n' > /tmp/orphan/content/blogs/post.md
+          printf '\n[[menu.main]]\n  identifier = "blog"\n  pageRef = "/blogs"\n  weight = 10\n' >> /tmp/orphan/hugo.toml
+          # toggle: the veto beats the menu, and `true` summons nothing.
+          cat >> /tmp/toggle/hugo.toml <<'TOML'
+
+          [[menu.main]]
+            identifier = "about"
+            url = "#about"
+            weight = 10
+          [[menu.main]]
+            identifier = "experience"
+            url = "#experience"
+            weight = 20
+          [[menu.main]]
+            identifier = "contact"
+            url = "#contact"
+            weight = 30
+          TOML
+          sed -i 's/^  \[params.experience\]$/  [params.experience]\n    enable = false/' /tmp/toggle/hugo.toml
+          sed -i 's/^  \[params.projects\]$/  [params.projects]\n    enable = true/'      /tmp/toggle/hugo.toml
+
+          for f in $WARNS; do
+            if ! hugo --source "/tmp/$f" --gc --minify > "/tmp/$f.log" 2>&1; then
+              cat "/tmp/$f.log"
+              echo "$f: a questionable config took the build down instead of warning"
+              exit 1
+            fi
+            if ! grep -q 'WARN.*terminal-mono:' "/tmp/$f.log"; then
+              cat "/tmp/$f.log"
+              echo "$f: built without the warning that is the whole point"
+              exit 1
+            fi
+            grep 'WARN.*terminal-mono:' "/tmp/$f.log"
+          done
+          # The orphan warning has to name every section it dropped, not just
+          # report that something went missing — the name is the actionable half.
+          for s in about projects experience contact; do
+            if ! grep -q "params.$s\] has content and is not turned off" /tmp/orphan.log; then
+              echo "orphan: the warning never named $s"
+              exit 1
+            fi
+          done
+          # And it must stay quiet about a section that said enable = false:
+          # that is the config stating the omission was deliberate.
+          if grep -q 'params.experience\] has content and is not turned off' /tmp/toggle.log; then
+            echo "toggle: warned about a section that was explicitly disabled"
+            exit 1
+          fi
+          if ! grep -q 'params.projects\] has content and is not turned off' /tmp/toggle.log; then
+            echo "toggle: enable = true outside the index went unreported"
+            exit 1
+          fi
+      # A green build only proves the templates ran, not what they emitted. Each
+      # block below is one line of the README's config contract, asserted. The
+      # blank-link check guards the direction none of them cover: an entry that
       # resolves to no label has to be dropped, never shipped as an <a> a screen
       # reader cannot announce.
-      - name: Assert the fallback nav
+      - name: Assert the menu drives the sections
         run: |
           python3 - <<'PY'
           import re, sys
 
-          html = open('/tmp/bare/public/index.html').read()
-          nav = re.search(r'<nav class=["\']?nav["\']?[ >].*?</nav>', html, re.S)
-          if not nav:
-              sys.exit('no <nav> in the bare site output')
+          ATTR = r'(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+))'
+          SECTION = re.compile(r'<section\b([^>]*)>')
+          IDS = re.compile(r'\bid=' + ATTR)
+          CLASS = re.compile(r'\bclass=' + ATTR)
+          NAV = re.compile(r'<nav class=["\']?nav["\']?[ >].*?</nav>', re.S)
+          ANCHOR = re.compile(r'<a\b([^>]*)>(.*?)</a>', re.S)
 
-          links = re.findall(r'<a\b[^>]*>(.*?)</a>', nav.group(0), re.S)
-          blank = [l for l in links if not re.sub(r'<[^>]*>|\s', '', l)]
-          if blank:
-              sys.exit(f'nav has {len(blank)} link(s) with no text: {blank}')
+          bad = []
+          def check(name, got, want):
+              if got == want:
+                  print(f'  ok   {name}: {got}')
+              else:
+                  bad.append(f'{name}:\n    got  {got}\n    want {want}')
+                  print(f'  FAIL {name}: {got} != {want}')
 
-          # Desktop bar and mobile menu render the same partial, hence twice.
-          expected = ['about', 'projects', 'experience', 'contact'] * 2
-          found = [l for l in links if l in set(expected)]
-          if found != expected:
-              sys.exit(f'fallback nav order changed:\n  found    {found}\n  expected {expected}')
+          def val(m):
+              return next(g for g in m.groups() if g is not None)
 
-          print(f'fallback nav OK: {found}')
+          def read(fixture):
+              return open(f'/tmp/{fixture}/public/index.html').read()
+
+          def sections(html):
+              out = []
+              for m in SECTION.finditer(html):
+                  i, c = IDS.search(m.group(1)), CLASS.search(m.group(1))
+                  out.append((val(i) if i else '', val(c) if c else ''))
+              # <section id="top"> is the hero: the page header, not a section.
+              return [(i, c) for i, c in out if i != 'top']
+
+          # Faults here go through `bad` like everything else rather than
+          # sys.exit: aborting the run hides every assertion after this one, and
+          # the first failure is rarely the only thing worth seeing.
+          def nav(html, label='nav'):
+              m = NAV.search(html)
+              if not m:
+                  bad.append(f'{label}: no <nav> in the output')
+                  return []
+              labels = []
+              for attrs, text in ANCHOR.findall(m.group(0)):
+                  if re.search(r'class=["\']?brand', attrs):
+                      continue
+                  labels.append(re.sub(r'<[^>]*>', '', text).strip())
+              blank = [l for l in labels if not l]
+              if blank:
+                  bad.append(f'{label}: nav has {len(blank)} link(s) with no text')
+              # Desktop bar and mobile menu render the same partial, hence twice.
+              half = len(labels) // 2
+              if labels[:half] != labels[half:]:
+                  bad.append(f'{label}: desktop bar {labels[:half]} and '
+                             f'mobile menu {labels[half:]} disagree')
+              return labels[:half]
+
+          def nav_hrefs(html):
+              m = NAV.search(html)
+              out = []
+              for attrs in re.findall(r'<a\b([^>]*)>', m.group(0) if m else ''):
+                  if re.search(r'class=["\']?brand', attrs):
+                      continue
+                  h = re.search(r'\bhref=' + ATTR, attrs)
+                  out.append(val(h) if h else '')
+              return out[:len(out) // 2]
+
+          def hero_cta(html):
+              return bool(re.search(r'<a[^>]*class=["\']?btn[^>]*#projects', html) or
+                          re.search(r'<a[^>]*#projects[^>]*class=["\']?btn', html))
+
+          def last(html):
+              secs = sections(html)
+              marked = [i for i, c in secs if 'section--last' in c]
+              return marked, ([secs[-1][0]] if secs else [])
+
+          # A site that configures nothing renders no sections — so it must offer
+          # no way to reach one. This is the defect the release exists to fix: the
+          # v0.3.0 bare site shipped four anchors that went nowhere.
+          html = read('bare')
+          check('bare sections', [i for i, _ in sections(html)], [])
+          check('bare nav', nav(html, 'bare'), [])
+          check('bare hamburger', 'hamburger' in html, False)
+          check('bare mobile menu', 'mobile-menu' in html, False)
+          check('bare hero CTA', hero_cta(html), False)
+          check('bare section--last', *last(html))
+
+          # No menu: the v0.3.0 defaults, which differ from each other and stay
+          # that way. This is the upgrade promise for every site out there today.
+          html = read('fallback')
+          check('fallback sections', [i for i, _ in sections(html)],
+                ['projects', 'about', 'experience', 'contact'])
+          check('fallback nav', nav(html, 'fallback'), ['about', 'projects', 'experience', 'contact'])
+          check('fallback section--last', *last(html))
+          # The one fixture that renders `projects`, and so the only one that can
+          # assert the hero CTA is *there*. Without it every hero_cta() call in
+          # this file expects False and a broken regex would pass all of them.
+          check('fallback hero CTA', hero_cta(html), True)
+
+          # The headline claim: one menu, one order, in one build.
+          html = read('custom')
+          check('custom sections', [i for i, _ in sections(html)],
+                ['contact', 'about', 'experience'])
+          check('custom nav', nav(html, 'custom'), ['contact', 'experience'])
+          check('custom section--last', *last(html))
+          check('custom hero CTA', hero_cta(html), False)
+
+          # The escape hatch, for a site that wants the two lists to disagree.
+          html = read('hatch')
+          check('hatch sections', [i for i, _ in sections(html)],
+                ['contact', 'about', 'experience'])
+          check('hatch nav', nav(html, 'hatch'), ['about', 'contact'])
+          check('hatch section--last', *last(html))
+
+          # enable is a veto, never a summons — both halves, one fixture.
+          html = read('toggle')
+          check('toggle sections', [i for i, _ in sections(html)], ['about', 'contact'])
+          check('toggle nav', nav(html, 'toggle'), ['about', 'contact'])
+          check('toggle section--last', *last(html))
+          check('toggle hero CTA', hero_cta(html), False)
+
+          # Menus and enable are language-scoped, and the two languages must be
+          # able to disagree about which sections exist. projects is off for the
+          # whole site, experience only for PT.
+          en = read('i18n')
+          pt = open('/tmp/i18n/public/pt/index.html').read()
+          check('i18n EN sections', [i for i, _ in sections(en)],
+                ['about', 'experience', 'contact'])
+          check('i18n PT sections', [i for i, _ in sections(pt)], ['about', 'contact'])
+          check('i18n EN section--last', *last(en))
+          check('i18n PT section--last', *last(pt))
+
+          # A menu naming no section renders no section — and says so. The nav
+          # keeps the blog, which was never a section to begin with.
+          html = read('orphan')
+          check('orphan sections', [i for i, _ in sections(html)], [])
+          check('orphan nav', nav(html, 'orphan'), ['blog'])
+          check('orphan hero CTA', hero_cta(html), False)
+
+          # A mismatched anchor is a typo with exactly one possible fix, so the
+          # link is repaired rather than shipped broken. This fixture is in the
+          # dead-anchor sweep below for the same reason.
+          html = read('invalid-anchor')
+          check('invalid-anchor sections', [i for i, _ in sections(html)], ['about'])
+          check('invalid-anchor href', [h for h in nav_hrefs(html) if '#' in h],
+                ['/terminal-mono/#about'])
+
+          for f in ['unknown', 'dup', 'type', 'empty', 'scalar', 'list']:
+              check(f'invalid-{f} falls back', [i for i, _ in sections(read(f'invalid-{f}'))],
+                    ['projects', 'about', 'experience', 'contact'])
+
+          if bad:
+              sys.exit('\n' + '\n'.join(bad))
+          print('the menu drives the sections')
+          PY
+      # The check that closes the defect for good, on every page of every build:
+      # no link may point at an anchor that is not on the page it targets.
+      # Fragments resolve against the target, not the page the link sits on — the
+      # nav on a blog post points at the home's anchors — and the baseURL
+      # sub-path has to come off before anything can be compared. Run against
+      # v0.3.0's bare output this reports 17 dead anchors, which is the reason it
+      # exists. Every fixture is in, invalid-anchor included: a mismatched anchor
+      # is repaired rather than shipped, so there is no longer a build in this
+      # workflow that is allowed to contain a dead one.
+      - name: Assert no link points at an anchor that is not there
+        run: |
+          python3 - <<'PY'
+          import os, re, sys
+
+          ATTR = r'(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+))'
+          IDS = re.compile(r'\bid=' + ATTR)
+          ANCHOR = re.compile(r'<a\b([^>]*)>', re.S)
+          HREF = re.compile(r'\bhref=' + ATTR)
+          PREFIX = '/terminal-mono/'
+
+          bad = []
+
+          def val(m):
+              return next(g for g in m.groups() if g is not None)
+
+          def sweep(label, public):
+              pages = {}
+              for dirpath, _, names in os.walk(public):
+                  for n in names:
+                      if not n.endswith('.html'):
+                          continue
+                      path = os.path.join(dirpath, n)
+                      body = open(path).read()
+                      rel = os.path.relpath(path, public)
+                      key = '' if rel == 'index.html' else (
+                          rel[:-len('/index.html')] if rel.endswith('/index.html') else rel)
+                      pages[key] = (body, {val(m) for m in IDS.finditer(body)})
+
+              checked = 0
+              for key, (body, _) in sorted(pages.items()):
+                  for attrs in ANCHOR.findall(body):
+                      h = HREF.search(attrs)
+                      if not h:
+                          continue
+                      href = val(h)
+                      if '#' not in href or href.startswith(('http://', 'https://', 'mailto:', 'tel:')):
+                          continue
+                      path, _, frag = href.partition('#')
+                      if not frag:
+                          continue
+                      if path.startswith('/'):
+                          if not path.startswith(PREFIX):
+                              bad.append(f'{label}: {href!r} on /{key} escapes {PREFIX}')
+                              continue
+                          target = path[len(PREFIX):].strip('/')
+                      elif path == '':
+                          target = key
+                      else:
+                          target = os.path.normpath(os.path.join(key, path)).strip('/')
+                          target = '' if target == '.' else target
+                      if target not in pages:
+                          bad.append(f'{label}: {href!r} on /{key} targets a page that was not built')
+                          continue
+                      if frag not in pages[target][1]:
+                          bad.append(f'{label}: {href!r} on /{key} points at #{frag}, '
+                                     f'which is not on /{target or "(home)"}')
+                      checked += 1
+              print(f'  {label}: {checked} fragment link(s) over {len(pages)} page(s)')
+              # Without a floor this whole sweep degrades to a green no-op the
+              # moment the markup moves out from under the regexes above — and it
+              # is the assertion the release is named for. Every page that renders
+              # the site chrome opens with a skip-link to #main, so counting the
+              # pages that carry one gives a floor that calibrates itself. Pages
+              # without it are the alias stubs Hugo writes for pagination: 273
+              # bytes of meta-refresh, no <a> at all.
+              floor = sum(1 for body, _ in pages.values() if '#main' in body)
+              if not floor:
+                  bad.append(f'{label}: no page carries the skip-link — nothing was swept')
+              elif checked < floor:
+                  bad.append(f'{label}: {checked} fragment link(s) over {floor} page(s) that '
+                             'carry one — the sweep is not seeing the markup')
+
+          sweep('exampleSite', 'exampleSite/public')
+          for f in ['bare', 'fallback', 'custom', 'hatch', 'i18n',
+                    'toggle', 'orphan', 'invalid-anchor']:
+              sweep(f, f'/tmp/{f}/public')
+
+          if bad:
+              sys.exit('\n'.join(bad))
+          print('every fragment link reaches its anchor')
           PY
       # The hero terminal's post listing is built server-side into data-posts and
       # only becomes visible once JS types it out, so a rendering bug here is

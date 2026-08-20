@@ -1,6 +1,10 @@
+{{- /* Whether this section renders at all is sections.html's call, not this
+       file's — see it for the three gates. Expects a dict: last (bool).
+       The `enable` check that used to live here was not deleted, it was
+       promoted: sections.html now runs it for all four sections, so a site with
+       [params.experience] enable = false gets exactly what it got before. */ -}}
 {{- $exp := site.Params.experience -}}
-{{ if $exp.enable }}
-<section id="experience" class="section">
+<section id="experience" class="section{{ if .last }} section--last{{ end }}">
   <div class="container">
     <div class="section__head">
       <h2><span class="cmt">//</span> {{ i18n "experience" }}</h2>
@@ -23,4 +27,3 @@
     </div>
   </div>
 </section>
-{{ end }}
