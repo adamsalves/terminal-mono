@@ -1,12 +1,44 @@
 {{- $hero := site.Params.hero -}}
-{{- $skills := site.Params.about.skills.items -}}
 {{- $loc := site.Params.hero.location -}}
+{{- /* Read through guards rather than straight: [params.about] or its skills
+       table written as a scalar would abort here, and the hero renders on the
+       home page of every language — sections.html normalises the same tables for
+       the same reason. skills.enable is honoured too, so the switch that hides
+       the skills block inside the about section also silences `cat stack.txt`
+       rather than hiding it in one place and announcing it in the other. */ -}}
+{{- $skills := slice -}}
+{{- with site.Params.about -}}
+  {{- if reflect.IsMap . -}}
+    {{- with .skills -}}
+      {{- if reflect.IsMap . -}}
+        {{- if .enable -}}{{- $skills = .items -}}{{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
 {{- /* The hero is the page's header, not a section, so it is never in the plan
        itself — but its call-to-action links at one, and a button pointing at a
        section that does not render is the same dead anchor the nav used to
        ship. */ -}}
 {{- $plan := partialCached "sections.html" . site.Language.Lang -}}
 {{- $hasProjects := in $plan.order "projects" -}}
+{{- /* The terminal's two remaining commands follow the plan the same way the
+       button does. Each one is built into a variable rather than inline, because
+       an empty value is what tells terminal.js to skip the command entirely —
+       the rule `ls ~/blog --latest` has always followed — and because the line
+       count below has to know which commands will render. */ -}}
+{{- $stackOut := "" -}}
+{{- if in $plan.order "about" -}}
+  {{- with $skills -}}{{- $stackOut = delimit (first 6 .) " · " -}}{{- end -}}
+{{- end -}}
+{{- $projectsOut := "" -}}
+{{- if $hasProjects -}}
+  {{- $names := slice -}}
+  {{- range site.Params.projects.items -}}
+    {{- $names = $names | append (printf "%s/" (.repo | default (.title | urlize))) -}}
+  {{- end -}}
+  {{- $projectsOut = delimit $names "   " -}}
+{{- end -}}
 {{- /* The newest posts, listed by the terminal's `ls ~/blog --latest`. Empty when
        the language has no posts, so the command is skipped entirely rather than
        printing an empty listing. site.RegularPages is scoped per language, so the
@@ -56,6 +88,17 @@
     {{- end -}}
   {{- end -}}
 {{- end -}}
+{{- /* How tall the terminal will be once terminal.js has typed it out, in lines,
+       so the box can reserve the space instead of growing under the reader. Each
+       command contributes its own line plus an output line and a blank one; the
+       blog block adds its command and a trailing blank around the posts; the
+       final prompt is the last line. The count has to be built here because only
+       the template knows which commands will render — a constant in the CSS was
+       right only while all three always did. */ -}}
+{{- $lines := 4 -}}
+{{- if $stackOut -}}{{- $lines = add $lines 3 -}}{{- end -}}
+{{- if $projectsOut -}}{{- $lines = add $lines 3 -}}{{- end -}}
+{{- with $posts -}}{{- $lines = add $lines (add 2 (len .)) -}}{{- end -}}
 <section id="top" class="container">
   <div class="hero">
 
@@ -65,14 +108,14 @@
         <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
         <span class="term__title">{{ site.Params.terminalUser | default "adams@portfolio" }}: ~</span>
       </div>
-      <pre id="hero-term" class="term__body{{ if $posts }} term__body--posts{{ end }}" aria-label="{{ i18n "aria_terminal" }}"
-        {{- with $posts }} style="--hero-posts:{{ len . }}"{{ end }}
+      <pre id="hero-term" class="term__body" aria-label="{{ i18n "aria_terminal" }}"
+        style="--hero-lines:{{ $lines }}"
         data-user="{{ site.Params.terminalUser | default "adams@portfolio" }}"
         data-name="{{ site.Params.title }}"
         data-role="{{ $hero.subtitle }}"
         data-loc="{{ $loc }}"
-        data-stack="{{ with $skills }}{{ delimit (first 6 .) " · " }}{{ end }}"
-        data-projects="{{ range $i, $p := site.Params.projects.items }}{{ if $i }}   {{ end }}{{ $p.repo | default ($p.title | urlize) }}/{{ end }}"
+        data-stack="{{ $stackOut }}"
+        data-projects="{{ $projectsOut }}"
         data-posts="{{ $posts | jsonify }}"></pre>
     </div>
 

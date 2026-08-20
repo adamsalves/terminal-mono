@@ -6,6 +6,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Hero terminal: the section switch reaches the terminal. v0.4.0 taught the hero
+  that its "view projects" button must not point at a section that does not
+  render, but the terminal directly above it went on typing `ls projects/` and
+  listing the repositories of a section the reader could not scroll to. Both
+  remaining commands now follow the plan: `ls projects/` follows the `projects`
+  section, and `cat stack.txt` follows `about`, which is where the skills live.
+- Hero terminal: a command with no output is no longer typed at all. Only the
+  blog listing had ever followed that rule; `cat stack.txt` and `ls projects/`
+  were unconditional, so a site that filled nothing in — the one CI has been
+  building all along — greeted its reader with two commands and two blank lines
+  under them. This half is fixed in the script rather than the template, so an
+  empty value produces no command whatever put it there.
+- Hero terminal: the reserved height follows the commands that actually render.
+  It was a constant `12` lines plus one per post, which was right only while all
+  three commands always rendered; drop one and the box reserved three lines it
+  never filled, leaving a block of dead space under the hero — the same class of
+  bug as `section--last` sitting on a section that was no longer last. The
+  template now counts the lines it is about to emit and passes them as
+  `--hero-lines`, replacing the `--hero-posts` variable and the
+  `.term__body--posts` class, which are gone. CI recomputes the count from the
+  rendered `data-*` attributes and holds the variable to it.
+
+### Changed
+- Hero terminal: `[params.about.skills] enable = false` now also silences
+  `cat stack.txt`. The switch used to hide the skills block inside the about
+  section while the terminal above kept announcing the same list — one switch
+  that meant two different things depending on where you looked. Sites that
+  leave `enable = true`, the exampleSite among them, are unaffected.
+
 ## [0.4.0] — 2026-08-20
 
 ### Added
