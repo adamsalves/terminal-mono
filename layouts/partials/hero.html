@@ -3,15 +3,20 @@
 {{- /* Read through guards rather than straight: [params.about] or its skills
        table written as a scalar would abort here, and the hero renders on the
        home page of every language — sections.html normalises the same tables for
-       the same reason. skills.enable is honoured too, so the switch that hides
-       the skills block inside the about section also silences `cat stack.txt`
-       rather than hiding it in one place and announcing it in the other. */ -}}
+       the same reason. items is tested for being a list, not merely for truth:
+       `first` does not reject a string, it slices its bytes, so items = "Go"
+       would type `71 · 111` into the terminal rather than fail somewhere a
+       consumer would see it. skills.enable is honoured too, and has to be an
+       explicit true — an absent key counts as off, the reading about.html and
+       sections.html have always used — so the switch that hides the skills block
+       inside the about section also silences `cat stack.txt` rather than hiding
+       it in one place and announcing it in the other. */ -}}
 {{- $skills := slice -}}
 {{- with site.Params.about -}}
   {{- if reflect.IsMap . -}}
     {{- with .skills -}}
       {{- if reflect.IsMap . -}}
-        {{- if .enable -}}{{- $skills = .items -}}{{- end -}}
+        {{- if and .enable (reflect.IsSlice .items) -}}{{- $skills = .items -}}{{- end -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}

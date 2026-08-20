@@ -97,8 +97,11 @@ a{color:inherit}
    ~49px at one post and undershot at three. It used to be a constant 12 plus one
    per post, which was right only while all three commands always rendered; a
    site with no skills or no projects reserved three lines it never filled. The
-   12 survives as the fallback: the count with every command present and no posts
-   listed, which is the safe way to be wrong if the variable never arrives.
+   12 survives only as the fallback for a <pre> that arrives without the variable
+   — an overridden hero.html, say. It is the old constant and not a count the
+   formula can produce: every command with nothing listed is 10 lines, and the
+   exampleSite is 15. Sitting between them is the least-wrong guess available
+   when there is nothing to count.
    Wrapping is not predictable, so long strings in a narrow column still grow. */
 .term__body{margin:0; padding:22px; font-family:var(--mono); font-size:14px; line-height:1.85; white-space:pre-wrap; word-break:break-word; min-height:calc(var(--hero-lines,12) * 1.85em + 44px)}
 .term__body a{text-decoration:none; border-bottom:1px solid transparent; transition:border-color .18s}

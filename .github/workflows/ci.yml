@@ -537,9 +537,11 @@ jobs:
           PY
       # The hero terminal's post listing is built server-side into data-posts and
       # only becomes visible once JS types it out, so a rendering bug here is
-      # invisible to a build that merely succeeds. Assert both directions: the
-      # exampleSite has posts and must carry them with per-language URLs, and the
-      # bare site has none and must not reserve the taller terminal for nothing.
+      # invisible to a build that merely succeeds. Four fixtures, one per shape
+      # the terminal can take: the exampleSite carries every command with
+      # per-language URLs, bare carries none, toggle loses one to the index, and
+      # orphan loses two while listing a single post. Each also holds the height
+      # it reserves to the commands it emitted.
       - name: Assert the hero post listing
         run: |
           python3 - <<'PY'
@@ -645,6 +647,23 @@ jobs:
           if lines('/tmp/toggle/public/index.html', tag, posts) != 7:
               sys.exit('toggle: dropping ls projects/ should take its three lines with it')
           print('toggle hero listing OK: ls projects/ gone with its section')
+
+          # Every fixture above lists three posts or none, so a per-post term
+          # hardcoded to 3 would satisfy all of them and the listing would only
+          # reserve the right height on a site with exactly three posts. orphan is
+          # the fixture that varies it: its menu names no section, so both other
+          # commands go, and its single post makes the block 2 + 1 rather than
+          # 2 + 3. It is also the other half of toggle — the index removing a
+          # command, asserted from the side where it removes two.
+          tag, posts = hero('/tmp/orphan/public/index.html')
+          if len(posts) != 1:
+              sys.exit(f'orphan: the per-post term is pinned by its single post, but it listed {len(posts)}')
+          for attr in ['data-stack', 'data-projects']:
+              if data(tag, attr):
+                  sys.exit(f'orphan: the menu names no section, but {attr} carries {data(tag, attr)!r}')
+          if lines('/tmp/orphan/public/index.html', tag, posts) != 7:
+              sys.exit('orphan: one post reserves 2 + 1 lines for the listing, not 2 + 3')
+          print('orphan hero listing OK: one post, both other commands gone with their sections')
           PY
       # The hero and the blog cards share partials/post-filename.html precisely so
       # they cannot name the same post differently. Both sides get checked, and

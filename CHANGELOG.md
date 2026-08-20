@@ -18,7 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   were unconditional, so a site that filled nothing in — the one CI has been
   building all along — greeted its reader with two commands and two blank lines
   under them. This half is fixed in the script rather than the template, so an
-  empty value produces no command whatever put it there.
+  empty value produces no command whatever put it there. `whoami` is the stated
+  exception and always runs: its output is the page's own identity, not a
+  section's data, so no switch can empty it.
 - Hero terminal: the reserved height follows the commands that actually render.
   It was a constant `12` lines plus one per post, which was right only while all
   three commands always rendered; drop one and the box reserved three lines it
@@ -30,11 +32,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   rendered `data-*` attributes and holds the variable to it.
 
 ### Changed
-- Hero terminal: `[params.about.skills] enable = false` now also silences
-  `cat stack.txt`. The switch used to hide the skills block inside the about
-  section while the terminal above kept announcing the same list — one switch
-  that meant two different things depending on where you looked. Sites that
-  leave `enable = true`, the exampleSite among them, are unaffected.
+- Hero terminal: `cat stack.txt` now follows `[params.about.skills] enable`,
+  which has to be an explicit `true` — an absent key counts as off, the same
+  reading the skills block inside the about section and the section index have
+  always used. The switch used to hide that block while the terminal above kept
+  announcing the same list — one switch that meant two different things
+  depending on where you looked. Sites that write `enable = true`, the
+  exampleSite among them, are unaffected. A site that lists `items` **without**
+  an `enable` key does lose `cat stack.txt`: it was already not rendering the
+  skills block, and the terminal now agrees with the page instead of announcing
+  a list the reader cannot find.
 
 ## [0.4.0] — 2026-08-20
 
