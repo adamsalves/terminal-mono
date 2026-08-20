@@ -193,8 +193,13 @@ same list, and they stay that way — defining a menu is what makes them agree.
 
 #### 2. Remove a section
 
-Delete its block. The section and its nav link both go, with nothing else to
-set: the absence is the configuration.
+Delete its menu block. The section and its nav link both go.
+
+If you also delete `[params.<section>]`, that is the whole story. If you leave
+the section's content in the config, the theme warns that it is carrying content
+nothing renders — see [§3](#3-turn-a-section-off-without-touching-the-menu) for
+how to say the omission is deliberate. That warning is what stops a menu written
+before this feature existed from silently emptying a home page.
 
 #### 3. Turn a section off without touching the menu
 
@@ -206,6 +211,10 @@ set: the absence is the configuration.
 Same result, and the section's config stays where it is for the day you want it
 back. Use whichever says what you mean: **delete the block** when the section is
 not part of this site, **`enable = false`** when it is, just not right now.
+
+`enable = false` is also how you keep a section's content in the config while
+leaving it out of the menu without being warned about it every build: it is the
+config saying "yes, I meant to leave this out".
 
 `enable` is a veto, never a summons. `false` removes the section whatever the
 menu says; `true` grants nothing the index and the content do not already grant,
@@ -249,10 +258,19 @@ because a dead link is not a layout choice.
 
 #### When the config is wrong
 
-An unknown section name, a duplicate, a list that is not a list, an empty list,
-or a menu entry whose `url` does not match its `identifier`: the theme prints a
-warning and falls back. None of it can fail your build.
+The theme warns and falls back. **None of it can fail your build** — that is the
+rule the list below exists to keep:
 
+| What | What the theme does |
+|---|---|
+| `params.sections` written as anything but a table | warns, ignores it |
+| `order` that is not a list, or is empty | warns, ignores it |
+| `order` naming an unknown section, or naming one twice | warns, ignores the whole list |
+| `enable` or `showInNav` set to something that is not `true`/`false` | warns, ignores it |
+| `[params.<section>]` written as a scalar instead of a table | warns, treats the section as unconfigured |
+| a menu entry whose `url` is the wrong anchor (`#sobre` for `about`) | warns, points the link at the right one |
+| a menu entry naming a section but linking elsewhere (a page, an external URL) | warns, leaves the link alone — it may be a real page |
+| content configured for a section nothing renders | warns, naming the section and how to silence it |
 
 
 **Labels are translated from `identifier`.** One block serves every language —

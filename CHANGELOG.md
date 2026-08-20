@@ -28,9 +28,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   and takes only its link out of the nav, and `[params.sections] order = [...]`
   is the escape hatch for a site that wants the nav and the page in different
   orders on purpose. Order resolves as `params.sections.order`, then the menu,
-  then the previous default. No configuration can fail a build: an unknown
-  section name, a duplicate, a list that is not a list, an empty list, or a menu
-  entry whose `url` does not match its `identifier` warns and falls back.
+  then the previous default.
+- Sections: **no configuration can fail a build.** Every misconfiguration warns
+  and falls back — an unknown section name, a duplicate, an `order` that is not a
+  list or is empty, `params.sections` or `[params.<section>]` written as
+  something other than a table, and `enable` or `showInNav` set to something that
+  is not a boolean (`enable = "false"` is a string, and used to be read as "on"
+  in silence). A menu entry whose `url` is the wrong anchor for the section it
+  names — `url = "#sobre"` on `identifier = "about"` — warns and has its link
+  pointed at the right anchor, because the section's id is fixed by the theme and
+  the typo has exactly one possible fix. One naming a section but linking
+  somewhere else entirely (a page, an external URL) warns and is left alone: that
+  may well be a real destination.
+- Sections: the theme warns when a section has content configured, is not turned
+  off, and nothing in the index renders it — naming the section and the two ways
+  to resolve it. This is the shape of a `[[menu.main]]` written for v0.3.0, where
+  the menu drove only the nav: such a menu can now leave a home page with no
+  sections at all, and this warning is what keeps that from happening quietly.
+  `[params.<section>] enable = false` states that the omission is deliberate and
+  silences it; so does deleting the section's params.
 
 ### Fixed
 - Sections: a site that fills nothing in no longer ships links to sections that
@@ -60,11 +76,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   so an unexplained 422 stays fatal everywhere else.
 
 ### Changed
-- Sections: the menu now moves the sections, so a site that adopted
-  `[[menu.main]]` in v0.3.0 with a nav order deliberately different from the
-  layout order will see its sections move on upgrade. Set
-  `[params.sections] order = [...]` to pin the previous layout; the nav keeps
-  following the menu.
+- Sections: **the menu now moves and removes the sections.** A site that adopted
+  `[[menu.main]]` in v0.3.0 — where the menu drove only the nav, and the README
+  said so — will see its sections move on upgrade if its nav order differs from
+  the layout order, and **lose any section the menu does not name**. A menu
+  written for the nav alone, listing say `about` and an external link, now leaves
+  the home page with one section instead of four; one naming no section at all
+  leaves it with none. Both cases warn, naming each section that went missing.
+  Set `[params.sections] order = [...]` to pin the previous layout and section
+  set; the nav keeps following the menu.
+- Sections: the four section partials (`about`, `projects`, `experience`,
+  `contact`) now expect a context of `dict "last" <bool>` and no longer decide
+  for themselves whether to render — `sections.html` does. A site that overrode
+  `layouts/index.html` and calls them with the page (`{{ partial "about.html" . }}`)
+  has to pass the dict instead, or read the plan the way the theme's own
+  `index.html` does.
 - Experience: the section is now opt-out like the other three, where it used to
   be opt-in. `[params.experience] enable` was the only switch of its kind in the
   theme, and making all four consistent meant picking one default for all of
