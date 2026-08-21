@@ -77,24 +77,41 @@
        Nested `with` throughout, so a missing params table is absence and not a
        nil dereference. */ -}}
 {{- $filled := dict -}}
+{{- /* The list-shaped params are read through params-list.html rather than
+       tested for truth. Two reasons, and the second is the one that decides it:
+
+       A scalar `items` is truthy, so it used to pass this gate and reach the
+       partial — which is how a bad value got far enough to abort a build. Now
+       that the partials guard themselves the build survives, but the section
+       would render with nothing in it, which is the defect v0.4.0 closed.
+
+       And the warning has to come from here. Once this gate excludes the
+       section its partial never runs, so a guard that only warns inside the
+       partial would go silent exactly when the config is wrong. params-list
+       warns, this gate reads what it returns, and the two stay in step. */ -}}
 {{- $has := false -}}
 {{- with index $params "about" -}}
   {{- if .content -}}{{- $has = true -}}{{- end -}}
-  {{- with .skills -}}
-    {{- if reflect.IsMap . -}}
-      {{- if and .enable .items -}}{{- $has = true -}}{{- end -}}
+  {{- $sk := partialCached "params-table.html" (dict "value" .skills "path" "[params.about.skills]") "about.skills" site.Language.Lang -}}
+  {{- if $sk.enable -}}
+    {{- with partialCached "params-list.html" (dict "value" $sk.items "path" "[params.about.skills] items" "maps" false) "about.skills.items" site.Language.Lang -}}
+      {{- $has = true -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
 {{- $filled = merge $filled (dict "about" $has) -}}
 {{- $has = false -}}
 {{- with index $params "projects" -}}
-  {{- if .items -}}{{- $has = true -}}{{- end -}}
+  {{- with partialCached "params-list.html" (dict "value" .items "path" "[params.projects] items" "maps" true) "projects.items" site.Language.Lang -}}
+    {{- $has = true -}}
+  {{- end -}}
 {{- end -}}
 {{- $filled = merge $filled (dict "projects" $has) -}}
 {{- $has = false -}}
 {{- with index $params "experience" -}}
-  {{- if .items -}}{{- $has = true -}}{{- end -}}
+  {{- with partialCached "params-list.html" (dict "value" .items "path" "[params.experience] items" "maps" true) "experience.items" site.Language.Lang -}}
+    {{- $has = true -}}
+  {{- end -}}
 {{- end -}}
 {{- $filled = merge $filled (dict "experience" $has) -}}
 {{- $has = false -}}

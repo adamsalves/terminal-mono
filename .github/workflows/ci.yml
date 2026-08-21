@@ -345,6 +345,100 @@ jobs:
             echo "toggle: enable = true outside the index went unreported"
             exit 1
           fi
+      # Every param the theme dereferences, written as the wrong type. This is
+      # the same promise sections.html states in its header -- no configuration
+      # may fail the build -- but it is the *consumers* that have to keep it,
+      # and each row below took a build down before params-table.html and
+      # params-list.html existed. Two of them (a scalar [params.footer] and a
+      # scalar [params.contact]) broke every page, not just the home.
+      #
+      # Table-driven because the shape is identical nine times over: write a
+      # fragment, build without --panicOnWarning, assert the warning names the
+      # param, assert the page still stands.
+      #
+      # Where the fragment goes matters, and getting it wrong makes a fixture
+      # build green while proving nothing:
+      #   bare   a bare key belongs to whichever table is open, so `footer = "x"`
+      #          appended after a [params.x] block quietly becomes x.footer.
+      #          These go in through [params] itself.
+      #   about  skills = "x" has to sit *inside* [params.about]; appended it
+      #          would collide with the [params.about.skills] subtable.
+      #   tail   a new subtable, appended.
+      #
+      # The base fills [params.about] content on purpose. Without it `about`
+      # never passes gate 3, about.html never runs, and a broken skills param
+      # looks fixed.
+      - name: Assert a mistyped param warns and still renders
+        run: |
+          set -e
+          cat > /tmp/mistyped-base.toml <<'TOML'
+
+          [params]
+            [params.about]
+              content = "About the site owner."
+          TOML
+
+          run_case() {
+            name="$1"; pos="$2"; frag="$3"; expect="$4"
+            d="/tmp/mistyped-$name"
+            rm -rf "$d"; mkdir -p "$d/themes"
+            ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+            printf 'baseURL = "https://example.com/terminal-mono/"\ntitle = "Fixture %s"\ntheme = "terminal-mono"\n' "$name" > "$d/hugo.toml"
+            cat /tmp/mistyped-base.toml >> "$d/hugo.toml"
+            case "$pos" in
+              bare)  sed -i "0,/^\[params\]$/s//[params]\n$frag/" "$d/hugo.toml" ;;
+              about) sed -i "0,/^  \[params.about\]$/s//  [params.about]\n$frag/" "$d/hugo.toml" ;;
+              tail)  printf '%b' "$frag" >> "$d/hugo.toml" ;;
+            esac
+            if ! hugo --source "$d" --gc --minify > "$d.log" 2>&1; then
+              cat "$d.log"
+              echo "$name: a mistyped param took the build down instead of warning"
+              exit 1
+            fi
+            if ! grep -qF "$expect" "$d.log"; then
+              cat "$d.log"
+              echo "$name: no warning naming '$expect'"
+              exit 1
+            fi
+            # Warning and then an empty page is only half the promise.
+            if ! grep -q '<title>Fixture '"$name"'</title>' "$d/public/index.html"; then
+              echo "$name: the home page did not render"
+              exit 1
+            fi
+            if ! grep -qE 'id="?about"?[ >]' "$d/public/index.html"; then
+              echo "$name: a mistyped param took the about section down with it"
+              exit 1
+            fi
+            if ! grep -q '<title>' "$d/public/404.html"; then
+              echo "$name: a mistyped param reached a page that renders no section"
+              exit 1
+            fi
+            if grep -rq '%!s(\|%!d(\|%!v(' "$d/public" --include='*.html'; then
+              echo "$name: a param rendered as printf garbage"
+              grep -rho '%![sdv]([^)]*)' "$d/public" --include='*.html' | sort -u | head -5
+              exit 1
+            fi
+            grep -o 'terminal-mono: .*' "$d.log" | head -1
+          }
+
+          run_case contact     bare  '  contact = "x"' \
+                   '[params.contact] must be a table'
+          run_case footer      bare  '  footer = "x"' \
+                   '[params.footer] must be a table'
+          run_case social      tail  '  [params.footer]\n    socialNetworks = "x"\n' \
+                   '[params.footer.socialNetworks] must be a table'
+          run_case skills      about '    skills = "x"' \
+                   '[params.about.skills] must be a table'
+          run_case skillitems  tail  '  [params.about.skills]\n    enable = true\n    items = "x"\n' \
+                   '[params.about.skills] items must be a list'
+          run_case projitems   tail  '  [params.projects]\n    items = "x"\n' \
+                   '[params.projects] items must be a list'
+          run_case projentries tail  '  [params.projects]\n    items = ["a", "b"]\n' \
+                   '[params.projects] items ignored 2 of its entries'
+          run_case expitems    tail  '  [params.experience]\n    items = "x"\n' \
+                   '[params.experience] items must be a list'
+          run_case expjobs     tail  '  [[params.experience.items]]\n    company = "ACME"\n    jobs = "x"\n' \
+                   'jobs must be a list'
       # A green build only proves the templates ran, not what they emitted. Each
       # block below is one line of the README's config contract, asserted. The
       # blank-link check guards the direction none of them cover: an entry that

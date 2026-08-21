@@ -30,22 +30,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `--hero-lines`, replacing the `--hero-posts` variable and the
   `.term__body--posts` class, which are gone. CI recomputes the count from the
   rendered `data-*` attributes and holds the variable to it.
-- Config: `[params.hero]` written as a scalar no longer takes the whole site
-  down. `sections.html` promises that no configuration may fail the build and
-  normalises the section tables to keep it; hero is not a section, so it was
-  never covered and its consumers read it straight. `hero = "x"` died in
-  `head.html` on `hero.subtitle` — and `head.html` runs on **every** page, with
-  `cond` evaluating both of its branches, so the read happened even on pages
-  that render no hero at all. A 404 and every blog post went down with the home.
-  The table is now normalised once, in a new `hero-params.html` partial that
-  both `head.html` and `hero.html` read, so the two agree on its shape and the
-  warning is emitted once per language rather than once per page.
-- Config: the nested `socialLinks` table and its `fontAwesomeIcons` list are
-  guarded too. Normalising `hero` itself does not reach inside it, so
-  `socialLinks = "x"` still aborted, and a list of bare strings rather than
-  tables failed further in, on the `.icon` of the first entry. Both now warn and
-  render the rest of the hero; entries that are dropped are counted in the
-  warning rather than vanishing from the page.
+- Config: **a param written as the wrong type no longer takes the build down.**
+  `sections.html` has always stated the rule in its header — no configuration
+  may fail the build — and normalised the four section tables to keep it. But
+  every partial that read `site.Params.<x>` straight bypassed that, so the
+  promise held in the one file that made it and nowhere else. Twelve
+  configurations aborted a build: `[params.hero]`, `[params.contact]` and
+  `[params.footer]` written as scalars; `[params.footer.socialNetworks]`,
+  `[params.hero.socialLinks]` and `[params.about.skills]` the same one level
+  down; `items` written as a scalar under `about.skills`, `projects` and
+  `experience`; a `jobs` list inside an experience entry; and a list of bare
+  strings where `projects`, `experience` or `socialLinks` expect a list of
+  tables. Each now warns, names the param, and falls back.
+  Three of the twelve broke **every page**, not the home alone — `head.html`
+  and `footer.html` run site-wide, so a scalar `hero`, `contact` or `footer`
+  took the 404 and every blog post with it.
+- Config: two new partials carry that, `params-table.html` and
+  `params-list.html`, and every consumer reads through them. A guard on a
+  parent says nothing about its children, so nested tables go through the same
+  helper — that is the whole reason six of the twelve existed. Lists are tested
+  for *being* lists rather than for truth: `first` does not reject a string, it
+  slices its bytes, so `items = "Go"` would have rendered `71 · 111` instead of
+  failing anywhere a consumer could see it. Entries dropped from a list are
+  counted in the warning, so a typo that silently removes one project from six
+  is reported rather than simply absent.
+- Config: gate 3 in `sections.html` now type-checks the list-shaped params as
+  well as testing them for emptiness. A scalar `items` is truthy, so it used to
+  pass the gate and reach the partial; with the partials guarded the build
+  survives, but the section would render with nothing in it — the defect v0.4.0
+  closed. The warning has to come from the gate for the same reason: once the
+  gate drops the section its partial never runs, so a guard that only warned
+  inside the partial would go quiet exactly when the config is wrong.
 - SEO: a site that never set `[params.hero] subtitle` no longer publishes
   `<title>Site — %!s(&lt;nil>)</title>`. Go's `printf` has no nil case for
   `%s`, so the missing param was formatted straight into the page — on the home

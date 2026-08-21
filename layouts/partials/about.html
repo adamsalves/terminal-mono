@@ -1,6 +1,8 @@
 {{- /* Whether this section renders at all is sections.html's call, not this
        file's — see it for the three gates. Expects a dict: last (bool). */ -}}
-{{- $about := site.Params.about -}}
+{{- $about := partialCached "params-table.html" (dict "value" site.Params.about "path" "[params.about]") "about" site.Language.Lang -}}
+{{- $skills := partialCached "params-table.html" (dict "value" $about.skills "path" "[params.about.skills]") "about.skills" site.Language.Lang -}}
+{{- $skillItems := partialCached "params-list.html" (dict "value" $skills.items "path" "[params.about.skills] items" "maps" false) "about.skills.items" site.Language.Lang -}}
 <section id="about" class="section{{ if .last }} section--last{{ end }}">
   <div class="container">
     <div class="section__head">
@@ -11,11 +13,11 @@
       <div class="about">
         {{ $about.content | markdownify }}
       </div>
-      {{ if $about.skills.enable }}
+      {{ if $skills.enable }}
       <div>
         <div class="skills-label">{{ i18n "prompt_skills" }}</div>
         <div class="skills">
-          {{ range $about.skills.items }}<span class="skill">{{ . }}</span>{{ end }}
+          {{ range $skillItems }}<span class="skill">{{ . }}</span>{{ end }}
         </div>
       </div>
       {{ end }}

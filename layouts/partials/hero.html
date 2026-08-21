@@ -1,61 +1,36 @@
-{{- /* Read [params.hero] through the same normalisation head.html uses, so the
-       two agree on what the table is. Straight, `hero = "x"` aborted here as
-       well as there. */ -}}
-{{- $hero := partialCached "hero-params.html" . site.Language.Lang -}}
+{{- /* Every table this file touches goes through params-table.html, and every
+       list through params-list.html, so the hero cannot disagree with
+       head.html or with the section partials about what a param is. The hero
+       renders on the home page of every language, and it reads four different
+       namespaces, so it was the single richest source of ways to abort a build.
+
+       Two of these are nested one level down — [params.hero.socialLinks] and
+       [params.about.skills] — and the guard on a parent says nothing about its
+       children, so both levels are read through the helper.
+
+       Lists are tested for being lists, never merely for truth: `first` does
+       not reject a string, it slices its bytes, so items = "Go" would type
+       `71 · 111` into the terminal rather than fail where a consumer sees it.
+
+       skills.enable is honoured here too, and has to be an explicit true — an
+       absent key counts as off, the reading about.html and sections.html have
+       always used — so the switch that hides the skills block inside the about
+       section also silences `cat stack.txt`, rather than hiding it in one place
+       and announcing it in the other. */ -}}
+{{- $lang := site.Language.Lang -}}
+{{- $hero := partialCached "params-table.html" (dict "value" site.Params.hero "path" "[params.hero]") "hero" $lang -}}
 {{- $loc := $hero.location -}}
-{{- /* Read through guards rather than straight: [params.about] or its skills
-       table written as a scalar would abort here, and the hero renders on the
-       home page of every language — sections.html normalises the same tables for
-       the same reason. items is tested for being a list, not merely for truth:
-       `first` does not reject a string, it slices its bytes, so items = "Go"
-       would type `71 · 111` into the terminal rather than fail somewhere a
-       consumer would see it. skills.enable is honoured too, and has to be an
-       explicit true — an absent key counts as off, the reading about.html and
-       sections.html have always used — so the switch that hides the skills block
-       inside the about section also silences `cat stack.txt` rather than hiding
-       it in one place and announcing it in the other. */ -}}
+{{- $about := partialCached "params-table.html" (dict "value" site.Params.about "path" "[params.about]") "about" $lang -}}
+{{- $aboutSkills := partialCached "params-table.html" (dict "value" $about.skills "path" "[params.about.skills]") "about.skills" $lang -}}
 {{- $skills := slice -}}
-{{- with site.Params.about -}}
-  {{- if reflect.IsMap . -}}
-    {{- with .skills -}}
-      {{- if reflect.IsMap . -}}
-        {{- if and .enable (reflect.IsSlice .items) -}}{{- $skills = .items -}}{{- end -}}
-      {{- end -}}
-    {{- end -}}
-  {{- end -}}
+{{- if $aboutSkills.enable -}}
+  {{- $skills = partialCached "params-list.html" (dict "value" $aboutSkills.items "path" "[params.about.skills] items" "maps" false) "about.skills.items" $lang -}}
 {{- end -}}
-{{- /* socialLinks is a table nested inside hero, so normalising hero itself does
-       not reach it — `[params.hero] socialLinks = "x"` passed that guard and
-       died further down on `.fontAwesomeIcons`. Each entry is checked for being
-       a table too, because the loop reads .icon and .url off it: a list of bare
-       strings would otherwise fail in the middle of the row rather than here.
-       Entries that are dropped are counted and reported, so a typo does not
-       simply vanish from the rendered page. */ -}}
-{{- $icons := slice -}}
-{{- $dropped := 0 -}}
-{{- with $hero.socialLinks -}}
-  {{- if reflect.IsMap . -}}
-    {{- $list := .fontAwesomeIcons -}}
-    {{- if reflect.IsSlice $list -}}
-      {{- range $list -}}
-        {{- if reflect.IsMap . -}}
-          {{- $icons = $icons | append . -}}
-        {{- else -}}
-          {{- $dropped = add $dropped 1 -}}
-        {{- end -}}
-      {{- end -}}
-    {{- else -}}
-      {{- with $list -}}
-        {{- warnf "terminal-mono: [params.hero.socialLinks] fontAwesomeIcons must be a list, got %#v — ignoring it" . -}}
-      {{- end -}}
-    {{- end -}}
-  {{- else -}}
-    {{- warnf "terminal-mono: [params.hero] socialLinks must be a table, got %#v — ignoring it" . -}}
-  {{- end -}}
-{{- end -}}
-{{- with $dropped -}}
-  {{- warnf "terminal-mono: [params.hero.socialLinks] ignored %d of the fontAwesomeIcons entries — each one must be a table with icon and url" . -}}
-{{- end -}}
+{{- $socialLinks := partialCached "params-table.html" (dict "value" $hero.socialLinks "path" "[params.hero.socialLinks]") "hero.socialLinks" $lang -}}
+{{- $icons := partialCached "params-list.html" (dict "value" $socialLinks.fontAwesomeIcons "path" "[params.hero.socialLinks] fontAwesomeIcons" "maps" true) "hero.socialLinks.fontAwesomeIcons" $lang -}}
+{{- $projects := partialCached "params-table.html" (dict "value" site.Params.projects "path" "[params.projects]") "projects" $lang -}}
+{{- $projectItems := partialCached "params-list.html" (dict "value" $projects.items "path" "[params.projects] items" "maps" true) "projects.items" $lang -}}
+{{- $contact := partialCached "params-table.html" (dict "value" site.Params.contact "path" "[params.contact]") "contact" $lang -}}
 {{- /* The hero is the page's header, not a section, so it is never in the plan
        itself — but its call-to-action links at one, and a button pointing at a
        section that does not render is the same dead anchor the nav used to
@@ -74,7 +49,7 @@
 {{- $projectsOut := "" -}}
 {{- if $hasProjects -}}
   {{- $names := slice -}}
-  {{- range site.Params.projects.items -}}
+  {{- range $projectItems -}}
     {{- $names = $names | append (printf "%s/" (.repo | default (.title | urlize))) -}}
   {{- end -}}
   {{- $projectsOut = delimit $names "   " -}}
@@ -168,7 +143,7 @@
 
       <div class="btn-row">
         {{ if $hasProjects }}<a class="btn btn--solid" href="#projects">{{ i18n "view_projects" }} →</a>{{ end }}
-        {{ with site.Params.contact.btnLink }}<a class="btn btn--ghost" href="{{ . }}">{{ i18n "email" }}</a>{{ end }}
+        {{ with $contact.btnLink }}<a class="btn btn--ghost" href="{{ . }}">{{ i18n "email" }}</a>{{ end }}
       </div>
 
       <div class="social">
