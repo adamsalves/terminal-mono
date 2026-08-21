@@ -21,6 +21,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   empty value produces no command whatever put it there. `whoami` is the stated
   exception and always runs: its output is the page's own identity, not a
   section's data, so no switch can empty it.
+- Hero terminal: the reserved height counts the rows the text takes, not the
+  lines it is written in. `--hero-lines` was a count of *logical* lines, and
+  `.term__body` wraps — so on a 360px phone five of the exampleSite's fifteen
+  lines take two rows each, the box reserved 369px for 480px of text, and it grew
+  under the reader line by line as the animation typed: the exact shift the
+  reservation exists to prevent, on the viewport where it is scored hardest. Only
+  the browser knows the box's width and the font's advance, so `terminal.js` now
+  measures both and writes the corrected count back before the first character is
+  typed — and again when a rotate changes the width or JetBrains Mono arrives
+  under `font-display:swap`. What the template emits is unchanged and becomes the
+  floor: the number a reader gets before the script runs, or without it. Not a
+  regression from the entry below: v0.4.0 reserved the identical height by a
+  different route and carried the same `pre-wrap`, so this is older than both.
 - Hero terminal: the reserved height follows the commands that actually render.
   It was a constant `12` lines plus one per post, which was right only while all
   three commands always rendered; drop one and the box reserved three lines it

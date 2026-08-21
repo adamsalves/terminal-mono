@@ -99,6 +99,101 @@
 
   segs.push(s(prompt, C.prompt), s(':~$ ', C.sep));
 
+  /* ---- the height the terminal reserves, in visual lines ----
+     hero.html counts the lines it is about to emit and hands them over as
+     --hero-lines, which the CSS turns into a min-height so the box does not grow
+     under the reader while this types. That count is exact only while one logical
+     line renders as one visual line, and .term__body wraps (white-space:pre-wrap
+     with word-break:break-word): on a 360px phone five of the exampleSite's
+     fifteen lines take two rows each, so the box reserved 369px for 480px of text
+     and grew line by line — the exact shift the reservation exists to prevent, on
+     the viewport where it is scored hardest.
+     Only the browser knows the body's width and the font's advance, so the count
+     is refined here and written back to the same variable before the first
+     character is typed. The template's number stays the pre-JS and no-JS value:
+     where this does not run, nothing has changed. */
+
+  /* One probe measured twice: the block takes the body's content width, after
+     whatever padding the breakpoint or a site override applies, and the digits
+     inside it give one character's advance in the font actually in use. Both are
+     gone before this returns, so neither is ever painted. */
+  var RULER = '0123456789';
+  function columns() {
+    var box = document.createElement('span');
+    box.setAttribute('style', 'display:block;height:0;overflow:hidden;visibility:hidden');
+    var ruler = document.createElement('span');
+    ruler.setAttribute('style', 'white-space:pre');
+    ruler.textContent = RULER;
+    box.appendChild(ruler);
+    pre.appendChild(box);
+    var width = box.getBoundingClientRect().width;
+    var advance = ruler.getBoundingClientRect().width / RULER.length;
+    pre.removeChild(box);
+    /* A hidden hero, a zero-width column, a DOM that does not lay anything out:
+       nothing to measure, so the template's count stands rather than being
+       replaced by a guess. */
+    if (!(width > 0) || !(advance > 0)) return 0;
+    return Math.max(1, Math.floor(width / advance + 0.01));
+  }
+
+  /* How many rows one logical line takes in `cols` characters, by the rule the
+     browser applies: fill the row with whole words, push a word that does not fit
+     onto the next one, and split it mid-word only when it would not fit on a row
+     of its own. Trailing spaces hang past the edge instead of forcing a wrap, so
+     a run of them can fill a row but never start one.
+     Measured in characters, which the monospace body makes equivalent to width.
+     Two approximations, both deliberately in the same direction: a grapheme
+     spelled with more than one code unit — an emoji, an accented name in NFD —
+     counts as several, and a hyphen inside a word is a break opportunity the
+     browser will take and this will not, so a word moves down whole where the
+     browser would have filled the row first. Neither can pack a line tighter than
+     the browser does, so the count is never short — and of the two mistakes, dead
+     space is the one the reader does not see. */
+  function rows(line, cols) {
+    var n = 1, used = 0;
+    var parts = line.match(/\s+|\S+/g) || [];
+    for (var i = 0; i < parts.length; i++) {
+      var part = parts[i], len = part.length;
+      if (/\s/.test(part.charAt(0))) { used = Math.min(used + len, cols); continue; }
+      if (used + len <= cols) { used += len; continue; }
+      if (used) { n++; used = 0; }
+      if (len <= cols) { used = len; continue; }
+      n += Math.ceil(len / cols) - 1;
+      used = len % cols || cols;
+    }
+    return n;
+  }
+
+  var measuredAt = -1;
+  function reserve(force) {
+    /* Only a change of width can change the count, so a resize that leaves it
+       alone — a vertical drag, the address bar collapsing — costs one read and
+       stops there. */
+    var w = pre.clientWidth;
+    if (!force && w === measuredAt) return;
+    measuredAt = w;
+    var cols = columns();
+    if (!cols) return;
+    var text = '';
+    for (var i = 0; i < segs.length; i++) text += segs[i].t;
+    /* No segment ends the script with a newline, so this is the same set of
+       logical lines the template counted — each one now costing what it really
+       costs. */
+    var lines = 0, logical = text.split('\n');
+    for (var j = 0; j < logical.length; j++) lines += rows(logical[j], cols);
+    pre.style.setProperty('--hero-lines', String(lines));
+  }
+
+  reserve(true);
+  /* The width belongs to the viewport and the advance to the loaded font, and
+     both can move after this first pass: a rotate changes one, JetBrains Mono
+     arriving under font-display:swap changes the other, either of them while the
+     text is still being typed. */
+  window.addEventListener('resize', function () { reserve(false); });
+  if (document.fonts && document.fonts.ready && document.fonts.ready.then) {
+    document.fonts.ready.then(function () { reserve(true); });
+  }
+
   var cursorStyle = 'display:inline-block;width:9px;height:16px;background:#b6ff3c;vertical-align:-3px;margin-left:2px;animation:blink 1.1s steps(1) infinite;';
 
   /* Escapes " as well as the text-node set, since esc() now also feeds an href. */
