@@ -79,7 +79,7 @@ terminal-mono/
       hero.html  projects.html  about.html  experience.html  contact.html
       post-card.html  pager.html
   i18n/                      # en.toml (default), pt.toml
-  static/favicon.svg
+  static/                    # favicon.svg + one per palette (amber, cyberpunk, ice, mono)
   archetypes/                # default.md, blogs.md
   exampleSite/               # bilingual demo site + commented config
 ```
@@ -97,6 +97,7 @@ terminal-mono/
 | Contact | `params.contact.title/content/btnName/btnLink`; `params.contact.enable` (optional) |
 | Footer | `params.footer.copyright`, `params.footer.socialNetworks.github/linkedin` |
 | Blog | `content/blogs/*.md` → `title`, `date`, `tags`, `description`, `image` (optional), `toc` |
+| Colors | `params.theme.palette` (optional, default `lime`) and `params.theme.colors.*` (optional) — see [Colors](#colors) |
 
 ### Latest posts in the hero terminal
 
@@ -351,16 +352,107 @@ To add a language (e.g. Spanish):
 > Single-language sites work too: just keep one `[languages.*]` (or none) — the switcher
 > hides itself and the lone i18n table drives every string.
 
+## Colors
+
+The theme ships five palettes. Pick one in the config — there is nothing to edit in
+the theme, which matters because a theme pulled in as a Hugo Module or a submodule is
+not yours to edit:
+
+```toml
+# hugo.toml
+[params.theme]
+  palette = "cyberpunk"   # lime (default) · amber · cyberpunk · ice · mono
+```
+
+| Palette | Accent | |
+|---|---|---|
+| `lime` | `#b6ff3c` | Green phosphor. The default, and what every earlier version rendered. |
+| `amber` | `#ffb000` | The other CRT phosphor. The ground goes warm with it. |
+| `cyberpunk` | `#ff2fd0` + `#3fb9cf` | Neon magenta with cyan prompts, on violet-black. |
+| `ice` | `#4fd6ff` | Cold cyan on slate. Reads as an editor rather than a CRT. |
+| `mono` | `#ffffff` | No hue at all — white phosphor on true black. |
+
+The choice is made at build time and the published site has one palette. This is not a
+light/dark toggle: the theme is [dark-only by design](#notes), and all five are dark.
+
+An unknown name warns and falls back to `lime` rather than failing the build.
+
+Palette colors are mixed with [`color-mix()`](https://caniuse.com/mdn-css_types_color_color-mix)
+(Chrome 111, Safari 16.2, Firefox 113 — all 2023). Older browsers keep the nav, the mobile
+menu and the code-block borders through a literal fallback, and lose only decorative
+glows and hover tints.
+
+### Overriding individual colors
+
+`[params.theme.colors]` is applied on top of the palette, so you can start from one and
+change only what you want:
+
+```toml
+[params.theme]
+  palette = "cyberpunk"
+
+  [params.theme.colors]
+    accent    = "#00ffd5"
+    accentDim = "#ff2fd0"
+```
+
+Any of these keys, each mapping to the CSS custom property of the same name in
+kebab-case (`surface2` → `--surface-2`, `accentDim` → `--accent-dim`):
+
+| | |
+|---|---|
+| **Ground** | `bg` · `surface` · `surface2` · `surface3` |
+| **Lines** | `border` · `borderSoft` · `borderFaint` |
+| **Text** | `text` · `soft` · `prose` · `muted` · `muted2` · `dim` · `dim2` |
+| **Accent** | `accent` · `accentDim` · `danger` |
+| **Code** | `codeKey` · `codeType` · `codeStr` · `codeNum` |
+
+Case and punctuation are yours: `accentDim`, `accentdim`, `accent-dim` and `accent_dim`
+are the same key, so the spelling you copied out of the stylesheet works too.
+
+Values are hex codes or CSS color functions (`oklch(70% 0.2 150)`, `rgb(0 0 0 / 40%)`),
+written as quoted strings. A key that isn't on this list, or a value that isn't a color —
+a bare number, an unquoted `true`, a function with its parenthesis left open — is ignored
+with a warning naming it. A typo that silently did nothing would look exactly like a
+broken feature.
+
+The rest of the theme follows the palette on its own: button glows, the reading-progress
+bar, the hero typewriter, the 404, and the favicon in the browser tab.
+
+### Syntax highlighting
+
+Chroma follows the palette through `codeKey` / `codeType` / `codeStr` / `codeNum`
+(comments, function names and diff markers follow the accent instead). `amber` and
+`cyberpunk` restate the four; `lime` and `ice` share the blue-and-teal default.
+
+**`mono` renders code in grayscale**, which is the palette's premise rather than an
+oversight — but it costs code posts the hue that separates a string from a keyword.
+Put it back without giving up the rest of the palette:
+
+```toml
+[params.theme]
+  palette = "mono"
+  [params.theme.colors]
+    codeKey = "#7da6ff"
+    codeType = "#56b6c2"
+    codeStr = "#d7b56d"
+    codeNum = "#d19a66"
+```
+
 ## Customization
 
-- **Colors and fonts:** CSS variables in the `:root` of `assets/css/terminal.css`
-  (e.g. change the accent by editing `--accent`).
+- **Fonts:** the `--mono` variable. Set it from your own
+  `partials/extend-head.html` (`<style>:root:root{--mono:'IBM Plex Mono',monospace}</style>`)
+  rather than by editing `assets/css/terminal.css` — a theme pulled in as a Hugo
+  Module or a submodule is not yours to edit. `:root:root` for the same reason
+  `[params.theme.colors]` uses it: a plain `:root` loses to a palette block.
 - **Global toggles:** `params.showScanlines` (CRT overlay) and `params.readingProgress`.
 - **`partials/extend-head.html`** and **`partials/extend-footer.html`** (at the project
   level) are injected into `<head>` and before `</body>` — handy for analytics or
   comments without touching the theme.
-- **Syntax highlighting:** the Chroma colors live at the end of `terminal.css`
-  (`noClasses = false` in config). Tweak them freely.
+- **Project colors:** the language dot on each card comes from the project's own
+  `language`, not from the palette — Vue stays Vue green in all five. See
+  [Project colors](#project-colors).
 
 ## Notes
 

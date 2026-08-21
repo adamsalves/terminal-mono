@@ -48,7 +48,20 @@
   var stack = d.stack || '';
   var projects = d.projects || '';
 
-  var C = { prompt: '#6f8f3a', sep: '#8c9384', cmd: '#e9e7df', out1: '#b6ff3c', out2: '#9aa193' };
+  /* The five colors the script paints with, named rather than spelled. These
+     go straight into a style= attribute, so `var(--accent-dim)` is a value the
+     browser resolves against whatever palette is on <html> — including a
+     [params.theme.colors] override, which arrives as CSS this file never sees.
+     Reading them back with getComputedStyle would work too, and would have to
+     pick a moment after the stylesheet applied; there is no such moment to get
+     wrong when the value is never resolved here at all. */
+  var C = {
+    prompt: 'var(--accent-dim)',
+    sep: 'var(--muted-2)',
+    cmd: 'var(--text)',
+    out1: 'var(--accent)',
+    out2: 'var(--muted)'
+  };
   var prompt = (d.user || 'adams@portfolio');
   /* u is optional: a segment carrying one renders as a link instead of a span.
      a is the link's accessible name, since the visible text is a filename. */
@@ -271,7 +284,7 @@
     document.fonts.ready.then(function () { reserve(true); });
   }
 
-  var cursorStyle = 'display:inline-block;width:9px;height:16px;background:#b6ff3c;vertical-align:-3px;margin-left:2px;animation:blink 1.1s steps(1) infinite;';
+  var cursorStyle = 'display:inline-block;width:9px;height:16px;background:var(--accent);vertical-align:-3px;margin-left:2px;animation:blink 1.1s steps(1) infinite;';
 
   /* Escapes " as well as the text-node set, since esc() now also feeds an href. */
   function esc(str) {

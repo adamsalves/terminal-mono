@@ -6,6 +6,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- The palette is configuration. `[params.theme] palette = "…"` picks one of five —
+  `lime` (the default, and what every earlier version rendered), `amber`, `cyberpunk`,
+  `ice` and `mono` — and `[params.theme.colors]` overrides individual tokens on top of
+  whichever won. Until now the README's answer to "change the accent" was to edit
+  `--accent` in `assets/css/terminal.css`, which is advice a site can only follow if it
+  vendored the theme; consumed as a Hugo Module or a submodule the file is not the
+  site's to edit, so the theme was effectively one color. Closes #30.
+
+  Palettes live in the stylesheet as `:root[data-palette="…"]` blocks, stamped onto
+  `<html>` by `baseof.html` — `terminal.css` stays static, so it keeps being minified,
+  fingerprinted and cached the way it was, and a site that configures nothing gets the
+  bare `:root`, which is still lime. Overrides are the one thing that has to come from
+  the config, and they arrive as a `<style>` element after the stylesheet. It is written
+  `:root:root` on purpose: a palette selector is 0,2,0 and a plain `:root` is 0,1,0, so
+  the obvious spelling would have worked on lime and silently done nothing on the other
+  four — the harder half of that bug to notice.
+
+  An unknown palette name, a `[params.theme]` written as a scalar, an unknown color key
+  and a value that is not a color each warn and are ignored. None of them fails the
+  build, which is the rule `sections.html` set and the `params-*.html` guards enforce.
+
+### Fixed
+- Colors that did not follow the accent because they never went through it. Eight
+  `rgba(182,255,60,…)` washes were spelled out in `terminal.css` — the solid button's
+  glow, the reading-progress bar, the contact box, the tag hover, the blockquote, the
+  post banner's dot grid, the 404's text-shadow and the gradient behind the whole body —
+  along with the typewriter's five colors in `terminal.js`, five inline `style="color:#…"`
+  attributes in `404.html`, and the favicon. They were correct while there was one
+  palette and would have stayed lime green in the other four. The washes are now
+  `color-mix()` against `var(--accent)`; the script and the 404 emit `var(--accent-dim)`
+  and friends rather than hex, which also removes the question of when it is safe to
+  read a computed color, since nothing is resolved in JavaScript at all; and each palette
+  ships its own favicon. The neutral overlays stay literal — the white scanlines and the
+  black drop shadows are not palette colors and read the same on every ground.
+
+  Under `lime` every one of these resolves to the value it had before, exactly, with two
+  exceptions — both derivations of a value that had been picked by hand, and both under
+  2/255 of where they were:
+
+  - the border on code blocks, `#232a1c`, now derived from `--border` and `--border-soft`:
+    +1 on red and +2 on blue, on a 1px rule;
+  - the post banner's gradient, `#11160d`, now `--surface-2` (`#11140d`): −2 on green.
+
+- Browser chrome follows the palette too: `<meta name="theme-color">` carries the
+  palette's ground, or the `[params.theme.colors]` override of it, so an amber site does
+  not get a lime address bar drawn around it — the same argument as the per-palette
+  favicon, one layer out.
+
+- `color-mix()` has a literal fallback where it reaches something structural. A
+  declaration carrying `color-mix()` parses fine and only becomes invalid at
+  computed-value time, which resolves to the property's *initial* value rather than to
+  an earlier declaration — so the usual two-declaration fallback does not work through a
+  custom property, and on a browser without the function (pre-2023) the sticky nav and
+  the open mobile menu both went transparent over the scrolling page, and the code-block
+  borders disappeared. The derived tokens now carry the values the theme shipped before
+  palettes existed and are upgraded inside `@supports`. Decorative mixes — glows, hover
+  tints, shadows — are deliberately left to degrade to nothing.
+
+- `[params.theme.colors]` keys accept the spelling you copied out of the stylesheet:
+  `accentDim`, `accentdim`, `accent-dim` and `accent_dim` are one key. TOML bare keys
+  do permit `-`, so `accent-dim` was reaching the theme intact and being reported as an
+  unknown key.
+
+- `[params.theme.colors]` rejects two values it used to emit. A non-string — `accent = true`,
+  `accent = 255` — is never a color, and emitted CSS that was valid to parse and invalid
+  to compute, so every `var(--accent)` on the page fell back to nothing with no warning.
+  A value with an unclosed parenthesis — `accent = "rgb("` — swallowed every declaration
+  after it in the block, so one typo silently deleted the *other* overrides. Both now
+  warn and are ignored.
+
+- The warning for an unknown palette no longer reports printf's error syntax. `palette = 3`
+  arrives as an integer and `%q` on an integer is a rune literal, so it announced that the
+  requested palette was `'\x03'`; `palette = true` reported `%!q(bool=true)`.
+
 ## [0.5.0] — 2026-08-21
 
 ### Fixed

@@ -93,6 +93,37 @@ summaryLength = 30
 [params]
   showScanlines = true       # CRT scanline overlay
   readingProgress = true     # reading-progress bar on posts
+
+  # ============================================================
+  #  Palette — the whole site's colors, chosen here rather than by
+  #  editing the theme's CSS. Five ship:
+  #
+  #    lime       green phosphor — the default, and what every
+  #               earlier version of the theme rendered
+  #    amber      the other CRT phosphor; the ground goes warm too
+  #    cyberpunk  neon magenta with cyan prompts, on violet-black
+  #    ice        cold cyan on slate; an editor rather than a CRT
+  #    mono       no hue at all — white phosphor on true black
+  #
+  #  Build time, not runtime: the published site has one palette.
+  #  All five are dark — the theme is dark-only by design.
+  #
+  #  [params.theme.colors] goes on top of whichever palette won, so
+  #  a site can start from one and change only what it wants. The
+  #  keys are bg, surface, surface2, surface3, border, borderSoft,
+  #  borderFaint, text, soft, prose, muted, muted2, dim, dim2,
+  #  accent, accentDim, danger, and codeKey/codeType/codeStr/codeNum
+  #  for the syntax highlighting. Case and punctuation don't matter:
+  #  accentDim, accentdim and accent-dim are the same key.
+  #
+  #  Commented out so the demo ships in lime. An unknown palette
+  #  name, or a key not on that list, warns and is ignored — it
+  #  never takes the build down.
+  # ============================================================
+  # [params.theme]
+  #   palette = "cyberpunk"
+  #   [params.theme.colors]
+  #     accent = "#00ffd5"
   terminalUser = "robin@portfolio"
   allowIndexing = true       # allow indexing even outside production
   # favicon = "/favicon.svg" # the theme ships a favicon; set to override
