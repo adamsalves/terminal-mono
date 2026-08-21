@@ -81,6 +81,22 @@ jobs:
           ln -sfn "$GITHUB_WORKSPACE" /tmp/bare/themes/terminal-mono
           printf 'baseURL = "https://example.com/terminal-mono/"\ntitle = "Bare Site"\ntheme = "terminal-mono"\n' > /tmp/bare/hugo.toml
           hugo --source /tmp/bare --gc --minify --panicOnWarning
+          # A param the site never set must not reach the page as Go's printf
+          # garbage. --panicOnWarning cannot catch this: nothing warns, the
+          # template does exactly what it was told. This very fixture shipped
+          # `<title>Bare Site — %!s(<nil>)</title>` until the subtitle got a
+          # fallback, and the green build said nothing about it.
+          if grep -rq '%!s(\|%!d(\|%!v(' /tmp/bare/public --include='*.html'; then
+            echo 'bare: a param rendered as printf garbage'
+            grep -rho '%![sdv]([^)]*)' /tmp/bare/public --include='*.html' | sort -u | head -5
+            exit 1
+          fi
+          # The fallback has to be the site name, not an empty half-title.
+          if ! grep -q '<title>Bare Site</title>' /tmp/bare/public/index.html; then
+            echo 'bare: the home title did not fall back to the site name'
+            grep -o '<title>[^<]*</title>' /tmp/bare/public/index.html
+            exit 1
+          fi
       # One config contract, one fixture per promise it makes. Together these are
       # why "the menu drives the sections" is a checked claim and not a sentence
       # in a changelog. The params block is shared so that only the menu, the
@@ -192,6 +208,15 @@ jobs:
 
           for f in fallback custom hatch i18n; do
             hugo --source "/tmp/$f" --gc --minify --panicOnWarning
+            # These four build clean under --panicOnWarning and still shipped
+            # `%!s(<nil>)` in their titles until the hero subtitle got a
+            # fallback: printf renders a nil param without warning about it, so
+            # a green build is not evidence the page is right.
+            if grep -rq '%!s(\|%!d(\|%!v(' "/tmp/$f/public" --include='*.html'; then
+              echo "$f: a param rendered as printf garbage"
+              grep -rho '%![sdv]([^)]*)' "/tmp/$f/public" --include='*.html' | sort -u | head -5
+              exit 1
+            fi
           done
       # A questionable config must warn and fall back, never take a consumer's
       # build down — so these are built WITHOUT --panicOnWarning, and the warning
@@ -212,7 +237,8 @@ jobs:
         run: |
           set -e
           WARNS="invalid-unknown invalid-dup invalid-type invalid-empty invalid-anchor
-                 invalid-scalar invalid-list orphan toggle"
+                 invalid-scalar invalid-list invalid-hero invalid-hero-social
+                 invalid-hero-icons orphan toggle"
           for f in $WARNS; do
             mkdir -p "/tmp/$f/themes"
             ln -sfn "$GITHUB_WORKSPACE" "/tmp/$f/themes/terminal-mono"
@@ -228,6 +254,14 @@ jobs:
           # already open, so these go in as plain keys inside it.
           sed -i '0,/^\[params\]$/s//[params]\n  sections = "about"/'               /tmp/invalid-scalar/hugo.toml
           sed -i '0,/^\[params\]$/s//[params]\n  sections = ["about", "projects"]/' /tmp/invalid-list/hugo.toml
+          # params.hero is the one that breaks pages other than the home: head.html
+          # reads hero.subtitle on every page, and `cond` evaluates both of its
+          # branches, so a scalar aborted the whole site rather than one template.
+          # The nested table and its entry list are guarded separately — normalising
+          # hero itself does not reach inside it.
+          sed -i '0,/^\[params\]$/s//[params]\n  hero = "x"/' /tmp/invalid-hero/hugo.toml
+          printf '  [params.hero]\n    socialLinks = "x"\n' >> /tmp/invalid-hero-social/hugo.toml
+          printf '  [params.hero]\n    [params.hero.socialLinks]\n      fontAwesomeIcons = ["github"]\n' >> /tmp/invalid-hero-icons/hugo.toml
           # orphan: the menu is real, and names nothing the page can render. The
           # post is what makes the blog entry survive, so the nav is not empty
           # for some other reason than the one under test.
@@ -265,7 +299,34 @@ jobs:
               exit 1
             fi
             grep 'WARN.*terminal-mono:' "/tmp/$f.log"
+            if grep -rq '%!s(\|%!d(\|%!v(' "/tmp/$f/public" --include='*.html'; then
+              echo "$f: a param rendered as printf garbage"
+              grep -rho '%![sdv]([^)]*)' "/tmp/$f/public" --include='*.html' | sort -u | head -5
+              exit 1
+            fi
           done
+          # Warning and then handing back an empty page is only half the promise.
+          # A scalar [params.hero] must leave the home standing: the title falls
+          # back to the site name, and the sections the params do fill in still
+          # render, because nothing about hero should reach them.
+          if ! grep -q '<title>Fixture invalid-hero</title>' /tmp/invalid-hero/public/index.html; then
+            echo 'invalid-hero: the title did not fall back to the site name'
+            grep -o '<title>[^<]*</title>' /tmp/invalid-hero/public/index.html
+            exit 1
+          fi
+          for s in about projects experience contact; do
+            if ! grep -qE "id=\"?$s\"?[ >]" /tmp/invalid-hero/public/index.html; then
+              echo "invalid-hero: a scalar hero took the $s section down with it"
+              exit 1
+            fi
+          done
+          # And it must not break the pages that never render a hero at all —
+          # the row that makes this the worst of the five.
+          if ! grep -q '<title>404 Page not found · Fixture invalid-hero</title>' /tmp/invalid-hero/public/404.html; then
+            echo 'invalid-hero: a scalar hero reached a page that renders no hero'
+            grep -o '<title>[^<]*</title>' /tmp/invalid-hero/public/404.html
+            exit 1
+          fi
           # The orphan warning has to name every section it dropped, not just
           # report that something went missing — the name is the actionable half.
           for s in about projects experience contact; do

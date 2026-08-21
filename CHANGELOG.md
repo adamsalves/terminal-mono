@@ -30,6 +30,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `--hero-lines`, replacing the `--hero-posts` variable and the
   `.term__body--posts` class, which are gone. CI recomputes the count from the
   rendered `data-*` attributes and holds the variable to it.
+- Config: `[params.hero]` written as a scalar no longer takes the whole site
+  down. `sections.html` promises that no configuration may fail the build and
+  normalises the section tables to keep it; hero is not a section, so it was
+  never covered and its consumers read it straight. `hero = "x"` died in
+  `head.html` on `hero.subtitle` — and `head.html` runs on **every** page, with
+  `cond` evaluating both of its branches, so the read happened even on pages
+  that render no hero at all. A 404 and every blog post went down with the home.
+  The table is now normalised once, in a new `hero-params.html` partial that
+  both `head.html` and `hero.html` read, so the two agree on its shape and the
+  warning is emitted once per language rather than once per page.
+- Config: the nested `socialLinks` table and its `fontAwesomeIcons` list are
+  guarded too. Normalising `hero` itself does not reach inside it, so
+  `socialLinks = "x"` still aborted, and a list of bare strings rather than
+  tables failed further in, on the `.icon` of the first entry. Both now warn and
+  render the rest of the hero; entries that are dropped are counted in the
+  warning rather than vanishing from the page.
+- SEO: a site that never set `[params.hero] subtitle` no longer publishes
+  `<title>Site — %!s(&lt;nil>)</title>`. Go's `printf` has no nil case for
+  `%s`, so the missing param was formatted straight into the page — on the home
+  page of every site that skipped it, including the bare site CI has been
+  building all along. Nothing warned, so `--panicOnWarning` could not see it and
+  the build stayed green. The title now falls back to the site name alone. CI
+  asserts no built page contains printf's error syntax, across every fixture.
+- SEO: `jobTitle` and `description` are omitted from the JSON-LD when unset
+  instead of emitted as `null`. `jsonify` renders a nil as valid JSON, so this
+  was never the defect above — but `"jobTitle":null` asserts that the person has
+  no job title, where saying nothing asserts only that this site left the field
+  empty.
 
 ### Changed
 - Hero terminal: `cat stack.txt` now follows `[params.about.skills] enable`,

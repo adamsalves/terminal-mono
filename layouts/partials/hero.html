@@ -1,5 +1,8 @@
-{{- $hero := site.Params.hero -}}
-{{- $loc := site.Params.hero.location -}}
+{{- /* Read [params.hero] through the same normalisation head.html uses, so the
+       two agree on what the table is. Straight, `hero = "x"` aborted here as
+       well as there. */ -}}
+{{- $hero := partialCached "hero-params.html" . site.Language.Lang -}}
+{{- $loc := $hero.location -}}
 {{- /* Read through guards rather than straight: [params.about] or its skills
        table written as a scalar would abort here, and the hero renders on the
        home page of every language — sections.html normalises the same tables for
@@ -20,6 +23,38 @@
       {{- end -}}
     {{- end -}}
   {{- end -}}
+{{- end -}}
+{{- /* socialLinks is a table nested inside hero, so normalising hero itself does
+       not reach it — `[params.hero] socialLinks = "x"` passed that guard and
+       died further down on `.fontAwesomeIcons`. Each entry is checked for being
+       a table too, because the loop reads .icon and .url off it: a list of bare
+       strings would otherwise fail in the middle of the row rather than here.
+       Entries that are dropped are counted and reported, so a typo does not
+       simply vanish from the rendered page. */ -}}
+{{- $icons := slice -}}
+{{- $dropped := 0 -}}
+{{- with $hero.socialLinks -}}
+  {{- if reflect.IsMap . -}}
+    {{- $list := .fontAwesomeIcons -}}
+    {{- if reflect.IsSlice $list -}}
+      {{- range $list -}}
+        {{- if reflect.IsMap . -}}
+          {{- $icons = $icons | append . -}}
+        {{- else -}}
+          {{- $dropped = add $dropped 1 -}}
+        {{- end -}}
+      {{- end -}}
+    {{- else -}}
+      {{- with $list -}}
+        {{- warnf "terminal-mono: [params.hero.socialLinks] fontAwesomeIcons must be a list, got %#v — ignoring it" . -}}
+      {{- end -}}
+    {{- end -}}
+  {{- else -}}
+    {{- warnf "terminal-mono: [params.hero] socialLinks must be a table, got %#v — ignoring it" . -}}
+  {{- end -}}
+{{- end -}}
+{{- with $dropped -}}
+  {{- warnf "terminal-mono: [params.hero.socialLinks] ignored %d of the fontAwesomeIcons entries — each one must be a table with icon and url" . -}}
 {{- end -}}
 {{- /* The hero is the page's header, not a section, so it is never in the plan
        itself — but its call-to-action links at one, and a button pointing at a
@@ -137,7 +172,7 @@
       </div>
 
       <div class="social">
-        {{ range $i, $s := $hero.socialLinks.fontAwesomeIcons }}
+        {{ range $i, $s := $icons }}
           {{- $label := (i18n "link_default") -}}
           {{- $ext := true -}}
           {{- if in $s.icon "github" }}{{ $label = "github" }}{{ end -}}
