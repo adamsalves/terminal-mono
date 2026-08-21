@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-08-21
+
 ### Fixed
 - Hero terminal: the section switch reaches the terminal. v0.4.0 taught the hero
   that its "view projects" button must not point at a section that does not
@@ -360,7 +362,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   switcher, `hreflang` alternates and locale-aware dates.
 - Complete bilingual `exampleSite/` and Hugo Modules support.
 
-[Unreleased]: https://github.com/adamsalves/terminal-mono/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/adamsalves/terminal-mono/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/adamsalves/terminal-mono/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/adamsalves/terminal-mono/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/adamsalves/terminal-mono/compare/v0.2.3...v0.3.0
 [0.2.3]: https://github.com/adamsalves/terminal-mono/compare/v0.2.2...v0.2.3
