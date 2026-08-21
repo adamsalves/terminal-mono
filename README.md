@@ -351,16 +351,92 @@ To add a language (e.g. Spanish):
 > Single-language sites work too: just keep one `[languages.*]` (or none) — the switcher
 > hides itself and the lone i18n table drives every string.
 
+## Colors
+
+The theme ships five palettes. Pick one in the config — there is nothing to edit in
+the theme, which matters because a theme pulled in as a Hugo Module or a submodule is
+not yours to edit:
+
+```toml
+# hugo.toml
+[params.theme]
+  palette = "cyberpunk"   # lime (default) · amber · cyberpunk · ice · mono
+```
+
+| Palette | Accent | |
+|---|---|---|
+| `lime` | `#b6ff3c` | Green phosphor. The default, and what every earlier version rendered. |
+| `amber` | `#ffb000` | The other CRT phosphor. The ground goes warm with it. |
+| `cyberpunk` | `#ff2fd0` + `#3fb9cf` | Neon magenta with cyan prompts, on violet-black. |
+| `ice` | `#4fd6ff` | Cold cyan on slate. Reads as an editor rather than a CRT. |
+| `mono` | `#ffffff` | No hue at all — white phosphor on true black. |
+
+The choice is made at build time and the published site has one palette. This is not a
+light/dark toggle: the theme is [dark-only by design](#notes), and all five are dark.
+
+An unknown name warns and falls back to `lime` rather than failing the build.
+
+### Overriding individual colors
+
+`[params.theme.colors]` is applied on top of the palette, so you can start from one and
+change only what you want:
+
+```toml
+[params.theme]
+  palette = "cyberpunk"
+
+  [params.theme.colors]
+    accent    = "#00ffd5"
+    accentDim = "#ff2fd0"
+```
+
+Any of these keys, each mapping to the CSS custom property of the same name:
+
+| | |
+|---|---|
+| **Ground** | `bg` · `surface` · `surface2` · `surface3` |
+| **Lines** | `border` · `borderSoft` · `borderFaint` |
+| **Text** | `text` · `soft` · `prose` · `muted` · `muted2` · `dim` · `dim2` |
+| **Accent** | `accent` · `accentDim` · `danger` |
+| **Code** | `codeKey` · `codeType` · `codeStr` · `codeNum` |
+
+Values are hex codes or CSS color functions (`oklch(70% 0.2 150)`, `rgb(0 0 0 / 40%)`).
+A key that isn't on this list, or a value that isn't a color, is ignored with a warning
+naming it — a typo that silently did nothing would look exactly like a broken feature.
+
+The rest of the theme follows the palette on its own: button glows, the reading-progress
+bar, the hero typewriter, the 404, and the favicon in the browser tab.
+
+### Syntax highlighting
+
+Chroma follows the palette through `codeKey` / `codeType` / `codeStr` / `codeNum`
+(comments, function names and diff markers follow the accent instead). `amber` and
+`cyberpunk` restate the four; `lime` and `ice` share the blue-and-teal default.
+
+**`mono` renders code in grayscale**, which is the palette's premise rather than an
+oversight — but it costs code posts the hue that separates a string from a keyword.
+Put it back without giving up the rest of the palette:
+
+```toml
+[params.theme]
+  palette = "mono"
+  [params.theme.colors]
+    codeKey = "#7da6ff"
+    codeType = "#56b6c2"
+    codeStr = "#d7b56d"
+    codeNum = "#d19a66"
+```
+
 ## Customization
 
-- **Colors and fonts:** CSS variables in the `:root` of `assets/css/terminal.css`
-  (e.g. change the accent by editing `--accent`).
+- **Fonts:** the `--mono` variable in the `:root` of `assets/css/terminal.css`.
 - **Global toggles:** `params.showScanlines` (CRT overlay) and `params.readingProgress`.
 - **`partials/extend-head.html`** and **`partials/extend-footer.html`** (at the project
   level) are injected into `<head>` and before `</body>` — handy for analytics or
   comments without touching the theme.
-- **Syntax highlighting:** the Chroma colors live at the end of `terminal.css`
-  (`noClasses = false` in config). Tweak them freely.
+- **Project colors:** the language dot on each card comes from the project's own
+  `language`, not from the palette — Vue stays Vue green in all five. See
+  [Project colors](#project-colors).
 
 ## Notes
 

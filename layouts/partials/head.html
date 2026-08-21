@@ -20,7 +20,14 @@
        cast that fails aborts. head.html runs on every page, so [params.description]
        written as [params.description] with keys under it was a whole site. */ -}}
 {{- $siteDesc := partialCached "params-scalar.html" (dict "value" site.Params.description "path" "[params.description]") "description" site.Language.Lang -}}
-{{- $favicon := or (partialCached "params-scalar.html" (dict "value" site.Params.favicon "path" "[params.favicon]") "favicon" site.Language.Lang) "favicon.svg" -}}
+{{- /* The palette resolves to one of five literals, which is what makes it safe
+       to build a filename out of. The default favicon is the one drawn in the
+       active palette, so a cyberpunk site does not fly a lime flag in the tab;
+       [params.favicon] still wins over it, the way it always did. */ -}}
+{{- $theme := partialCached "theme-palette.html" . site.Language.Lang -}}
+{{- $themeFavicon := "favicon.svg" -}}
+{{- if ne $theme.palette "lime" -}}{{- $themeFavicon = printf "favicon-%s.svg" $theme.palette -}}{{- end -}}
+{{- $favicon := or (partialCached "params-scalar.html" (dict "value" site.Params.favicon "path" "[params.favicon]") "favicon" site.Language.Lang) $themeFavicon -}}
 {{- $desc := or .Description .Summary $siteDesc -}}
 {{- $desc = $desc | plainify | truncate 200 -}}
 <meta charset="utf-8">
@@ -89,6 +96,21 @@
     <link rel="stylesheet" href="{{ .RelPermalink }}">
   {{ end }}
 {{ end }}
+{{- /* [params.theme.colors], applied on top of whichever palette won.
+
+       This has to come after the stylesheet, and it has to be written as
+       `:root:root`. A palette is `:root[data-palette="…"]`, which is 0,2,0;
+       a plain `:root` is 0,1,0 and would lose to it — so overrides would have
+       worked on lime and silently done nothing on the other four, which is the
+       harder bug to notice of the two. Doubling the pseudo-class ties the
+       specificity and lets source order settle it, and it stays a tie no matter
+       what a project's own baseof.html does with the attribute.
+
+       Emitted only when there is something to emit: a site that names no colors
+       ships no extra bytes and no extra element. */ -}}
+{{- with $theme.css }}
+<style>:root:root{ {{ . | safeCSS }} }</style>
+{{- end }}
 
 {{/* JSON-LD */}}
 {{ if $isHome }}
