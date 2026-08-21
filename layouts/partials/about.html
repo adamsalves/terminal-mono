@@ -3,6 +3,11 @@
 {{- $about := partialCached "params-table.html" (dict "value" site.Params.about "path" "[params.about]") "about" site.Language.Lang -}}
 {{- $skills := partialCached "params-table.html" (dict "value" $about.skills "path" "[params.about.skills]") "about.skills" site.Language.Lang -}}
 {{- $skillItems := partialCached "params-list.html" (dict "value" $skills.items "path" "[params.about.skills] items" "maps" false) "about.skills.items" site.Language.Lang -}}
+{{- /* content goes through the scalar guard because markdownify casts to string
+       like relURL and plainify do, so a table here aborted rather than rendering
+       oddly. sections.html reads the same key for gate 3, so a mistyped content
+       drops the section instead of admitting it and rendering an empty shell. */ -}}
+{{- $content := partialCached "params-scalar.html" (dict "value" $about.content "path" "[params.about] content") "about.content" site.Language.Lang -}}
 <section id="about" class="section{{ if .last }} section--last{{ end }}">
   <div class="container">
     <div class="section__head">
@@ -11,7 +16,7 @@
     </div>
     <div class="grid-2">
       <div class="about">
-        {{ $about.content | markdownify }}
+        {{ $content | markdownify }}
       </div>
       {{ if $skills.enable }}
       <div>

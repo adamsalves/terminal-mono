@@ -9,7 +9,10 @@
       <a class="back-link" href="{{ $blog }}">← {{ i18n "back_to_blog" }}</a>
     </div>
 
-    {{ with .Params.image }}
+    {{/* Same guard head.html puts on this param, for the same relURL cast —
+         guarding it in one file and not the other would tolerate the typo in
+         the <head> and still abort on the body of the very same page. */}}
+    {{ with partial "params-scalar.html" (dict "value" .Params.image "path" (printf "image in %s" .RelPermalink)) }}
       <div class="featured has-image" role="img" aria-label="{{ $.Title }}" style="background-image:url('{{ . | relURL }}')"></div>
     {{ else }}
       <div class="featured" aria-hidden="true">

@@ -15,7 +15,13 @@
   {{- $title = $siteName -}}
   {{- with $hero.subtitle -}}{{- $title = printf "%s — %s" $siteName . -}}{{- end -}}
 {{- end -}}
-{{- $desc := or .Description .Summary site.Params.description -}}
+{{- /* The scalar-shaped params go through params-scalar.html for the reason its
+       header spells out: plainify, relURL and absURL all cast to string, and a
+       cast that fails aborts. head.html runs on every page, so [params.description]
+       written as [params.description] with keys under it was a whole site. */ -}}
+{{- $siteDesc := partialCached "params-scalar.html" (dict "value" site.Params.description "path" "[params.description]") "description" site.Language.Lang -}}
+{{- $favicon := or (partialCached "params-scalar.html" (dict "value" site.Params.favicon "path" "[params.favicon]") "favicon" site.Language.Lang) "favicon.svg" -}}
+{{- $desc := or .Description .Summary $siteDesc -}}
 {{- $desc = $desc | plainify | truncate 200 -}}
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -27,7 +33,7 @@
 {{- if not (or hugo.IsProduction site.Params.allowIndexing) }}
 <meta name="robots" content="noindex, nofollow">
 {{- end }}
-<link rel="icon" href="{{ or site.Params.favicon "favicon.svg" | relURL }}" type="image/svg+xml">
+<link rel="icon" href="{{ $favicon | relURL }}" type="image/svg+xml">
 
 {{/* hreflang alternates for translated pages */}}
 {{ range .AllTranslations -}}
@@ -36,7 +42,12 @@
 
 {{/* Open Graph + Twitter */}}
 {{- $img := "" -}}
-{{- with or .Params.image site.Params.ogImage }}{{ $img = . | absURL }}{{ end -}}
+{{- /* The page's own image is front matter, so it cannot share a cache key the
+       way the site-wide params can — and the page it names is the actionable
+       half of the warning anyway. */ -}}
+{{- $pageImg := partial "params-scalar.html" (dict "value" .Params.image "path" (printf "image in %s" .RelPermalink)) -}}
+{{- $ogImage := partialCached "params-scalar.html" (dict "value" site.Params.ogImage "path" "[params.ogImage]") "ogImage" site.Language.Lang -}}
+{{- with or $pageImg $ogImage }}{{ $img = . | absURL }}{{ end -}}
 <meta property="og:type" content="{{ cond $isHome "website" "article" }}">
 <meta property="og:title" content="{{ cond $isHome $siteName .Title }}">
 <meta property="og:description" content="{{ $desc }}">
@@ -101,7 +112,7 @@
   "url" .Permalink
   "sameAs" $sameAs -}}
 {{- with $hero.subtitle }}{{ $person = merge $person (dict "jobTitle" .) }}{{ end -}}
-{{- with site.Params.description }}{{ $person = merge $person (dict "description" .) }}{{ end -}}
+{{- with $siteDesc }}{{ $person = merge $person (dict "description" .) }}{{ end -}}
 <script type="application/ld+json">
 {{- $person | jsonify (dict "indent" "  ") | safeJS -}}
 </script>

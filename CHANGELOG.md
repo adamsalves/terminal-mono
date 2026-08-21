@@ -34,26 +34,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `sections.html` has always stated the rule in its header — no configuration
   may fail the build — and normalised the four section tables to keep it. But
   every partial that read `site.Params.<x>` straight bypassed that, so the
-  promise held in the one file that made it and nowhere else. Twelve
-  configurations aborted a build: `[params.hero]`, `[params.contact]` and
-  `[params.footer]` written as scalars; `[params.footer.socialNetworks]`,
-  `[params.hero.socialLinks]` and `[params.about.skills]` the same one level
-  down; `items` written as a scalar under `about.skills`, `projects` and
-  `experience`; a `jobs` list inside an experience entry; and a list of bare
-  strings where `projects`, `experience` or `socialLinks` expect a list of
-  tables. Each now warns, names the param, and falls back.
-  Three of the twelve broke **every page**, not the home alone — `head.html`
-  and `footer.html` run site-wide, so a scalar `hero`, `contact` or `footer`
-  took the 404 and every blog post with it.
-- Config: two new partials carry that, `params-table.html` and
-  `params-list.html`, and every consumer reads through them. A guard on a
-  parent says nothing about its children, so nested tables go through the same
-  helper — that is the whole reason six of the twelve existed. Lists are tested
-  for *being* lists rather than for truth: `first` does not reject a string, it
-  slices its bytes, so `items = "Go"` would have rendered `71 · 111` instead of
-  failing anywhere a consumer could see it. Entries dropped from a list are
-  counted in the warning, so a typo that silently removes one project from six
-  is reported rather than simply absent.
+  promise held in the one file that made it and nowhere else. Thirteen
+  configurations aborted a build: `[params.hero]`, `[params.contact]`,
+  `[params.footer]` and `[params.navbar]` written as scalars;
+  `[params.footer.socialNetworks]`, `[params.hero.socialLinks]` and
+  `[params.about.skills]` the same one level down; `items` written as a scalar
+  under `about.skills`, `projects` and `experience`; a `jobs` list inside an
+  experience entry; and a list of bare strings where `projects`, `experience` or
+  `socialLinks` expect a list of tables. Each now warns, names the param, and
+  falls back.
+  Four of the thirteen broke **every page**, not the home alone — `head.html`,
+  `footer.html` and `nav.html` run site-wide, so a scalar `hero`, `contact`,
+  `footer` or `navbar` took the 404 and every blog post with it. `navbar` was
+  the sharpest of them: `nav.html` is the file the invariant names, and
+  `sections.html` already guarded that same param for its `showBlog` gate, so
+  the theme disagreed with itself about `[params.navbar]` in two files.
+- Config: three new partials carry that — `params-table.html`,
+  `params-list.html` and `params-scalar.html` — and every consumer reads through
+  them. A guard on a parent says nothing about its children, so nested tables go
+  through the same helper; that is the whole reason six of the thirteen existed.
+  Lists are tested for *being* lists rather than for truth: `first` does not
+  reject a string, it slices its bytes, so `items = "Go"` would have rendered
+  `71 · 111` instead of failing anywhere a consumer could see it. Entries
+  dropped from a list are counted in the warning, so a typo that silently
+  removes one project from six is reported rather than simply absent — and
+  entries are checked in both directions now, so a table written where a bare
+  skill belongs is dropped and counted rather than rendering `map[a:1]` into a
+  skill chip.
+- Config: the mirror direction is covered too — a scalar-shaped param written as
+  a table or a list. It fails differently and had to be guarded separately:
+  these never reach a `range` or a field lookup, they reach `plainify`,
+  `relURL`, `absURL`, `markdownify` or `urlize`, all of which cast to string and
+  abort when the cast fails. Eight more configurations, on top of the thirteen
+  above: `[params.description]`, `[params.favicon]` and `[params.ogImage]`, read
+  in `head.html`, so all three took whole sites down; a post's own `image`, from
+  its front matter, in `head.html` for `og:image` and again in `single.html` for
+  the featured banner; and the prose fields — `[params.about] content`, a
+  project entry's `content` and `title`, and an experience job's `content`.
+  The per-entry ones name the entry in the warning, by `repo` or by `title` once
+  the title itself has been through the guard, so a list of six says which one.
+  A param that is only ever printed is left alone on purpose: `map[a:1]` on the
+  page is wrong but does not stop the build, and warning about it would report
+  the same mistake twice for the reads that do go through a cast.
+- Config: gate 3 type-checks `[params.about] content` for the same reason it
+  type-checks the lists — a table there is truthy, so it admitted the section
+  and then rendered it as an empty shell.
+- Config: a warning about an experience entry with no `company` no longer
+  degrades into printf's own error syntax. `%q` on a nil printed the warning as
+  `items %!q(<nil>) jobs must be a list`, turning the half that names the broken
+  entry into noise. CI now watches the warnings for printf garbage as well as
+  the pages, since the log is the only place this one could ever appear.
 - Config: gate 3 in `sections.html` now type-checks the list-shaped params as
   well as testing them for emptiness. A scalar `items` is truthy, so it used to
   pass the gate and reach the partial; with the partials guarded the build

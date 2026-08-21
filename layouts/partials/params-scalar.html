@@ -1,0 +1,33 @@
+{{- /* A param that must be a single value, normalised.
+
+       The mirror of params-table.html and params-list.html, and the direction
+       they leave open: those catch a table or a list written as a scalar, this
+       catches a scalar written as a table or a list. Not a cosmetic difference —
+       three reads in head.html hand the param straight to a function that casts
+       it to a string, and a cast that fails is a build that stops:
+
+           [params.description]  head.html  plainify: unable to cast hmaps.Params
+           [params.favicon]      head.html  relURL:   unable to cast hmaps.Params
+           [params.ogImage]      head.html  absURL:   unable to cast hmaps.Params
+
+       head.html runs on every page, so each of those takes a whole site down
+       rather than one template — the same reason [params.hero] was the worst of
+       the twelve.
+
+       A param that is merely printed needs no guard and does not get one: `{{ . }}`
+       on a table renders `map[a:1]`, which is wrong on the page but does not stop
+       the build, and warning about it here would report the same mistake twice
+       for the reads that do go through a cast.
+
+       Context: dict "value" <the raw param> "path" "<what to call it>".
+       Returns the value, or "" when it was not a single one — "" rather than nil
+       so the `or` chains this sits inside fall through to their next candidate.
+
+       Nothing here may print: this partial returns a value, so every action is
+       whitespace-trimmed. An untrimmed line breaks `return`. */ -}}
+{{- $v := .value -}}
+{{- if or (reflect.IsMap $v) (reflect.IsSlice $v) -}}
+  {{- warnf "terminal-mono: %s must be a single value, got %#v — ignoring it" $.path $v -}}
+  {{- $v = "" -}}
+{{- end -}}
+{{- return $v -}}

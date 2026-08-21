@@ -91,7 +91,9 @@
        warns, this gate reads what it returns, and the two stay in step. */ -}}
 {{- $has := false -}}
 {{- with index $params "about" -}}
-  {{- if .content -}}{{- $has = true -}}{{- end -}}
+  {{- with partialCached "params-scalar.html" (dict "value" .content "path" "[params.about] content") "about.content" site.Language.Lang -}}
+    {{- $has = true -}}
+  {{- end -}}
   {{- $sk := partialCached "params-table.html" (dict "value" .skills "path" "[params.about.skills]") "about.skills" site.Language.Lang -}}
   {{- if $sk.enable -}}
     {{- with partialCached "params-list.html" (dict "value" $sk.items "path" "[params.about.skills] items" "maps" false) "about.skills.items" site.Language.Lang -}}
@@ -261,11 +263,8 @@
        language actually having posts so ordering it by weight cannot turn it
        into a permanent link to an empty listing. */ -}}
 {{- $hasBlog := gt (len (where site.RegularPages "Section" "blogs")) 0 -}}
-{{- with site.Params.navbar -}}
-  {{- if reflect.IsMap . -}}
-    {{- if isset . "showblog" -}}{{- $hasBlog = index . "showblog" -}}{{- end -}}
-  {{- end -}}
-{{- end -}}
+{{- $navbar := partialCached "params-table.html" (dict "value" site.Params.navbar "path" "[params.navbar]") "navbar" site.Language.Lang -}}
+{{- if isset $navbar "showblog" -}}{{- $hasBlog = index $navbar "showblog" -}}{{- end -}}
 {{- $entries := slice -}}
 {{- range $raw -}}
   {{- $keep := true -}}

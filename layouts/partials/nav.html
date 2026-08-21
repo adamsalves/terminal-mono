@@ -5,6 +5,14 @@
        posts, and showInNav = false has been honoured. This file decides nothing
        about which links exist — that is the point. */ -}}
 {{- $plan := partialCached "sections.html" . site.Language.Lang -}}
+{{- /* The brand reads through the guard like every other table. This is the file
+       the invariant names — "an unguarded dereference would take a whole site
+       down, not one page" — and it was the last one still dereferencing straight:
+       navbar = "x" died here with `can't evaluate field brandName in type string`
+       while rendering /categories, not the home. sections.html guarded the same
+       param for its showBlog gate and this line did not, so the theme disagreed
+       with itself about [params.navbar] in two files. Same cache key as there. */ -}}
+{{- $navbar := partialCached "params-table.html" (dict "value" site.Params.navbar "path" "[params.navbar]") "navbar" site.Language.Lang -}}
 {{- $entries := $plan.entries -}}
 {{- $links := dict "page" . "entries" $entries "home" $home "onBlog" $onBlog -}}
 {{- /* The language switcher rides inside nav-links, so a site with no entries at
@@ -14,7 +22,7 @@
 {{- $hasMenu := or $entries (gt (len hugo.Sites) 1) -}}
 <nav class="nav">
   <div class="nav__inner">
-    <a class="brand" href="{{ $home }}"><b>&gt;_</b> {{ site.Params.navbar.brandName | default site.Params.title }}<span class="cursor" aria-hidden="true">_</span></a>
+    <a class="brand" href="{{ $home }}"><b>&gt;_</b> {{ $navbar.brandName | default site.Params.title }}<span class="cursor" aria-hidden="true">_</span></a>
 
     <div class="nav__links">
       {{- partial "nav-links.html" $links }}

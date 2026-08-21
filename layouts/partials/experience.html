@@ -16,15 +16,24 @@
         {{ $company := .company }}
         {{- /* jobs is nested one level per entry, so it cannot be cached by a
                single key like the lists above — the company name goes into the
-               path instead, so the warning says which entry is wrong. */ -}}
-        {{ $jobs := partial "params-list.html" (dict "value" .jobs "path" (printf "[params.experience] items %q jobs" $company) "maps" true) }}
+               path instead, so the warning says which entry is wrong. Through
+               %v and a fallback first: an entry can be missing `company` (or
+               carry a number), and `%q` on a nil printed the warning as
+               `items %!q(<nil>) jobs`, turning the half that names the entry
+               into printf's own error syntax. */ -}}
+        {{- $named := printf "%v" (or $company "<unnamed>") -}}
+        {{ $jobs := partial "params-list.html" (dict "value" .jobs "path" (printf "[params.experience] items %q jobs" $named) "maps" true) }}
         {{ range $jobs }}
+          {{- /* content reaches markdownify, which casts to string, so a table
+                 here aborted. name and date are only printed and stay unguarded;
+                 name is what identifies the job in the warning. */ -}}
+          {{- $jobContent := partial "params-scalar.html" (dict "value" .content "path" (printf "[params.experience] items %q jobs %q content" $named (printf "%v" (or .name "<unnamed>")))) }}
           <div class="tl-item">
             <span class="gt" aria-hidden="true">&gt;</span>
             <div>
               <div class="tl-role">{{ .name }} <span>@ {{ $company }}</span></div>
               {{ with .date }}<div class="tl-date">{{ . }}</div>{{ end }}
-              <p class="tl-desc">{{ .content | markdownify }}</p>
+              <p class="tl-desc">{{ $jobContent | markdownify }}</p>
             </div>
           </div>
         {{ end }}

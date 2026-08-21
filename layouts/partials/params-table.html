@@ -13,9 +13,13 @@
        Returns a table, empty if the param was not one.
 
        An *absent* param is legitimate and says nothing; only a wrong type
-       warns. Cache it per path and language at the call sites — head.html and
-       footer.html run on every page, so an uncached warning repeats per page
-       rather than per site.
+       warns. Cache it per path and language at the call sites: head.html,
+       footer.html and nav.html run on every page, so an uncached guard re-runs
+       once per page for an answer that cannot change. Not for the warning's
+       sake — Hugo's logger already collapses identical warnings, measured at one
+       line for the same warnf across nine pages — but the language variant is
+       load-bearing for the *value*, since [languages.pt.params.hero] and its en
+       counterpart are two different tables behind one path.
 
        Nothing here may print: this partial returns a value, so every action is
        whitespace-trimmed. An untrimmed line breaks `return`. */ -}}

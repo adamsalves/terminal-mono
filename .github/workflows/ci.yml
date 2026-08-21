@@ -379,7 +379,7 @@ jobs:
           TOML
 
           run_case() {
-            name="$1"; pos="$2"; frag="$3"; expect="$4"
+            name="$1"; pos="$2"; frag="$3"; expect="$4"; post="$5"
             d="/tmp/mistyped-$name"
             rm -rf "$d"; mkdir -p "$d/themes"
             ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
@@ -389,7 +389,23 @@ jobs:
               bare)  sed -i "0,/^\[params\]$/s//[params]\n$frag/" "$d/hugo.toml" ;;
               about) sed -i "0,/^  \[params.about\]$/s//  [params.about]\n$frag/" "$d/hugo.toml" ;;
               tail)  printf '%b' "$frag" >> "$d/hugo.toml" ;;
+              front) ;;
+              # about's content is the base's own reason to keep that section
+              # filled, so a case that breaks content has to give the section
+              # another one — otherwise gate 3 drops it, correctly, and the
+              # shared "the about section is still there" assertion below fires
+              # on a fixture that is behaving exactly as designed.
+              content) sed -i "0,/^    content = .*$/s||$frag|" "$d/hugo.toml"
+                       printf '  [params.about.skills]\n    enable = true\n    items = ["Go"]\n' >> "$d/hugo.toml" ;;
+              *)     echo "$name: unknown fragment position '$pos'"; exit 1 ;;
             esac
+            # Front matter is configuration a consumer writes too, and the same
+            # cast aborts on it. `front` puts the mistyped param on a post
+            # instead of in hugo.toml; the assertions below are unchanged.
+            if [ -n "$post" ]; then
+              mkdir -p "$d/content/blogs"
+              printf -- '---\ntitle: "Post"\ndate: 2026-01-01\n%b\n---\nbody\n' "$post" > "$d/content/blogs/p.md"
+            fi
             if ! hugo --source "$d" --gc --minify > "$d.log" 2>&1; then
               cat "$d.log"
               echo "$name: a mistyped param took the build down instead of warning"
@@ -413,9 +429,27 @@ jobs:
               echo "$name: a mistyped param reached a page that renders no section"
               exit 1
             fi
-            if grep -rq '%!s(\|%!d(\|%!v(' "$d/public" --include='*.html'; then
+            if grep -rq '%!s(\|%!d(\|%!v(\|%!q(' "$d/public" --include='*.html'; then
               echo "$name: a param rendered as printf garbage"
-              grep -rho '%![sdv]([^)]*)' "$d/public" --include='*.html' | sort -u | head -5
+              grep -rho '%![sdvq]([^)]*)' "$d/public" --include='*.html' | sort -u | head -5
+              exit 1
+            fi
+            # The warning is read by a human, so printf's error syntax is a defect
+            # there too — and the log is the only place it can appear, since the
+            # page nets above never look at it. `items %!q(<nil>) jobs` is what an
+            # experience entry with no company name used to report.
+            if grep -q '%!s(\|%!d(\|%!v(\|%!q(' "$d.log"; then
+              echo "$name: the warning itself contains printf garbage"
+              grep -o '%![sdvq]([^)]*)' "$d.log" | sort -u | head -5
+              exit 1
+            fi
+            # Exactly one. Every guard is cached per param and language, so a
+            # second line means the cache key drifted between two call sites and
+            # the same mistake is being reported once per consumer.
+            n=$(grep -c 'terminal-mono:' "$d.log")
+            if [ "$n" != 1 ]; then
+              echo "$name: expected exactly 1 warning, got $n"
+              grep -o 'terminal-mono: .*' "$d.log"
               exit 1
             fi
             grep -o 'terminal-mono: .*' "$d.log" | head -1
@@ -439,6 +473,53 @@ jobs:
                    '[params.experience] items must be a list'
           run_case expjobs     tail  '  [[params.experience.items]]\n    company = "ACME"\n    jobs = "x"\n' \
                    'jobs must be a list'
+          # An entry with no company at all: the warning has to keep naming the
+          # entry rather than degrading into printf's own error syntax, which is
+          # what the log net above is watching for.
+          run_case expnoname   tail  '  [[params.experience.items]]\n    jobs = "x"\n' \
+                   'items "<unnamed>" jobs must be a list'
+          # navbar is the one that reached every page: nav.html renders on all of
+          # them, so this died on /categories rather than the home. sections.html
+          # already guarded the same param for its showBlog gate — the two files
+          # disagreed about [params.navbar] until both read through the helper.
+          run_case navbar      bare  '  navbar = "x"' \
+                   '[params.navbar] must be a table'
+          # The mirror direction: a scalar-shaped param written as a table. These
+          # never reach a `range` or a field lookup — they reach plainify, relURL
+          # and absURL, which cast to string and abort when the cast fails. All
+          # three are read in head.html, so all three were whole-site failures.
+          run_case description tail  '  [params.description]\n    a = 1\n' \
+                   '[params.description] must be a single value'
+          run_case favicon     tail  '  [params.favicon]\n    a = 1\n' \
+                   '[params.favicon] must be a single value'
+          run_case ogimage     tail  '  [params.ogImage]\n    a = 1\n' \
+                   '[params.ogImage] must be a single value'
+          # A table where a bare skill belongs. This one never aborted — it
+          # rendered `map[a:1]` into a skill chip — but a helper that means
+          # "entries are tables" in one mode and "entries are anything" in the
+          # other is a helper nobody can reason about.
+          run_case skillmaps   tail  '  [params.about.skills]\n    enable = true\n    items = ["Go", {a = 1}]\n' \
+                   '[params.about.skills] items ignored 1 of its entries'
+          # A post's own image, read by head.html for og:image and again by
+          # single.html for the featured banner. Both go through a relURL/absURL
+          # cast, so guarding one and not the other would tolerate the typo in
+          # the <head> and still abort on the body of the same page.
+          run_case pageimg     front '' \
+                   'image in /terminal-mono/blogs/p/ must be a single value' \
+                   'image:\n  a: 1'
+          # markdownify and urlize cast to string too, so the same table that
+          # merely looks wrong when printed aborts the moment it reaches one of
+          # them. These four are per entry rather than per param, so the warning
+          # names the entry — by repo, or by title once the title itself has been
+          # through the guard.
+          run_case aboutcontent content '    [params.about.content]\n      a = 1' \
+                   '[params.about] content must be a single value'
+          run_case projcontent tail  '  [params.projects]\n    [[params.projects.items]]\n      repo = "r"\n      [params.projects.items.content]\n        a = 1\n' \
+                   '[params.projects] items "r" content must be a single value'
+          run_case projtitle   tail  '  [params.projects]\n    [[params.projects.items]]\n      repo = "r"\n      [params.projects.items.title]\n        a = 1\n' \
+                   '[params.projects] items "r" title must be a single value'
+          run_case jobcontent  tail  '  [[params.experience.items]]\n    company = "C"\n    [[params.experience.items.jobs]]\n      name = "N"\n      [params.experience.items.jobs.content]\n        a = 1\n' \
+                   '[params.experience] items "C" jobs "N" content must be a single value'
       # A green build only proves the templates ran, not what they emitted. Each
       # block below is one line of the README's config contract, asserted. The
       # blank-link check guards the direction none of them cover: an entry that

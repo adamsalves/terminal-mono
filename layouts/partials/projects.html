@@ -13,7 +13,19 @@
 
     <div class="stack">
       {{ range $items }}
-        {{- $repo := .repo | default (.title | urlize) -}}
+        {{- /* title and content reach urlize and markdownify, both of which cast
+               to string — a table in either aborted the build. Per entry, so no
+               single cache key can cover them; the entry is named in the path
+               instead, the way experience.html names one by its company. repo is
+               only ever printed and is left unguarded on purpose. */ -}}
+        {{- $named := printf "%v" (or .repo "<unnamed>") -}}
+        {{- $title := partial "params-scalar.html" (dict "value" .title "path" (printf "[params.projects] items %q title" $named)) -}}
+        {{- /* The title can name the entry from here on, but only now that it has
+               been through the guard — naming a broken entry by the broken value
+               reads as `items "map[a:1]" title must be a single value`. */ -}}
+        {{- $named = printf "%v" (or .repo $title "<unnamed>") -}}
+        {{- $content := partial "params-scalar.html" (dict "value" .content "path" (printf "[params.projects] items %q content" $named)) -}}
+        {{- $repo := .repo | default (urlize $title) -}}
         {{- $lead := .language -}}
         {{- if and (not $lead) .badges }}{{ $lead = index .badges 0 }}{{ end -}}
         {{- $color := "#8c9384" -}}
@@ -37,7 +49,7 @@
           <div class="card__body">
             <div class="card__title">{{ .title }}</div>
             {{ with .tagline }}<div class="card__tagline">// {{ . }}</div>{{ end }}
-            <p class="card__desc">{{ .content | markdownify }}</p>
+            <p class="card__desc">{{ $content | markdownify }}</p>
             {{ with .badges }}
             <div class="hashtags">
               {{ range . }}<span>#{{ . }}</span>{{ end }}

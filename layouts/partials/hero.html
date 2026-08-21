@@ -50,7 +50,12 @@
 {{- if $hasProjects -}}
   {{- $names := slice -}}
   {{- range $projectItems -}}
-    {{- $names = $names | append (printf "%s/" (.repo | default (.title | urlize))) -}}
+    {{- /* Same guard projects.html puts on the same param, and deliberately the
+           same warning text: the terminal lists the repositories the cards below
+           render, so a mistyped title is one mistake, not two. */ -}}
+    {{- $named := printf "%v" (or .repo "<unnamed>") -}}
+    {{- $title := partial "params-scalar.html" (dict "value" .title "path" (printf "[params.projects] items %q title" $named)) -}}
+    {{- $names = $names | append (printf "%s/" (.repo | default (urlize $title))) -}}
   {{- end -}}
   {{- $projectsOut = delimit $names "   " -}}
 {{- end -}}

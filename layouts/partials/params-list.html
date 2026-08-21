@@ -18,8 +18,16 @@
 
        Context: dict "value" <the raw param>
                      "path"  "<what to call it>"
-                     "maps"  <true if entries must be tables>.
+                     "maps"  <true if entries must be tables, false if scalars>.
        Returns a list, empty if the param was not one.
+
+       Entries are checked in both directions, because both directions happen: a
+       bare string where a table belongs (`items = ["a", "b"]` under projects,
+       which dies on the `.repo` of the first one) and a table where a bare value
+       belongs (`items = [{a = 1}]` under skills, which renders `map[a:1]` into a
+       skill chip). The second only ever renders wrong rather than aborting, but
+       leaving it through would make this helper mean "entries are tables" in one
+       mode and "entries are anything" in the other.
 
        Entries that are dropped are counted and reported. A typo that silently
        removes one project from a list of six is worse than one that fails, and
@@ -27,20 +35,23 @@
 {{- $out := slice -}}
 {{- $v := .value -}}
 {{- if reflect.IsSlice $v -}}
-  {{- if .maps -}}
-    {{- $dropped := 0 -}}
-    {{- range $v -}}
-      {{- if reflect.IsMap . -}}
-        {{- $out = $out | append . -}}
-      {{- else -}}
-        {{- $dropped = add $dropped 1 -}}
-      {{- end -}}
+  {{- $dropped := 0 -}}
+  {{- range $v -}}
+    {{- $isTable := reflect.IsMap . -}}
+    {{- $keep := $isTable -}}
+    {{- if not $.maps -}}
+      {{- $keep = not (or $isTable (reflect.IsSlice .)) -}}
     {{- end -}}
-    {{- with $dropped -}}
-      {{- warnf "terminal-mono: %s ignored %d of its entries — each one must be a table, not a bare value" $.path . -}}
+    {{- if $keep -}}
+      {{- $out = $out | append . -}}
+    {{- else -}}
+      {{- $dropped = add $dropped 1 -}}
     {{- end -}}
-  {{- else -}}
-    {{- $out = $v -}}
+  {{- end -}}
+  {{- with $dropped -}}
+    {{- $want := "a single value, not a table or a list" -}}
+    {{- if $.maps -}}{{- $want = "a table, not a bare value" -}}{{- end -}}
+    {{- warnf "terminal-mono: %s ignored %d of its entries — each one must be %s" $.path . $want -}}
   {{- end -}}
 {{- else -}}
   {{- with $v -}}
