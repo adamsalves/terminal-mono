@@ -1,11 +1,17 @@
-{{- $social := site.Params.footer.socialNetworks -}}
+{{- /* Both levels through the guard, and contact too: footer.html runs on
+       every page, so an unguarded read here is a whole site rather than
+       one template. sections.html normalises [params.contact] for its own
+       gates, but that value never reaches this file. */ -}}
+{{- $footer := partialCached "params-table.html" (dict "value" site.Params.footer "path" "[params.footer]") "footer" site.Language.Lang -}}
+{{- $social := partialCached "params-table.html" (dict "value" $footer.socialNetworks "path" "[params.footer.socialNetworks]") "footer.socialNetworks" site.Language.Lang -}}
+{{- $contact := partialCached "params-table.html" (dict "value" site.Params.contact "path" "[params.contact]") "contact" site.Language.Lang -}}
 <div class="container">
   <footer class="footer">
-    <span><span class="cmt">&gt;_</span> © {{ now.Year }} {{ site.Params.footer.copyright | default site.Params.title }} — {{ i18n "made_with" }} <a href="https://gohugo.io/" target="_blank" rel="noopener noreferrer" style="color:inherit">Hugo</a> &amp; <a href="https://github.com/adamsalves/terminal-mono" target="_blank" rel="noopener noreferrer" style="color:inherit">terminal-mono</a></span>
+    <span><span class="cmt">&gt;_</span> © {{ now.Year }} {{ $footer.copyright | default site.Params.title }} — {{ i18n "made_with" }} <a href="https://gohugo.io/" target="_blank" rel="noopener noreferrer" style="color:inherit">Hugo</a> &amp; <a href="https://github.com/adamsalves/terminal-mono" target="_blank" rel="noopener noreferrer" style="color:inherit">terminal-mono</a></span>
     <div class="social">
       {{ with $social.github }}<a href="{{ . }}" target="_blank" rel="noopener noreferrer">github</a>{{ end }}
       {{ with $social.linkedin }}<a href="{{ . }}" target="_blank" rel="noopener noreferrer">linkedin</a>{{ end }}
-      {{ with site.Params.contact.btnLink }}<a href="{{ . }}">{{ i18n "email" }}</a>{{ end }}
+      {{ with $contact.btnLink }}<a href="{{ . }}">{{ i18n "email" }}</a>{{ end }}
     </div>
   </footer>
 </div>

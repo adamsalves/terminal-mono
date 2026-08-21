@@ -1,0 +1,61 @@
+{{- /* A list-shaped param, normalised.
+
+       Two separate things go wrong with these, and a truthiness test catches
+       neither. The list itself may not be a list — `items = "x"` reaches a
+       `range` and takes the build down. And a list may hold the wrong kind of
+       entry: `items = ["a", "b"]` ranges fine and then dies on the `.repo` of
+       the first string, halfway through rendering.
+
+       There is a quieter version of the first. `first` does not reject a
+       string, it slices its *bytes*:
+
+           {{ delimit (first 6 "Go") " · " }}   →   71 · 111
+
+       so a truthiness guard on a param that should be a list is not enough —
+       the wrong type ships as plausible-looking garbage instead of failing
+       where a consumer would see it. That is why this checks reflect.IsSlice
+       rather than merely `if`.
+
+       Context: dict "value" <the raw param>
+                     "path"  "<what to call it>"
+                     "maps"  <true if entries must be tables, false if scalars>.
+       Returns a list, empty if the param was not one.
+
+       Entries are checked in both directions, because both directions happen: a
+       bare string where a table belongs (`items = ["a", "b"]` under projects,
+       which dies on the `.repo` of the first one) and a table where a bare value
+       belongs (`items = [{a = 1}]` under skills, which renders `map[a:1]` into a
+       skill chip). The second only ever renders wrong rather than aborting, but
+       leaving it through would make this helper mean "entries are tables" in one
+       mode and "entries are anything" in the other.
+
+       Entries that are dropped are counted and reported. A typo that silently
+       removes one project from a list of six is worse than one that fails, and
+       the count is the only part of that a consumer can act on. */ -}}
+{{- $out := slice -}}
+{{- $v := .value -}}
+{{- if reflect.IsSlice $v -}}
+  {{- $dropped := 0 -}}
+  {{- range $v -}}
+    {{- $isTable := reflect.IsMap . -}}
+    {{- $keep := $isTable -}}
+    {{- if not $.maps -}}
+      {{- $keep = not (or $isTable (reflect.IsSlice .)) -}}
+    {{- end -}}
+    {{- if $keep -}}
+      {{- $out = $out | append . -}}
+    {{- else -}}
+      {{- $dropped = add $dropped 1 -}}
+    {{- end -}}
+  {{- end -}}
+  {{- with $dropped -}}
+    {{- $want := "a single value, not a table or a list" -}}
+    {{- if $.maps -}}{{- $want = "a table, not a bare value" -}}{{- end -}}
+    {{- warnf "terminal-mono: %s ignored %d of its entries — each one must be %s" $.path . $want -}}
+  {{- end -}}
+{{- else -}}
+  {{- with $v -}}
+    {{- warnf "terminal-mono: %s must be a list, got %#v — ignoring it" $.path . -}}
+  {{- end -}}
+{{- end -}}
+{{- return $out -}}

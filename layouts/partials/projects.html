@@ -1,18 +1,31 @@
 {{- /* Whether this section renders at all is sections.html's call, not this
        file's — see it for the three gates. Expects a dict: last (bool). */ -}}
-{{- $projects := site.Params.projects -}}
+{{- $projects := partialCached "params-table.html" (dict "value" site.Params.projects "path" "[params.projects]") "projects" site.Language.Lang -}}
+{{- $items := partialCached "params-list.html" (dict "value" $projects.items "path" "[params.projects] items" "maps" true) "projects.items" site.Language.Lang -}}
 <section id="projects" class="section{{ if .last }} section--last{{ end }}">
   <div class="container">
     <div class="section__head">
       <h2><span class="cmt">//</span> {{ i18n "projects" }}</h2>
-      <span class="muted-note">— {{ printf "%02d" (len $projects.items) }} {{ i18n "featured_repositories" }}</span>
+      <span class="muted-note">— {{ printf "%02d" (len $items) }} {{ i18n "featured_repositories" }}</span>
       <div class="rule"></div>
     </div>
     <div class="prompt">{{ i18n "prompt_projects" }}</div>
 
     <div class="stack">
-      {{ range $projects.items }}
-        {{- $repo := .repo | default (.title | urlize) -}}
+      {{ range $items }}
+        {{- /* title and content reach urlize and markdownify, both of which cast
+               to string — a table in either aborted the build. Per entry, so no
+               single cache key can cover them; the entry is named in the path
+               instead, the way experience.html names one by its company. repo is
+               only ever printed and is left unguarded on purpose. */ -}}
+        {{- $named := printf "%v" (or .repo "<unnamed>") -}}
+        {{- $title := partial "params-scalar.html" (dict "value" .title "path" (printf "[params.projects] items %q title" $named)) -}}
+        {{- /* The title can name the entry from here on, but only now that it has
+               been through the guard — naming a broken entry by the broken value
+               reads as `items "map[a:1]" title must be a single value`. */ -}}
+        {{- $named = printf "%v" (or .repo $title "<unnamed>") -}}
+        {{- $content := partial "params-scalar.html" (dict "value" .content "path" (printf "[params.projects] items %q content" $named)) -}}
+        {{- $repo := .repo | default (urlize $title) -}}
         {{- $lead := .language -}}
         {{- if and (not $lead) .badges }}{{ $lead = index .badges 0 }}{{ end -}}
         {{- $color := "#8c9384" -}}
@@ -36,7 +49,7 @@
           <div class="card__body">
             <div class="card__title">{{ .title }}</div>
             {{ with .tagline }}<div class="card__tagline">// {{ . }}</div>{{ end }}
-            <p class="card__desc">{{ .content | markdownify }}</p>
+            <p class="card__desc">{{ $content | markdownify }}</p>
             {{ with .badges }}
             <div class="hashtags">
               {{ range . }}<span>#{{ . }}</span>{{ end }}

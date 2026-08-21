@@ -1,7 +1,27 @@
 {{- $isHome := .IsHome -}}
 {{- $siteName := or site.Params.title site.Title -}}
-{{- $title := cond $isHome (printf "%s — %s" $siteName site.Params.hero.subtitle) (printf "%s · %s" .Title $siteName) -}}
-{{- $desc := or .Description .Summary site.Params.description -}}
+{{- $hero := partialCached "params-table.html" (dict "value" site.Params.hero "path" "[params.hero]") "hero" site.Language.Lang -}}
+{{- /* The home title carries the subtitle when there is one to carry. Two
+       separate things went wrong on the old one-line `cond`: a scalar
+       [params.hero] aborted every page in the site — `cond` evaluates both
+       branches, so the read happened even where the result was thrown away —
+       and a merely *absent* subtitle shipped as
+       `<title>Site — %!s(<nil>)</title>`, because Go's printf has no nil case
+       for %s. The second was the quieter of the two: it warns nothing, so
+       --panicOnWarning never saw it, and every site that skipped the param
+       published it. The site name alone is the fallback. */ -}}
+{{- $title := printf "%s · %s" .Title $siteName -}}
+{{- if $isHome -}}
+  {{- $title = $siteName -}}
+  {{- with $hero.subtitle -}}{{- $title = printf "%s — %s" $siteName . -}}{{- end -}}
+{{- end -}}
+{{- /* The scalar-shaped params go through params-scalar.html for the reason its
+       header spells out: plainify, relURL and absURL all cast to string, and a
+       cast that fails aborts. head.html runs on every page, so [params.description]
+       written as [params.description] with keys under it was a whole site. */ -}}
+{{- $siteDesc := partialCached "params-scalar.html" (dict "value" site.Params.description "path" "[params.description]") "description" site.Language.Lang -}}
+{{- $favicon := or (partialCached "params-scalar.html" (dict "value" site.Params.favicon "path" "[params.favicon]") "favicon" site.Language.Lang) "favicon.svg" -}}
+{{- $desc := or .Description .Summary $siteDesc -}}
 {{- $desc = $desc | plainify | truncate 200 -}}
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -13,7 +33,7 @@
 {{- if not (or hugo.IsProduction site.Params.allowIndexing) }}
 <meta name="robots" content="noindex, nofollow">
 {{- end }}
-<link rel="icon" href="{{ or site.Params.favicon "favicon.svg" | relURL }}" type="image/svg+xml">
+<link rel="icon" href="{{ $favicon | relURL }}" type="image/svg+xml">
 
 {{/* hreflang alternates for translated pages */}}
 {{ range .AllTranslations -}}
@@ -22,7 +42,12 @@
 
 {{/* Open Graph + Twitter */}}
 {{- $img := "" -}}
-{{- with or .Params.image site.Params.ogImage }}{{ $img = . | absURL }}{{ end -}}
+{{- /* The page's own image is front matter, so it cannot share a cache key the
+       way the site-wide params can — and the page it names is the actionable
+       half of the warning anyway. */ -}}
+{{- $pageImg := partial "params-scalar.html" (dict "value" .Params.image "path" (printf "image in %s" .RelPermalink)) -}}
+{{- $ogImage := partialCached "params-scalar.html" (dict "value" site.Params.ogImage "path" "[params.ogImage]") "ogImage" site.Language.Lang -}}
+{{- with or $pageImg $ogImage }}{{ $img = . | absURL }}{{ end -}}
 <meta property="og:type" content="{{ cond $isHome "website" "article" }}">
 <meta property="og:title" content="{{ cond $isHome $siteName .Title }}">
 <meta property="og:description" content="{{ $desc }}">
@@ -67,19 +92,29 @@
 
 {{/* JSON-LD */}}
 {{ if $isHome }}
+{{- /* footer is not a section, so sections.html never normalised it, and both
+       levels have to be read through the guard: [params.footer] being a table
+       is no promise that socialNetworks is one. */ -}}
+{{- $footer := partialCached "params-table.html" (dict "value" site.Params.footer "path" "[params.footer]") "footer" site.Language.Lang -}}
+{{- $social := partialCached "params-table.html" (dict "value" $footer.socialNetworks "path" "[params.footer.socialNetworks]") "footer.socialNetworks" site.Language.Lang -}}
 {{- $sameAs := slice -}}
-{{- with site.Params.footer.socialNetworks.github }}{{ $sameAs = $sameAs | append . }}{{ end -}}
-{{- with site.Params.footer.socialNetworks.linkedin }}{{ $sameAs = $sameAs | append . }}{{ end -}}
-<script type="application/ld+json">
-{{- dict
+{{- with $social.github }}{{ $sameAs = $sameAs | append . }}{{ end -}}
+{{- with $social.linkedin }}{{ $sameAs = $sameAs | append . }}{{ end -}}
+{{- /* jobTitle and description are omitted when unset rather than emitted as
+       JSON null. jsonify renders a nil as `null`, which is valid JSON and so
+       was never the %!s(<nil>) defect above — but `"jobTitle":null` still
+       states that the person has no job title, where saying nothing states
+       only that this site did not fill the field in. */ -}}
+{{- $person := dict
   "@context" "https://schema.org"
   "@type" "Person"
   "name" $siteName
   "url" .Permalink
-  "jobTitle" site.Params.hero.subtitle
-  "description" site.Params.description
-  "sameAs" $sameAs
-  | jsonify (dict "indent" "  ") | safeJS -}}
+  "sameAs" $sameAs -}}
+{{- with $hero.subtitle }}{{ $person = merge $person (dict "jobTitle" .) }}{{ end -}}
+{{- with $siteDesc }}{{ $person = merge $person (dict "description" .) }}{{ end -}}
+<script type="application/ld+json">
+{{- $person | jsonify (dict "indent" "  ") | safeJS -}}
 </script>
 {{ end }}
 

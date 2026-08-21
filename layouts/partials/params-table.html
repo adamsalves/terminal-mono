@@ -1,0 +1,33 @@
+{{- /* A [params.…] table, normalised.
+
+       sections.html states the rule: no configuration may fail the build. It
+       normalises the four section tables for its own gates, but every partial
+       that reads site.Params.<x> straight bypasses that — which is why
+       `contact = "x"` sailed through the gates and died in hero.html instead.
+
+       Call it for any table before dereferencing it, nested ones included: the
+       guard on a parent says nothing about its children, so [params.hero] being
+       a table is no promise about [params.hero.socialLinks].
+
+       Context: dict "value" <the raw param> "path" "<what to call it>".
+       Returns a table, empty if the param was not one.
+
+       An *absent* param is legitimate and says nothing; only a wrong type
+       warns. Cache it per path and language at the call sites: head.html,
+       footer.html and nav.html run on every page, so an uncached guard re-runs
+       once per page for an answer that cannot change. Not for the warning's
+       sake — Hugo's logger already collapses identical warnings, measured at one
+       line for the same warnf across nine pages — but the language variant is
+       load-bearing for the *value*, since [languages.pt.params.hero] and its en
+       counterpart are two different tables behind one path.
+
+       Nothing here may print: this partial returns a value, so every action is
+       whitespace-trimmed. An untrimmed line breaks `return`. */ -}}
+{{- $v := .value -}}
+{{- if not (reflect.IsMap $v) -}}
+  {{- with $v -}}
+    {{- warnf "terminal-mono: %s must be a table, got %#v — ignoring it" $.path . -}}
+  {{- end -}}
+  {{- $v = dict -}}
+{{- end -}}
+{{- return $v -}}

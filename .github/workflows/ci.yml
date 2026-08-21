@@ -81,6 +81,22 @@ jobs:
           ln -sfn "$GITHUB_WORKSPACE" /tmp/bare/themes/terminal-mono
           printf 'baseURL = "https://example.com/terminal-mono/"\ntitle = "Bare Site"\ntheme = "terminal-mono"\n' > /tmp/bare/hugo.toml
           hugo --source /tmp/bare --gc --minify --panicOnWarning
+          # A param the site never set must not reach the page as Go's printf
+          # garbage. --panicOnWarning cannot catch this: nothing warns, the
+          # template does exactly what it was told. This very fixture shipped
+          # `<title>Bare Site — %!s(<nil>)</title>` until the subtitle got a
+          # fallback, and the green build said nothing about it.
+          if grep -rq '%!s(\|%!d(\|%!v(' /tmp/bare/public --include='*.html'; then
+            echo 'bare: a param rendered as printf garbage'
+            grep -rho '%![sdv]([^)]*)' /tmp/bare/public --include='*.html' | sort -u | head -5
+            exit 1
+          fi
+          # The fallback has to be the site name, not an empty half-title.
+          if ! grep -q '<title>Bare Site</title>' /tmp/bare/public/index.html; then
+            echo 'bare: the home title did not fall back to the site name'
+            grep -o '<title>[^<]*</title>' /tmp/bare/public/index.html
+            exit 1
+          fi
       # One config contract, one fixture per promise it makes. Together these are
       # why "the menu drives the sections" is a checked claim and not a sentence
       # in a changelog. The params block is shared so that only the menu, the
@@ -192,6 +208,15 @@ jobs:
 
           for f in fallback custom hatch i18n; do
             hugo --source "/tmp/$f" --gc --minify --panicOnWarning
+            # These four build clean under --panicOnWarning and still shipped
+            # `%!s(<nil>)` in their titles until the hero subtitle got a
+            # fallback: printf renders a nil param without warning about it, so
+            # a green build is not evidence the page is right.
+            if grep -rq '%!s(\|%!d(\|%!v(' "/tmp/$f/public" --include='*.html'; then
+              echo "$f: a param rendered as printf garbage"
+              grep -rho '%![sdv]([^)]*)' "/tmp/$f/public" --include='*.html' | sort -u | head -5
+              exit 1
+            fi
           done
       # A questionable config must warn and fall back, never take a consumer's
       # build down — so these are built WITHOUT --panicOnWarning, and the warning
@@ -212,7 +237,8 @@ jobs:
         run: |
           set -e
           WARNS="invalid-unknown invalid-dup invalid-type invalid-empty invalid-anchor
-                 invalid-scalar invalid-list orphan toggle"
+                 invalid-scalar invalid-list invalid-hero invalid-hero-social
+                 invalid-hero-icons orphan toggle"
           for f in $WARNS; do
             mkdir -p "/tmp/$f/themes"
             ln -sfn "$GITHUB_WORKSPACE" "/tmp/$f/themes/terminal-mono"
@@ -228,6 +254,14 @@ jobs:
           # already open, so these go in as plain keys inside it.
           sed -i '0,/^\[params\]$/s//[params]\n  sections = "about"/'               /tmp/invalid-scalar/hugo.toml
           sed -i '0,/^\[params\]$/s//[params]\n  sections = ["about", "projects"]/' /tmp/invalid-list/hugo.toml
+          # params.hero is the one that breaks pages other than the home: head.html
+          # reads hero.subtitle on every page, and `cond` evaluates both of its
+          # branches, so a scalar aborted the whole site rather than one template.
+          # The nested table and its entry list are guarded separately — normalising
+          # hero itself does not reach inside it.
+          sed -i '0,/^\[params\]$/s//[params]\n  hero = "x"/' /tmp/invalid-hero/hugo.toml
+          printf '  [params.hero]\n    socialLinks = "x"\n' >> /tmp/invalid-hero-social/hugo.toml
+          printf '  [params.hero]\n    [params.hero.socialLinks]\n      fontAwesomeIcons = ["github"]\n' >> /tmp/invalid-hero-icons/hugo.toml
           # orphan: the menu is real, and names nothing the page can render. The
           # post is what makes the blog entry survive, so the nav is not empty
           # for some other reason than the one under test.
@@ -265,7 +299,34 @@ jobs:
               exit 1
             fi
             grep 'WARN.*terminal-mono:' "/tmp/$f.log"
+            if grep -rq '%!s(\|%!d(\|%!v(' "/tmp/$f/public" --include='*.html'; then
+              echo "$f: a param rendered as printf garbage"
+              grep -rho '%![sdv]([^)]*)' "/tmp/$f/public" --include='*.html' | sort -u | head -5
+              exit 1
+            fi
           done
+          # Warning and then handing back an empty page is only half the promise.
+          # A scalar [params.hero] must leave the home standing: the title falls
+          # back to the site name, and the sections the params do fill in still
+          # render, because nothing about hero should reach them.
+          if ! grep -q '<title>Fixture invalid-hero</title>' /tmp/invalid-hero/public/index.html; then
+            echo 'invalid-hero: the title did not fall back to the site name'
+            grep -o '<title>[^<]*</title>' /tmp/invalid-hero/public/index.html
+            exit 1
+          fi
+          for s in about projects experience contact; do
+            if ! grep -qE "id=\"?$s\"?[ >]" /tmp/invalid-hero/public/index.html; then
+              echo "invalid-hero: a scalar hero took the $s section down with it"
+              exit 1
+            fi
+          done
+          # And it must not break the pages that never render a hero at all —
+          # the row that makes this the worst of the five.
+          if ! grep -q '<title>404 Page not found · Fixture invalid-hero</title>' /tmp/invalid-hero/public/404.html; then
+            echo 'invalid-hero: a scalar hero reached a page that renders no hero'
+            grep -o '<title>[^<]*</title>' /tmp/invalid-hero/public/404.html
+            exit 1
+          fi
           # The orphan warning has to name every section it dropped, not just
           # report that something went missing — the name is the actionable half.
           for s in about projects experience contact; do
@@ -284,6 +345,181 @@ jobs:
             echo "toggle: enable = true outside the index went unreported"
             exit 1
           fi
+      # Every param the theme dereferences, written as the wrong type. This is
+      # the same promise sections.html states in its header -- no configuration
+      # may fail the build -- but it is the *consumers* that have to keep it,
+      # and each row below took a build down before params-table.html and
+      # params-list.html existed. Two of them (a scalar [params.footer] and a
+      # scalar [params.contact]) broke every page, not just the home.
+      #
+      # Table-driven because the shape is identical nine times over: write a
+      # fragment, build without --panicOnWarning, assert the warning names the
+      # param, assert the page still stands.
+      #
+      # Where the fragment goes matters, and getting it wrong makes a fixture
+      # build green while proving nothing:
+      #   bare   a bare key belongs to whichever table is open, so `footer = "x"`
+      #          appended after a [params.x] block quietly becomes x.footer.
+      #          These go in through [params] itself.
+      #   about  skills = "x" has to sit *inside* [params.about]; appended it
+      #          would collide with the [params.about.skills] subtable.
+      #   tail   a new subtable, appended.
+      #
+      # The base fills [params.about] content on purpose. Without it `about`
+      # never passes gate 3, about.html never runs, and a broken skills param
+      # looks fixed.
+      - name: Assert a mistyped param warns and still renders
+        run: |
+          set -e
+          cat > /tmp/mistyped-base.toml <<'TOML'
+
+          [params]
+            [params.about]
+              content = "About the site owner."
+          TOML
+
+          run_case() {
+            name="$1"; pos="$2"; frag="$3"; expect="$4"; post="$5"
+            d="/tmp/mistyped-$name"
+            rm -rf "$d"; mkdir -p "$d/themes"
+            ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+            printf 'baseURL = "https://example.com/terminal-mono/"\ntitle = "Fixture %s"\ntheme = "terminal-mono"\n' "$name" > "$d/hugo.toml"
+            cat /tmp/mistyped-base.toml >> "$d/hugo.toml"
+            case "$pos" in
+              bare)  sed -i "0,/^\[params\]$/s//[params]\n$frag/" "$d/hugo.toml" ;;
+              about) sed -i "0,/^  \[params.about\]$/s//  [params.about]\n$frag/" "$d/hugo.toml" ;;
+              tail)  printf '%b' "$frag" >> "$d/hugo.toml" ;;
+              front) ;;
+              # about's content is the base's own reason to keep that section
+              # filled, so a case that breaks content has to give the section
+              # another one — otherwise gate 3 drops it, correctly, and the
+              # shared "the about section is still there" assertion below fires
+              # on a fixture that is behaving exactly as designed.
+              content) sed -i "0,/^    content = .*$/s||$frag|" "$d/hugo.toml"
+                       printf '  [params.about.skills]\n    enable = true\n    items = ["Go"]\n' >> "$d/hugo.toml" ;;
+              *)     echo "$name: unknown fragment position '$pos'"; exit 1 ;;
+            esac
+            # Front matter is configuration a consumer writes too, and the same
+            # cast aborts on it. `front` puts the mistyped param on a post
+            # instead of in hugo.toml; the assertions below are unchanged.
+            if [ -n "$post" ]; then
+              mkdir -p "$d/content/blogs"
+              printf -- '---\ntitle: "Post"\ndate: 2026-01-01\n%b\n---\nbody\n' "$post" > "$d/content/blogs/p.md"
+            fi
+            if ! hugo --source "$d" --gc --minify > "$d.log" 2>&1; then
+              cat "$d.log"
+              echo "$name: a mistyped param took the build down instead of warning"
+              exit 1
+            fi
+            if ! grep -qF "$expect" "$d.log"; then
+              cat "$d.log"
+              echo "$name: no warning naming '$expect'"
+              exit 1
+            fi
+            # Warning and then an empty page is only half the promise.
+            if ! grep -q '<title>Fixture '"$name"'</title>' "$d/public/index.html"; then
+              echo "$name: the home page did not render"
+              exit 1
+            fi
+            if ! grep -qE 'id="?about"?[ >]' "$d/public/index.html"; then
+              echo "$name: a mistyped param took the about section down with it"
+              exit 1
+            fi
+            if ! grep -q '<title>' "$d/public/404.html"; then
+              echo "$name: a mistyped param reached a page that renders no section"
+              exit 1
+            fi
+            if grep -rq '%!s(\|%!d(\|%!v(\|%!q(' "$d/public" --include='*.html'; then
+              echo "$name: a param rendered as printf garbage"
+              grep -rho '%![sdvq]([^)]*)' "$d/public" --include='*.html' | sort -u | head -5
+              exit 1
+            fi
+            # The warning is read by a human, so printf's error syntax is a defect
+            # there too — and the log is the only place it can appear, since the
+            # page nets above never look at it. `items %!q(<nil>) jobs` is what an
+            # experience entry with no company name used to report.
+            if grep -q '%!s(\|%!d(\|%!v(\|%!q(' "$d.log"; then
+              echo "$name: the warning itself contains printf garbage"
+              grep -o '%![sdvq]([^)]*)' "$d.log" | sort -u | head -5
+              exit 1
+            fi
+            # Exactly one. Every guard is cached per param and language, so a
+            # second line means the cache key drifted between two call sites and
+            # the same mistake is being reported once per consumer.
+            n=$(grep -c 'terminal-mono:' "$d.log")
+            if [ "$n" != 1 ]; then
+              echo "$name: expected exactly 1 warning, got $n"
+              grep -o 'terminal-mono: .*' "$d.log"
+              exit 1
+            fi
+            grep -o 'terminal-mono: .*' "$d.log" | head -1
+          }
+
+          run_case contact     bare  '  contact = "x"' \
+                   '[params.contact] must be a table'
+          run_case footer      bare  '  footer = "x"' \
+                   '[params.footer] must be a table'
+          run_case social      tail  '  [params.footer]\n    socialNetworks = "x"\n' \
+                   '[params.footer.socialNetworks] must be a table'
+          run_case skills      about '    skills = "x"' \
+                   '[params.about.skills] must be a table'
+          run_case skillitems  tail  '  [params.about.skills]\n    enable = true\n    items = "x"\n' \
+                   '[params.about.skills] items must be a list'
+          run_case projitems   tail  '  [params.projects]\n    items = "x"\n' \
+                   '[params.projects] items must be a list'
+          run_case projentries tail  '  [params.projects]\n    items = ["a", "b"]\n' \
+                   '[params.projects] items ignored 2 of its entries'
+          run_case expitems    tail  '  [params.experience]\n    items = "x"\n' \
+                   '[params.experience] items must be a list'
+          run_case expjobs     tail  '  [[params.experience.items]]\n    company = "ACME"\n    jobs = "x"\n' \
+                   'jobs must be a list'
+          # An entry with no company at all: the warning has to keep naming the
+          # entry rather than degrading into printf's own error syntax, which is
+          # what the log net above is watching for.
+          run_case expnoname   tail  '  [[params.experience.items]]\n    jobs = "x"\n' \
+                   'items "<unnamed>" jobs must be a list'
+          # navbar is the one that reached every page: nav.html renders on all of
+          # them, so this died on /categories rather than the home. sections.html
+          # already guarded the same param for its showBlog gate — the two files
+          # disagreed about [params.navbar] until both read through the helper.
+          run_case navbar      bare  '  navbar = "x"' \
+                   '[params.navbar] must be a table'
+          # The mirror direction: a scalar-shaped param written as a table. These
+          # never reach a `range` or a field lookup — they reach plainify, relURL
+          # and absURL, which cast to string and abort when the cast fails. All
+          # three are read in head.html, so all three were whole-site failures.
+          run_case description tail  '  [params.description]\n    a = 1\n' \
+                   '[params.description] must be a single value'
+          run_case favicon     tail  '  [params.favicon]\n    a = 1\n' \
+                   '[params.favicon] must be a single value'
+          run_case ogimage     tail  '  [params.ogImage]\n    a = 1\n' \
+                   '[params.ogImage] must be a single value'
+          # A table where a bare skill belongs. This one never aborted — it
+          # rendered `map[a:1]` into a skill chip — but a helper that means
+          # "entries are tables" in one mode and "entries are anything" in the
+          # other is a helper nobody can reason about.
+          run_case skillmaps   tail  '  [params.about.skills]\n    enable = true\n    items = ["Go", {a = 1}]\n' \
+                   '[params.about.skills] items ignored 1 of its entries'
+          # A post's own image, read by head.html for og:image and again by
+          # single.html for the featured banner. Both go through a relURL/absURL
+          # cast, so guarding one and not the other would tolerate the typo in
+          # the <head> and still abort on the body of the same page.
+          run_case pageimg     front '' \
+                   'image in /terminal-mono/blogs/p/ must be a single value' \
+                   'image:\n  a: 1'
+          # markdownify and urlize cast to string too, so the same table that
+          # merely looks wrong when printed aborts the moment it reaches one of
+          # them. These four are per entry rather than per param, so the warning
+          # names the entry — by repo, or by title once the title itself has been
+          # through the guard.
+          run_case aboutcontent content '    [params.about.content]\n      a = 1' \
+                   '[params.about] content must be a single value'
+          run_case projcontent tail  '  [params.projects]\n    [[params.projects.items]]\n      repo = "r"\n      [params.projects.items.content]\n        a = 1\n' \
+                   '[params.projects] items "r" content must be a single value'
+          run_case projtitle   tail  '  [params.projects]\n    [[params.projects.items]]\n      repo = "r"\n      [params.projects.items.title]\n        a = 1\n' \
+                   '[params.projects] items "r" title must be a single value'
+          run_case jobcontent  tail  '  [[params.experience.items]]\n    company = "C"\n    [[params.experience.items.jobs]]\n      name = "N"\n      [params.experience.items.jobs.content]\n        a = 1\n' \
+                   '[params.experience] items "C" jobs "N" content must be a single value'
       # A green build only proves the templates ran, not what they emitted. Each
       # block below is one line of the README's config contract, asserted. The
       # blank-link check guards the direction none of them cover: an entry that

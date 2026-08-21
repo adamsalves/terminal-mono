@@ -1,26 +1,36 @@
-{{- $hero := site.Params.hero -}}
-{{- $loc := site.Params.hero.location -}}
-{{- /* Read through guards rather than straight: [params.about] or its skills
-       table written as a scalar would abort here, and the hero renders on the
-       home page of every language — sections.html normalises the same tables for
-       the same reason. items is tested for being a list, not merely for truth:
-       `first` does not reject a string, it slices its bytes, so items = "Go"
-       would type `71 · 111` into the terminal rather than fail somewhere a
-       consumer would see it. skills.enable is honoured too, and has to be an
-       explicit true — an absent key counts as off, the reading about.html and
-       sections.html have always used — so the switch that hides the skills block
-       inside the about section also silences `cat stack.txt` rather than hiding
-       it in one place and announcing it in the other. */ -}}
+{{- /* Every table this file touches goes through params-table.html, and every
+       list through params-list.html, so the hero cannot disagree with
+       head.html or with the section partials about what a param is. The hero
+       renders on the home page of every language, and it reads four different
+       namespaces, so it was the single richest source of ways to abort a build.
+
+       Two of these are nested one level down — [params.hero.socialLinks] and
+       [params.about.skills] — and the guard on a parent says nothing about its
+       children, so both levels are read through the helper.
+
+       Lists are tested for being lists, never merely for truth: `first` does
+       not reject a string, it slices its bytes, so items = "Go" would type
+       `71 · 111` into the terminal rather than fail where a consumer sees it.
+
+       skills.enable is honoured here too, and has to be an explicit true — an
+       absent key counts as off, the reading about.html and sections.html have
+       always used — so the switch that hides the skills block inside the about
+       section also silences `cat stack.txt`, rather than hiding it in one place
+       and announcing it in the other. */ -}}
+{{- $lang := site.Language.Lang -}}
+{{- $hero := partialCached "params-table.html" (dict "value" site.Params.hero "path" "[params.hero]") "hero" $lang -}}
+{{- $loc := $hero.location -}}
+{{- $about := partialCached "params-table.html" (dict "value" site.Params.about "path" "[params.about]") "about" $lang -}}
+{{- $aboutSkills := partialCached "params-table.html" (dict "value" $about.skills "path" "[params.about.skills]") "about.skills" $lang -}}
 {{- $skills := slice -}}
-{{- with site.Params.about -}}
-  {{- if reflect.IsMap . -}}
-    {{- with .skills -}}
-      {{- if reflect.IsMap . -}}
-        {{- if and .enable (reflect.IsSlice .items) -}}{{- $skills = .items -}}{{- end -}}
-      {{- end -}}
-    {{- end -}}
-  {{- end -}}
+{{- if $aboutSkills.enable -}}
+  {{- $skills = partialCached "params-list.html" (dict "value" $aboutSkills.items "path" "[params.about.skills] items" "maps" false) "about.skills.items" $lang -}}
 {{- end -}}
+{{- $socialLinks := partialCached "params-table.html" (dict "value" $hero.socialLinks "path" "[params.hero.socialLinks]") "hero.socialLinks" $lang -}}
+{{- $icons := partialCached "params-list.html" (dict "value" $socialLinks.fontAwesomeIcons "path" "[params.hero.socialLinks] fontAwesomeIcons" "maps" true) "hero.socialLinks.fontAwesomeIcons" $lang -}}
+{{- $projects := partialCached "params-table.html" (dict "value" site.Params.projects "path" "[params.projects]") "projects" $lang -}}
+{{- $projectItems := partialCached "params-list.html" (dict "value" $projects.items "path" "[params.projects] items" "maps" true) "projects.items" $lang -}}
+{{- $contact := partialCached "params-table.html" (dict "value" site.Params.contact "path" "[params.contact]") "contact" $lang -}}
 {{- /* The hero is the page's header, not a section, so it is never in the plan
        itself — but its call-to-action links at one, and a button pointing at a
        section that does not render is the same dead anchor the nav used to
@@ -39,8 +49,13 @@
 {{- $projectsOut := "" -}}
 {{- if $hasProjects -}}
   {{- $names := slice -}}
-  {{- range site.Params.projects.items -}}
-    {{- $names = $names | append (printf "%s/" (.repo | default (.title | urlize))) -}}
+  {{- range $projectItems -}}
+    {{- /* Same guard projects.html puts on the same param, and deliberately the
+           same warning text: the terminal lists the repositories the cards below
+           render, so a mistyped title is one mistake, not two. */ -}}
+    {{- $named := printf "%v" (or .repo "<unnamed>") -}}
+    {{- $title := partial "params-scalar.html" (dict "value" .title "path" (printf "[params.projects] items %q title" $named)) -}}
+    {{- $names = $names | append (printf "%s/" (.repo | default (urlize $title))) -}}
   {{- end -}}
   {{- $projectsOut = delimit $names "   " -}}
 {{- end -}}
@@ -133,11 +148,11 @@
 
       <div class="btn-row">
         {{ if $hasProjects }}<a class="btn btn--solid" href="#projects">{{ i18n "view_projects" }} →</a>{{ end }}
-        {{ with site.Params.contact.btnLink }}<a class="btn btn--ghost" href="{{ . }}">{{ i18n "email" }}</a>{{ end }}
+        {{ with $contact.btnLink }}<a class="btn btn--ghost" href="{{ . }}">{{ i18n "email" }}</a>{{ end }}
       </div>
 
       <div class="social">
-        {{ range $i, $s := $hero.socialLinks.fontAwesomeIcons }}
+        {{ range $i, $s := $icons }}
           {{- $label := (i18n "link_default") -}}
           {{- $ext := true -}}
           {{- if in $s.icon "github" }}{{ $label = "github" }}{{ end -}}

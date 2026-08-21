@@ -2,7 +2,7 @@
        file's — see it for the three gates. Expects a dict: last (bool).
        section--last used to be hardcoded here, which was fine only while
        contact was guaranteed to be last. It no longer is. */ -}}
-{{- $contact := site.Params.contact -}}
+{{- $contact := partialCached "params-table.html" (dict "value" site.Params.contact "path" "[params.contact]") "contact" site.Language.Lang -}}
 <section id="contact" class="section{{ if .last }} section--last{{ end }}">
   <div class="container">
     <div class="contact-box">
