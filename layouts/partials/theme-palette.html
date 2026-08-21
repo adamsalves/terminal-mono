@@ -1,7 +1,8 @@
 {{- /* [params.theme], normalised — the palette name and the token overrides.
 
-       Returns dict "palette" <a name terminal.css actually defines>
-                    "css"     <declarations for the :root:root block, or "">.
+       Returns dict "palette"    <a name terminal.css actually defines>
+                    "css"        <declarations for the :root:root block, or "">
+                    "themeColor" <the ground the browser chrome should match>.
 
        The palette is the whole point of the guard: baseof.html stamps it into
        `<html data-palette="…">` and head.html builds a favicon filename out of
@@ -14,19 +15,34 @@
        behind the same path. Uncached, the warnings below would be recomputed
        once per page for a result that is identical every time.
 
+       The call sites pass a context this partial never reads, and pass it
+       deliberately empty. A partialCached keyed only on the language would
+       otherwise freeze the *first* page of that language into every later one
+       the moment somebody adds a `.Params` read here — a bug that would show
+       up as one page's front matter leaking site-wide, long after the read
+       looked harmless.
+
        Nothing here may print: this returns a value, so every action is
        whitespace-trimmed. An untrimmed line breaks `return`. */ -}}
 
 {{- $known := slice "lime" "amber" "cyberpunk" "ice" "mono" -}}
 
+{{- /* Each palette's --bg, for <meta name="theme-color">. The one value that
+       has to be readable from a template as well as from CSS, so it is stated
+       twice; the fixture in ci.yml compares the two spellings against each
+       other, which is what keeps them from drifting. */ -}}
+{{- $grounds := dict "lime" "#0a0c0a" "amber" "#0c0906" "cyberpunk" "#08060f" "ice" "#06090c" "mono" "#0a0a0a" -}}
+
 {{- /* The keys sites write, mapped to the custom properties terminal.css reads.
 
-       They are spelled lowercase here because that is how they arrive: Hugo
-       lowercases every config key recursively, so `accentDim` in the TOML is
-       `accentdim` by the time it reaches site.Params. Sites should still write
-       camelCase — it is what the rest of the theme's params use, and TOML bare
-       keys cannot carry the `-` the CSS side needs. Both spellings work; only
-       this side has to know that. */ -}}
+       They are spelled lowercase and unpunctuated here because that is how they
+       are looked up: Hugo lowercases every config key recursively, so `accentDim`
+       in the TOML is `accentdim` by the time it reaches site.Params, and the
+       lookup below also strips `-` and `_` so `accent-dim` and `accent_dim`
+       land on the same token. Sites should still write camelCase — it is what
+       the rest of the theme's params use — but the CSS-side spelling a reader
+       copies out of the stylesheet works too, which is the spelling they are
+       most likely to try. */ -}}
 {{- $tokens := dict
   "bg" "--bg" "surface" "--surface" "surface2" "--surface-2" "surface3" "--surface-3"
   "border" "--border" "bordersoft" "--border-soft" "borderfaint" "--border-faint"
@@ -48,11 +64,16 @@
 {{- $palette := "lime" -}}
 {{- $raw := partial "params-scalar.html" (dict "value" $theme.palette "path" "[params.theme] palette") -}}
 {{- with $raw -}}
-  {{- $name := lower (printf "%v" .) -}}
+  {{- /* %v before %q, not %q on the raw value. `palette = 3` arrives as an int,
+         and %q on an int is a *rune* literal — it would tell whoever wrote 3
+         that their palette was '\x03'. A bool reports %!q(bool=true) outright.
+         Both are the printf garbage ci.yml greps the warnings for. */ -}}
+  {{- $written := printf "%v" . -}}
+  {{- $name := lower $written -}}
   {{- if in $known $name -}}
     {{- $palette = $name -}}
   {{- else -}}
-    {{- warnf "terminal-mono: [params.theme] palette = %q is not a palette this theme ships — using %q. Available: %s" . "lime" (delimit $known ", ") -}}
+    {{- warnf "terminal-mono: [params.theme] palette = %q is not a palette this theme ships — using %q. Available: %s" $written "lime" (delimit $known ", ") -}}
   {{- end -}}
 {{- end -}}
 
@@ -61,24 +82,57 @@
 {{- $decls := slice -}}
 {{- $unknown := slice -}}
 {{- $rejected := slice -}}
+{{- $ground := index $grounds $palette -}}
 {{- range $key, $value := $colors -}}
-  {{- $prop := index $tokens $key -}}
+  {{- $prop := index $tokens (replaceRE "[-_]" "" $key) -}}
   {{- if not $prop -}}
     {{- $unknown = $unknown | append $key -}}
   {{- else -}}
-    {{- $v := printf "%v" $value -}}
     {{- /* A value goes into a stylesheet as written, so it is checked before it
-           gets there rather than trusted. Without `;` and `}` a value cannot end
-           the declaration it sits in, and without `:` it cannot start another
-           one — which is the whole of the injection this could otherwise be.
-           What survives is still wide enough for anything a color is: #rgb,
-           #rrggbbaa, rgb(0 0 0 / 40%), oklch(70% .2 150), a bare keyword.
-           `url(` is excluded because a token that fetches something is not a
-           color, whatever it is spelled like. */ -}}
-    {{- if and (findRE `^[#A-Za-z0-9(),./% -]+$` $v) (not (in (lower $v) "url(")) (le (len $v) 64) -}}
-      {{- $decls = $decls | append (printf "%s:%s" $prop $v) -}}
-    {{- else -}}
+           gets there rather than trusted. Three gates, each closing a different
+           hole:
+
+           1. It has to be a string. A bool or a number is never a color, and
+              `accent = true` would otherwise emit `--accent:true` — valid CSS
+              syntax that is invalid at computed-value time, so every var(--accent)
+              on the page silently falls back to nothing with no warning at all.
+
+           2. The character allowlist. Without `;` and `}` a value cannot end the
+              declaration it sits in, and without `:` it cannot start another one.
+              `<` and `>` are absent too, so `</style>` is unspellable — which is
+              what matters, because safeCSS turns off html/template's own CSS
+              filter. This allowlist is the whole of the defence: `url(` is
+              excluded separately below, but image-set(), element() and friends
+              are only harmless because they cannot name a resource without a
+              `url()` or a quoted string, and quotes are not on the list either.
+              Do not widen it. What survives is still anything a color is: #rgb,
+              #rrggbbaa, rgb(0 0 0 / 40%), oklch(70% .2 150), a bare keyword.
+
+           3. Balanced parentheses, checked left to right. `accent = "rgb("`
+              passes the allowlist, and an unclosed function swallows every
+              declaration after it in the block — so one typo'd value silently
+              deletes the other overrides rather than just itself. */ -}}
+    {{- if ne (printf "%T" $value) "string" -}}
       {{- $rejected = $rejected | append $key -}}
+    {{- else -}}
+      {{- $v := printf "%v" $value -}}
+      {{- $depth := 0 -}}
+      {{- $unbalanced := false -}}
+      {{- range (split $v "") -}}
+        {{- if eq . "(" -}}
+          {{- $depth = add $depth 1 -}}
+        {{- else if eq . ")" -}}
+          {{- $depth = sub $depth 1 -}}
+          {{- if lt $depth 0 -}}{{- $unbalanced = true -}}{{- end -}}
+        {{- end -}}
+      {{- end -}}
+      {{- if ne $depth 0 -}}{{- $unbalanced = true -}}{{- end -}}
+      {{- if and (findRE `^[#A-Za-z0-9(),./% -]+$` $v) (not (in (lower $v) "url(")) (le (len $v) 64) (not $unbalanced) -}}
+        {{- $decls = $decls | append (printf "%s:%s" $prop $v) -}}
+        {{- if eq $prop "--bg" -}}{{- $ground = $v -}}{{- end -}}
+      {{- else -}}
+        {{- $rejected = $rejected | append $key -}}
+      {{- end -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
@@ -91,7 +145,7 @@
   {{- warnf "terminal-mono: [params.theme.colors] ignored %d unknown key(s): %s — Hugo lowercases config keys, so compare these against: %s" (len .) (delimit . ", ") (delimit $tokenNames ", ") -}}
 {{- end -}}
 {{- with $rejected -}}
-  {{- warnf "terminal-mono: [params.theme.colors] ignored %d value(s) that are not colors: %s — write a hex code like \"#b6ff3c\" or a CSS color function" (len .) (delimit . ", ") -}}
+  {{- warnf "terminal-mono: [params.theme.colors] ignored %d value(s) that are not colors: %s — write a hex code like \"#b6ff3c\" or a CSS color function, quoted, with its parentheses closed" (len .) (delimit . ", ") -}}
 {{- end -}}
 
-{{- return dict "palette" $palette "css" (delimit $decls ";") -}}
+{{- return dict "palette" $palette "css" (delimit $decls ";") "themeColor" $ground -}}

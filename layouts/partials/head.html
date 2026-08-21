@@ -24,7 +24,7 @@
        to build a filename out of. The default favicon is the one drawn in the
        active palette, so a cyberpunk site does not fly a lime flag in the tab;
        [params.favicon] still wins over it, the way it always did. */ -}}
-{{- $theme := partialCached "theme-palette.html" . site.Language.Lang -}}
+{{- $theme := partialCached "theme-palette.html" (dict) site.Language.Lang -}}
 {{- $themeFavicon := "favicon.svg" -}}
 {{- if ne $theme.palette "lime" -}}{{- $themeFavicon = printf "favicon-%s.svg" $theme.palette -}}{{- end -}}
 {{- $favicon := or (partialCached "params-scalar.html" (dict "value" site.Params.favicon "path" "[params.favicon]") "favicon" site.Language.Lang) $themeFavicon -}}
@@ -41,6 +41,10 @@
 <meta name="robots" content="noindex, nofollow">
 {{- end }}
 <link rel="icon" href="{{ $favicon | relURL }}" type="image/svg+xml">
+{{- /* The same argument as the favicon, one layer out: an amber site should not
+       hand the browser a lime address bar to draw around it. It is the palette's
+       --bg, or the [params.theme.colors] override of it when there is one. */ -}}
+<meta name="theme-color" content="{{ $theme.themeColor }}">
 
 {{/* hreflang alternates for translated pages */}}
 {{ range .AllTranslations -}}

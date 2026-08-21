@@ -97,6 +97,152 @@ jobs:
             grep -o '<title>[^<]*</title>' /tmp/bare/public/index.html
             exit 1
           fi
+      # The exampleSite ships lime with [params.theme] commented out, so without
+      # this step four of the five palettes, the override block, the per-palette
+      # favicon and the theme-color are all shipped unexecuted — 400-odd lines
+      # of feature behind one exercised path. One build per palette, each into
+      # its own destination so the cross-check below can read all five at once.
+      - name: Build every palette
+        run: |
+          set -e
+          d=/tmp/palette
+          rm -rf "$d"; mkdir -p "$d/themes"
+          ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          for p in lime amber cyberpunk ice mono; do
+            printf 'baseURL = "https://example.com/t/"\ntitle = "Palette"\ntheme = "terminal-mono"\n[params.theme]\n  palette = "%s"\n' "$p" > "$d/hugo.toml"
+            if ! hugo --source "$d" --gc --minify --panicOnWarning --destination "$d/out-$p" > "$d.log" 2>&1; then
+              cat "$d.log"
+              echo "$p: a palette this theme ships failed to build"
+              exit 1
+            fi
+            h="$d/out-$p/index.html"
+            if ! grep -qE "data-palette=\"?$p\"?[ >]" "$h"; then
+              echo "$p: not stamped onto <html>"
+              grep -o '<html[^>]*>' "$h"
+              exit 1
+            fi
+            # lime is the bare :root, so it keeps the unsuffixed favicon — and
+            # must not ask for a favicon-lime.svg that does not exist.
+            if [ "$p" = lime ]; then want=favicon.svg; else want="favicon-$p.svg"; fi
+            if ! grep -qF "rel=icon href=/t/$want" "$h"; then
+              echo "$p: the favicon did not follow the palette"
+              grep -o 'rel=icon[^>]*' "$h"
+              exit 1
+            fi
+            if [ ! -f "$d/out-$p/$want" ]; then
+              echo "$p: the favicon it asked for is not in the build"
+              exit 1
+            fi
+          done
+          # theme-color is the one palette value stated twice — once in the CSS
+          # a browser reads, once in a Go template a browser cannot. Comparing
+          # the two spellings against each other is what keeps them from drifting.
+          python3 - <<'PY'
+          import pathlib, re, sys
+
+          src = pathlib.Path('assets/css/terminal.css').read_text()
+          bad = []
+
+          def ground(p):
+              head = ':root{' if p == 'lime' else ':root[data-palette="%s"]{' % p
+              if head not in src:
+                  bad.append('%s: terminal.css defines no block for it' % p)
+                  return None
+              block = src.split(head, 1)[1].split('}', 1)[0]
+              m = re.search(r'--bg:\s*(#[0-9a-fA-F]{3,8})', block)
+              if not m:
+                  bad.append('%s: its block declares no --bg' % p)
+                  return None
+              return m.group(1).lower()
+
+          for p in ['lime', 'amber', 'cyberpunk', 'ice', 'mono']:
+              html = pathlib.Path('/tmp/palette/out-%s/index.html' % p).read_text()
+              m = re.search(r'<meta name=["\']?theme-color["\']?[^>]*?content=["\']?([^"\'>\s]+)', html)
+              if not m:
+                  bad.append('%s: no <meta name="theme-color">' % p)
+                  continue
+              want = ground(p)
+              if want and m.group(1).lower() != want:
+                  bad.append('%s: theme-color is %s, terminal.css says --bg is %s'
+                             % (p, m.group(1), want))
+
+          if bad:
+              sys.exit('\n'.join(bad))
+          print('every palette stamps, and its theme-color matches its --bg')
+          PY
+      # The override is the only half of the palette feature that comes from the
+      # config rather than the stylesheet, and the only half whose correctness is
+      # an ordering argument: :root:root ties the specificity of a palette block,
+      # so source order is what decides it. Assert the order, not just the bytes.
+      - name: Build a palette override
+        run: |
+          set -e
+          d=/tmp/override
+          rm -rf "$d"; mkdir -p "$d/themes"
+          ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          cat > "$d/hugo.toml" <<'TOML'
+          baseURL = "https://example.com/t/"
+          title = "Override"
+          theme = "terminal-mono"
+          [params.theme]
+            palette = "cyberpunk"
+            [params.theme.colors]
+              accent = "#00ffd5"
+              bg = "#101010"
+              accent-dim = "#ff2fd0"
+          TOML
+          hugo --source "$d" --gc --minify --panicOnWarning
+          h="$d/public/index.html"
+          # Every documented spelling of a key lands on its token: camelCase is
+          # what the README shows, and accent-dim is what a reader copies out of
+          # the stylesheet. Both have to work or the second looks like a typo.
+          for want in '--accent:#00ffd5' '--accent-dim:#ff2fd0' '--bg:#101010'; do
+            if ! grep -qF -- "$want" "$h"; then
+              echo "override: $want never reached the page"
+              grep -o '<style>[^<]*</style>' "$h"
+              exit 1
+            fi
+          done
+          # The palette is still stamped, and theme-color follows the override
+          # rather than the palette it started from.
+          grep -qE 'data-palette="?cyberpunk"?[ >]' "$h" || { echo 'override: the palette stopped being stamped'; exit 1; }
+          grep -qE 'theme-color[^>]*content=["\x27]?#101010' "$h" || { echo 'override: theme-color ignored the --bg override'; grep -o 'theme-color[^>]*' "$h"; exit 1; }
+          # The ordering argument, asserted as an ordering. A plain :root would
+          # be 0,1,0 against a palette's 0,2,0 and would have lost outright;
+          # :root:root ties it, which only settles the cascade while the <style>
+          # is still downstream of the <link>.
+          a=$(grep -bo '<link rel=stylesheet' "$h" | head -1 | cut -d: -f1)
+          b=$(grep -bo '<style>:root:root' "$h" | head -1 | cut -d: -f1)
+          if [ -z "$a" ] || [ -z "$b" ] || [ "$a" -ge "$b" ]; then
+            echo "override: the <style> is not after the stylesheet (link@$a, style@$b)"
+            exit 1
+          fi
+          # Rule 1 of terminal.css, as a check rather than a comment: no palette
+          # color may be named literally. Read from the *built* stylesheet, where
+          # the comment that has to spell the value out has been minified away.
+          # The stylesheet the page actually links, not whatever a glob sorts
+          # first — a stale fingerprint left in the destination is exactly the
+          # file this check must not be reading.
+          css="$d/public"$(grep -o '/t/css/terminal\.min\.[a-f0-9]*\.css' "$h" | head -1 | sed 's|^/t||')
+          if [ ! -f "$css" ]; then
+            echo "override: could not find the stylesheet the page links"
+            grep -o 'href=[^ >]*\.css' "$h"
+            exit 1
+          fi
+          if grep -qF 'rgba(182,255,60' "$css"; then
+            echo 'a lime literal is back in the stylesheet, and will not follow the accent'
+            grep -oF -m3 'rgba(182,255,60' "$css"
+            exit 1
+          fi
+          # Rule 3, likewise: the structural derived tokens keep a literal base
+          # outside @supports, or a browser without color-mix() renders the nav
+          # and the open mobile menu transparent over the scrolling page.
+          for t in --nav-bg --menu-bg --border-code; do
+            if ! grep -qE -- "$t:(rgba?\(|#)" "$css"; then
+              echo "$t lost its literal base — color-mix() is now its only value"
+              exit 1
+            fi
+          done
       # One config contract, one fixture per promise it makes. Together these are
       # why "the menu drives the sections" is a checked claim and not a sentence
       # in a changelog. The params block is shared so that only the menu, the
@@ -238,7 +384,8 @@ jobs:
           set -e
           WARNS="invalid-unknown invalid-dup invalid-type invalid-empty invalid-anchor
                  invalid-scalar invalid-list invalid-hero invalid-hero-social
-                 invalid-hero-icons orphan toggle"
+                 invalid-hero-icons invalid-palette invalid-colorkey invalid-colorval
+                 invalid-colortype invalid-colorparen orphan toggle"
           for f in $WARNS; do
             mkdir -p "/tmp/$f/themes"
             ln -sfn "$GITHUB_WORKSPACE" "/tmp/$f/themes/terminal-mono"
@@ -262,6 +409,19 @@ jobs:
           sed -i '0,/^\[params\]$/s//[params]\n  hero = "x"/' /tmp/invalid-hero/hugo.toml
           printf '  [params.hero]\n    socialLinks = "x"\n' >> /tmp/invalid-hero-social/hugo.toml
           printf '  [params.hero]\n    [params.hero.socialLinks]\n      fontAwesomeIcons = ["github"]\n' >> /tmp/invalid-hero-icons/hugo.toml
+          # [params.theme]: the five ways a palette or an override is wrong. Each
+          # is ignored, named, and left standing — and each is a *silent* failure
+          # without the warning, which is the whole argument for emitting one:
+          # a key that does nothing looks identical to a feature that is broken.
+          printf '  [params.theme]\n    palette = "neon"\n' >> /tmp/invalid-palette/hugo.toml
+          printf '  [params.theme]\n    [params.theme.colors]\n      acccent = "#b6ff3c"\n' >> /tmp/invalid-colorkey/hugo.toml
+          printf '  [params.theme]\n    [params.theme.colors]\n      accent = "red; } body { display:none } :root {"\n' >> /tmp/invalid-colorval/hugo.toml
+          # Not a string, and an unclosed function: both used to be emitted. The
+          # first computes to nothing everywhere var(--accent) is read; the second
+          # swallows the declarations that follow it, so one bad value deletes the
+          # site's *other* overrides.
+          printf '  [params.theme]\n    [params.theme.colors]\n      accent = true\n' >> /tmp/invalid-colortype/hugo.toml
+          printf '  [params.theme]\n    [params.theme.colors]\n      accent = "rgb("\n      bg = "#101010"\n' >> /tmp/invalid-colorparen/hugo.toml
           # orphan: the menu is real, and names nothing the page can render. The
           # post is what makes the blog entry survive, so the nav is not empty
           # for some other reason than the one under test.
@@ -325,6 +485,27 @@ jobs:
           if ! grep -q '<title>404 Page not found · Fixture invalid-hero</title>' /tmp/invalid-hero/public/404.html; then
             echo 'invalid-hero: a scalar hero reached a page that renders no hero'
             grep -o '<title>[^<]*</title>' /tmp/invalid-hero/public/404.html
+            exit 1
+          fi
+          # A rejected value must leave no trace in the stylesheet. invalid-colorval
+          # is the injection attempt; invalid-colorparen is the quieter one, where
+          # the *valid* override next to it has to survive the rejected one.
+          if grep -q 'display:none' /tmp/invalid-colorval/public/index.html; then
+            echo 'invalid-colorval: a rejected value reached the stylesheet'
+            exit 1
+          fi
+          if grep -q 'rgb(' /tmp/invalid-colorparen/public/index.html; then
+            echo 'invalid-colorparen: an unclosed function reached the stylesheet'
+            exit 1
+          fi
+          if ! grep -q -- '--bg:#101010' /tmp/invalid-colorparen/public/index.html; then
+            echo 'invalid-colorparen: a rejected value took the valid override with it'
+            grep -o '<style>[^<]*</style>' /tmp/invalid-colorparen/public/index.html
+            exit 1
+          fi
+          # An unknown palette falls back rather than stamping itself.
+          if ! grep -qE 'data-palette="?lime"?[ >]' /tmp/invalid-palette/public/index.html; then
+            echo 'invalid-palette: an unknown name reached the html attribute'
             exit 1
           fi
           # The orphan warning has to name every section it dropped, not just
@@ -520,6 +701,19 @@ jobs:
                    '[params.projects] items "r" title must be a single value'
           run_case jobcontent  tail  '  [[params.experience.items]]\n    company = "C"\n    [[params.experience.items.jobs]]\n      name = "N"\n      [params.experience.items.jobs.content]\n        a = 1\n' \
                    '[params.experience] items "C" jobs "N" content must be a single value'
+          # [params.theme] in each of the three wrong shapes. palettebool is here
+          # rather than in the WARNS block for the printf-garbage net above: the
+          # value reaches warnf, and %q on a non-string is exactly the defect
+          # this harness was built to catch — `palette = 3` announced that the
+          # requested palette was '\x03'.
+          run_case theme       bare  '  theme = "x"' \
+                   '[params.theme] must be a table'
+          run_case palettetype tail  '  [params.theme]\n    [params.theme.palette]\n      a = 1\n' \
+                   '[params.theme] palette must be a single value'
+          run_case palettebool tail  '  [params.theme]\n    palette = true\n' \
+                   'is not a palette this theme ships'
+          run_case paletteint  tail  '  [params.theme]\n    palette = 3\n' \
+                   'is not a palette this theme ships'
       # A green build only proves the templates ran, not what they emitted. Each
       # block below is one line of the README's config contract, asserted. The
       # blank-link check guards the direction none of them cover: an entry that

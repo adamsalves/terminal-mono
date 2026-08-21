@@ -42,10 +42,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   ships its own favicon. The neutral overlays stay literal — the white scanlines and the
   black drop shadows are not palette colors and read the same on every ground.
 
-  Under `lime` every one of these resolves to the value it had before, exactly. The one
-  exception is the border on code blocks, which was a hand-picked `#232a1c` and is now
-  derived from `--border` and `--border-soft` so it follows a palette: it lands within
-  2/255 on one channel of a 1px rule.
+  Under `lime` every one of these resolves to the value it had before, exactly, with two
+  exceptions — both derivations of a value that had been picked by hand, and both under
+  2/255 of where they were:
+
+  - the border on code blocks, `#232a1c`, now derived from `--border` and `--border-soft`:
+    +1 on red and +2 on blue, on a 1px rule;
+  - the post banner's gradient, `#11160d`, now `--surface-2` (`#11140d`): −2 on green.
+
+- Browser chrome follows the palette too: `<meta name="theme-color">` carries the
+  palette's ground, or the `[params.theme.colors]` override of it, so an amber site does
+  not get a lime address bar drawn around it — the same argument as the per-palette
+  favicon, one layer out.
+
+- `color-mix()` has a literal fallback where it reaches something structural. A
+  declaration carrying `color-mix()` parses fine and only becomes invalid at
+  computed-value time, which resolves to the property's *initial* value rather than to
+  an earlier declaration — so the usual two-declaration fallback does not work through a
+  custom property, and on a browser without the function (pre-2023) the sticky nav and
+  the open mobile menu both went transparent over the scrolling page, and the code-block
+  borders disappeared. The derived tokens now carry the values the theme shipped before
+  palettes existed and are upgraded inside `@supports`. Decorative mixes — glows, hover
+  tints, shadows — are deliberately left to degrade to nothing.
+
+- `[params.theme.colors]` keys accept the spelling you copied out of the stylesheet:
+  `accentDim`, `accentdim`, `accent-dim` and `accent_dim` are one key. TOML bare keys
+  do permit `-`, so `accent-dim` was reaching the theme intact and being reported as an
+  unknown key.
+
+- `[params.theme.colors]` rejects two values it used to emit. A non-string — `accent = true`,
+  `accent = 255` — is never a color, and emitted CSS that was valid to parse and invalid
+  to compute, so every `var(--accent)` on the page fell back to nothing with no warning.
+  A value with an unclosed parenthesis — `accent = "rgb("` — swallowed every declaration
+  after it in the block, so one typo silently deleted the *other* overrides. Both now
+  warn and are ignored.
+
+- The warning for an unknown palette no longer reports printf's error syntax. `palette = 3`
+  arrives as an integer and `%q` on an integer is a rune literal, so it announced that the
+  requested palette was `'\x03'`; `palette = true` reported `%!q(bool=true)`.
 
 ## [0.5.0] — 2026-08-21
 

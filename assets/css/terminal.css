@@ -19,15 +19,31 @@
       rgba(182,255,60,…) does not follow the accent — it follows lime,
       into every other palette, and the button glows, tag hovers and
       404 all stayed green while the page around them turned. They are
-      color-mix() against var(--accent) now. Neutral overlays are the
-      exception and stay literal: the white scanlines and the black
-      drop shadows are not palette colors, and they read the same on
-      every ground.
+      color-mix() against var(--accent) now. Three kinds of literal are
+      the exception and stay: the white scanlines and the black drop
+      shadows, which are neutral overlays that read the same on every
+      ground; the .dot traffic lights, which are macOS window buttons
+      and not the theme's colors at all; and the language dots on the
+      project cards, which belong to the language.
 
    2. A palette declares colors and nothing else. Anything derivable is
-      derived once here — see --nav-bg, --menu-bg and --border-code —
-      so adding a sixth palette stays a list of hex values with no way
-      to forget half of it.
+      derived once here — see the --nav-bg group — so adding a sixth
+      palette stays a list of hex values with no way to forget half of it.
+
+   3. A derived token that reaches a *structural* property needs a
+      literal base outside the @supports block below. color-mix() is
+      ~2023 (Chrome 111, Safari 16.2, Firefox 113); where it is missing,
+      a declaration carrying it parses fine and only then becomes invalid
+      at computed-value time, which resolves to the property's *initial*
+      value — never to an earlier declaration. So the usual two-declaration
+      fallback does not work through a custom property: `background:
+      rgba(...); background:var(--nav-bg)` still computes to transparent,
+      because the var() declaration won the cascade before the failure
+      happened. @supports is the only guard that does work, and without
+      it the sticky nav and the open mobile menu both go transparent over
+      the scrolling page. Purely decorative mixes — glows, hover tints,
+      shadows — are left unguarded on purpose: they degrade to nothing,
+      which is a fine thing for a glow to degrade to.
    ============================================================ */
 :root{
   /* ── lime — the default, and the shape every palette copies ── */
@@ -42,18 +58,43 @@
      and --danger, so they turn with the palette on their own. */
   --code-key:#7da6ff; --code-type:#56b6c2; --code-str:#d7b56d; --code-num:#d19a66;
 
-  /* Derived. Declared once at :root and resolved against whichever
-     palette won, because a var() in a custom property is substituted
-     from the element's own computed values — so these follow a palette
-     that never mentions them. */
-  --nav-bg:color-mix(in srgb, var(--bg) 72%, transparent);
-  --menu-bg:color-mix(in srgb, var(--bg) 96%, transparent);
-  --border-code:color-mix(in srgb, var(--border) 55%, var(--border-soft));
+  /* Derived — see rule 3. These are the literal bases, and they are the
+     values this theme shipped before palettes existed, so a browser
+     without color-mix() renders a lime site exactly as it always did and
+     every other palette a hair off its own ground, at sizes where a hair
+     is a 1px rule or a 72%-opaque backdrop. The @supports block below
+     replaces all five wherever the function exists. */
+  --nav-bg:rgba(10,12,10,.72);
+  --menu-bg:rgba(10,12,10,.96);
+  --border-code:#232a1c;
+  /* These two are decorative, but they share a declaration with something
+     that is not: the wash is one layer of the body's background-image and
+     the dots are the whole of the card's, so letting either fail takes the
+     dot grid or the panel down with it. Their bases are neutral rather
+     than lime — a leftover green haze reads worse on a violet ground than
+     no haze does. */
+  --body-wash:transparent;
+  --card-dots:rgba(255,255,255,.06);
 
   /* Not colors, and not part of a palette. */
   --mono:'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --max:1080px;
   --nav-h:64px;
+}
+
+/* The derived tokens, resolved against whichever palette won. A var() inside
+   a custom property is substituted from the element's own computed values,
+   and :root and :root[data-palette="…"] are the same element — so these
+   follow a palette that never mentions them, and follow a
+   [params.theme.colors] override of --bg or --border just as readily. */
+@supports (color: color-mix(in srgb, red, blue)){
+  :root{
+    --nav-bg:color-mix(in srgb, var(--bg) 72%, transparent);
+    --menu-bg:color-mix(in srgb, var(--bg) 96%, transparent);
+    --border-code:color-mix(in srgb, var(--border) 55%, var(--border-soft));
+    --body-wash:color-mix(in srgb, var(--accent) 5%, transparent);
+    --card-dots:color-mix(in srgb, var(--accent) 10%, transparent);
+  }
 }
 
 /* amber — the other phosphor a CRT was ever made in. The ground goes
@@ -131,7 +172,7 @@ body{
   font-family:var(--mono); font-size:16px; line-height:1.6;
   -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
   background-image:
-    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--accent) 5%, transparent), transparent 38%),
+    radial-gradient(circle at 50% 0%, var(--body-wash), transparent 38%),
     radial-gradient(circle at 1px 1px, rgba(255,255,255,.018) 1px, transparent 0);
   background-size:auto, 30px 30px; background-attachment:fixed, scroll;
 }
@@ -311,7 +352,7 @@ a{color:inherit}
 .back-link:hover,.back-link:focus-visible{color:var(--accent)}
 .featured{margin:24px 0 28px; border:1px solid var(--border); border-radius:12px; overflow:hidden;
   background:linear-gradient(135deg,var(--surface-2),var(--surface-3));
-  background-image:radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--accent) 10%, transparent) 1px, transparent 0); background-size:22px 22px;
+  background-image:radial-gradient(circle at 1px 1px, var(--card-dots) 1px, transparent 0); background-size:22px 22px;
   height:150px; display:flex; align-items:center; justify-content:center; position:relative}
 .featured.has-image{background-size:cover; background-position:center}
 .featured .path{font-size:15px; color:var(--accent); letter-spacing:.04em}

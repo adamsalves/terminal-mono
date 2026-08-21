@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-{{- $theme := partialCached "theme-palette.html" . site.Language.Lang -}}
+{{- $theme := partialCached "theme-palette.html" (dict) site.Language.Lang -}}
 <html lang="{{ or site.Language.Locale "en" }}" dir="{{ or site.Language.Direction "ltr" }}" data-palette="{{ $theme.palette }}">
 <head>
   {{ partial "head.html" . }}

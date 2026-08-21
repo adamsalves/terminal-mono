@@ -113,7 +113,8 @@ summaryLength = 30
   #  keys are bg, surface, surface2, surface3, border, borderSoft,
   #  borderFaint, text, soft, prose, muted, muted2, dim, dim2,
   #  accent, accentDim, danger, and codeKey/codeType/codeStr/codeNum
-  #  for the syntax highlighting.
+  #  for the syntax highlighting. Case and punctuation don't matter:
+  #  accentDim, accentdim and accent-dim are the same key.
   #
   #  Commented out so the demo ships in lime. An unknown palette
   #  name, or a key not on that list, warns and is ignored — it

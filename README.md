@@ -79,7 +79,7 @@ terminal-mono/
       hero.html  projects.html  about.html  experience.html  contact.html
       post-card.html  pager.html
   i18n/                      # en.toml (default), pt.toml
-  static/favicon.svg
+  static/                    # favicon.svg + one per palette (amber, cyberpunk, ice, mono)
   archetypes/                # default.md, blogs.md
   exampleSite/               # bilingual demo site + commented config
 ```
@@ -97,6 +97,7 @@ terminal-mono/
 | Contact | `params.contact.title/content/btnName/btnLink`; `params.contact.enable` (optional) |
 | Footer | `params.footer.copyright`, `params.footer.socialNetworks.github/linkedin` |
 | Blog | `content/blogs/*.md` → `title`, `date`, `tags`, `description`, `image` (optional), `toc` |
+| Colors | `params.theme.palette` (optional, default `lime`) and `params.theme.colors.*` (optional) — see [Colors](#colors) |
 
 ### Latest posts in the hero terminal
 
@@ -376,6 +377,11 @@ light/dark toggle: the theme is [dark-only by design](#notes), and all five are 
 
 An unknown name warns and falls back to `lime` rather than failing the build.
 
+Palette colors are mixed with [`color-mix()`](https://caniuse.com/mdn-css_types_color_color-mix)
+(Chrome 111, Safari 16.2, Firefox 113 — all 2023). Older browsers keep the nav, the mobile
+menu and the code-block borders through a literal fallback, and lose only decorative
+glows and hover tints.
+
 ### Overriding individual colors
 
 `[params.theme.colors]` is applied on top of the palette, so you can start from one and
@@ -390,7 +396,8 @@ change only what you want:
     accentDim = "#ff2fd0"
 ```
 
-Any of these keys, each mapping to the CSS custom property of the same name:
+Any of these keys, each mapping to the CSS custom property of the same name in
+kebab-case (`surface2` → `--surface-2`, `accentDim` → `--accent-dim`):
 
 | | |
 |---|---|
@@ -400,9 +407,14 @@ Any of these keys, each mapping to the CSS custom property of the same name:
 | **Accent** | `accent` · `accentDim` · `danger` |
 | **Code** | `codeKey` · `codeType` · `codeStr` · `codeNum` |
 
-Values are hex codes or CSS color functions (`oklch(70% 0.2 150)`, `rgb(0 0 0 / 40%)`).
-A key that isn't on this list, or a value that isn't a color, is ignored with a warning
-naming it — a typo that silently did nothing would look exactly like a broken feature.
+Case and punctuation are yours: `accentDim`, `accentdim`, `accent-dim` and `accent_dim`
+are the same key, so the spelling you copied out of the stylesheet works too.
+
+Values are hex codes or CSS color functions (`oklch(70% 0.2 150)`, `rgb(0 0 0 / 40%)`),
+written as quoted strings. A key that isn't on this list, or a value that isn't a color —
+a bare number, an unquoted `true`, a function with its parenthesis left open — is ignored
+with a warning naming it. A typo that silently did nothing would look exactly like a
+broken feature.
 
 The rest of the theme follows the palette on its own: button glows, the reading-progress
 bar, the hero typewriter, the 404, and the favicon in the browser tab.
@@ -429,7 +441,11 @@ Put it back without giving up the rest of the palette:
 
 ## Customization
 
-- **Fonts:** the `--mono` variable in the `:root` of `assets/css/terminal.css`.
+- **Fonts:** the `--mono` variable. Set it from your own
+  `partials/extend-head.html` (`<style>:root:root{--mono:'IBM Plex Mono',monospace}</style>`)
+  rather than by editing `assets/css/terminal.css` — a theme pulled in as a Hugo
+  Module or a submodule is not yours to edit. `:root:root` for the same reason
+  `[params.theme.colors]` uses it: a plain `:root` loses to a palette block.
 - **Global toggles:** `params.showScanlines` (CRT overlay) and `params.readingProgress`.
 - **`partials/extend-head.html`** and **`partials/extend-footer.html`** (at the project
   level) are injected into `<head>` and before `</body>` — handy for analytics or
