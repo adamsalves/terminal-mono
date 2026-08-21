@@ -42,6 +42,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   an `enable` key does lose `cat stack.txt`: it was already not rendering the
   skills block, and the terminal now agrees with the page instead of announcing
   a list the reader cannot find.
+- Docs: `RELEASING.md` now says what `0.x` does with a breaking change. The
+  SemVer table had no row for it, and the `major` row's example read `0.3.0` →
+  `1.0.0` — which taken literally made v0.4.0, breaking by the table's own
+  definition, a `1.0.0`. It was cut as `0.4.0` deliberately, per
+  [SemVer §4](https://semver.org/#spec-item-4): while the theme is `0.x` a
+  breaking change goes in the minor, and `1.0.0` is reserved for the deliberate
+  statement that the contracts are stable. The `major` row now counts from
+  `1.0.0` so it stops implying otherwise. Wording only — the script chooses
+  nothing, the number is still yours to pass.
 
 ## [0.4.0] — 2026-08-20
 
