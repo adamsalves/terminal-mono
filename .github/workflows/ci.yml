@@ -806,6 +806,11 @@ jobs:
           # template does this arithmetic in Go, this does it again in Python, and
           # an off-by-a-command shows up as a mismatch rather than as dead space
           # under the hero that no test can see.
+          # Both sides count logical lines, which is the number the reader gets
+          # before terminal.js runs and without it. The script measures the box
+          # and adds what wrapping costs; nothing here renders at a width, so a
+          # wrap is invisible to this check by construction — that half is
+          # covered in scripts/test_terminal_js.js.
           def lines(path, tag, posts):
               want = 4
               if data(tag, 'data-stack'):

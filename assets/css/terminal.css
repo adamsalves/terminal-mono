@@ -102,7 +102,13 @@ a{color:inherit}
    formula can produce: every command with nothing listed is 10 lines, and the
    exampleSite is 15. Sitting between them is the least-wrong guess available
    when there is nothing to count.
-   Wrapping is not predictable, so long strings in a narrow column still grow. */
+   The count is logical lines, and this body wraps, so terminal.js remeasures it
+   against the box's real width and writes the same variable back before it types
+   anything — five of the exampleSite's fifteen lines take two rows on a phone.
+   Anything that changes the wrapping here — the padding below, the font-size, the
+   family behind --mono — changes that measurement too, since the script reads them
+   off the live box rather than being told. What the template emits is the floor:
+   the value a reader gets before the script runs, or without it. */
 .term__body{margin:0; padding:22px; font-family:var(--mono); font-size:14px; line-height:1.85; white-space:pre-wrap; word-break:break-word; min-height:calc(var(--hero-lines,12) * 1.85em + 44px)}
 .term__body a{text-decoration:none; border-bottom:1px solid transparent; transition:border-color .18s}
 .term__body a:hover,.term__body a:focus-visible{border-bottom-color:currentColor}
