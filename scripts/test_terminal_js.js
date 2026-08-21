@@ -40,16 +40,19 @@ function makeNode(tag) {
     appendChild(c) { this.children.push(c); return c; },
     removeChild(c) { this.children = this.children.filter((n) => n !== c); },
     insertAdjacentHTML(pos, html) { this._html += html; this.appends++; },
-    /* The script measures with two nested probes: a block that takes the body's
-     * content width, and a run of characters inside it. The block is the one
-     * carrying a child; the ruler is the one carrying text. */
+    /* The script measures with two nested probes and marks each one with
+     * data-probe, so this reads the role instead of inferring it from the shape
+     * of the tree: a stub that guessed would keep answering confidently — and
+     * wrongly — if the probes were ever restructured. */
     getBoundingClientRect() {
-      return { width: this.children.length ? metrics.width : this._html.length * metrics.char };
+      if (this.attrs['data-probe'] === 'box') return { width: metrics.width };
+      return { width: this._html.length * metrics.char };
     },
   };
 }
 
-function run(dataset, { reduceMotion = false, runTimers = true, width = 0, char = 0 } = {}) {
+function run(dataset, { reduceMotion = false, runTimers = true, width = 0, char = 0,
+                       resizeObserver = true } = {}) {
   const pre = makeNode('pre');
   pre.dataset = dataset;
   pre.clientWidth = width;
@@ -57,11 +60,27 @@ function run(dataset, { reduceMotion = false, runTimers = true, width = 0, char 
 
   const queue = [];
   const listeners = {};
+  // ResizeObserver is what the script reaches for first, so it is what the tests
+  // drive; `resizeObserver: false` takes it away to exercise the window fallback.
+  // The real one calls back once on observe, and this does too.
+  const observers = [];
+  if (resizeObserver) {
+    global.ResizeObserver = function (cb) {
+      this.observe = () => { observers.push(cb); cb(); };
+    };
+  } else {
+    delete global.ResizeObserver;
+  }
+  // font-display:swap: JetBrains Mono can land after the first reservation. A
+  // thenable rather than a real promise, so a test fires it where it can see the
+  // result instead of on a later microtask.
+  const fontCbs = [];
   global.document = {
     getElementById: (id) => (id === 'hero-term' ? pre : null),
     documentElement: { scrollHeight: 0 },
     createElement: makeNode,
     addEventListener: () => {},
+    fonts: { ready: { then: (fn) => { fontCbs.push(fn); } } },
   };
   global.window = {
     matchMedia: () => ({ matches: reduceMotion }),
@@ -95,7 +114,14 @@ function run(dataset, { reduceMotion = false, runTimers = true, width = 0, char 
     resize(w, ch = char) {
       pre.clientWidth = w;
       metrics = { width: w, char: ch };
+      observers.forEach((fn) => fn());
       (listeners.resize || []).forEach((fn) => fn());
+      return pre.style.props['--hero-lines'];
+    },
+    // The web font arrives: same box, a different advance.
+    fontsReady(ch) {
+      metrics = { width: metrics.width, char: ch };
+      fontCbs.forEach((fn) => fn());
       return pre.style.props['--hero-lines'];
     },
   };
@@ -294,6 +320,60 @@ check('a resize that leaves the width alone does not re-measure', () => {
   // count immediately if the guard were not there.
   const r = run(SITE, PHONE);
   return r.lines === '20' && r.resize(290, 14.4) === '20';
+});
+
+check('a full-width glyph costs two cells, not one', () => {
+  // The ruler measures a digit, and a CJK glyph is twice that by design — so a
+  // count of code units models a Japanese hero at half its real width and comes
+  // out short, which is this bug reintroduced by its own fix. 8 + 12 glyphs
+  // around an em dash is 43 cells against 40 columns, so the identity line takes
+  // two rows and the terminal is five. Counted in code units it is 23 cells, the
+  // line fits, and the script hands back the template's own 4 — nothing reserved.
+  const jp = { user: 'a@b', name: '東京都渋谷区在住', role: 'フロントエンド開発者です',
+    loc: '', stack: '', projects: '', posts: '[]' };
+  return run(jp, PHONE).lines === '5';
+});
+
+check('the cursor is given a place on the line it comes to rest on', () => {
+  // The cursor is an inline-block 9px wide with a 2px margin and belongs to no
+  // segment, so nothing in the text accounts for it. Here the closing prompt
+  // fills the row exactly: with the cursor it wraps, without it the last line
+  // costs one row and the terminal is 5 rather than 6.
+  const long = { user: 'a'.repeat(16), name: 'N', role: 'R', loc: '', stack: '',
+    projects: '', posts: '[]' };
+  return run(long, { width: 200, char: 10 }).lines === '6';
+});
+
+check('a box that measured nothing is not recorded as measured', () => {
+  // The hero can be laid out later than this runs — a closed <details>, a tab
+  // that is not showing. Marking the width done before anything was measured is
+  // what makes the re-measure at that same width the one that gets skipped, and
+  // the reader keeps the template's count forever.
+  const r = run(SITE, { width: 290, char: 0 });
+  return r.lines === undefined && r.resize(290, 7.2) === '20';
+});
+
+check('the web font arriving re-measures at the same width', () => {
+  // font-display:swap: the first reservation is against the fallback's advance,
+  // and JetBrains Mono is not the same width. The width guard would refuse this
+  // one, so it is forced. Twice the advance halves the columns: 20 rows, then 31.
+  const r = run(SITE, PHONE);
+  return r.lines === '20' && r.fontsReady(14.4) === '31';
+});
+
+check('reduced motion reserves the height it prints in one go', () => {
+  // The whole script is written out at once, so nothing grows — but the box is
+  // still a min-height in a centred grid, and the reservation runs before the
+  // early return that renders it.
+  return run(SITE, { ...PHONE, reduceMotion: true }).lines === '20';
+});
+
+check('without ResizeObserver, the window resize is still the fallback', () => {
+  // ResizeObserver watches the box, which is the only one of the two that sees a
+  // hero given a layout after this ran. Where it is missing, a rotate has to keep
+  // working through the listener this shipped with.
+  const r = run(SITE, { ...PHONE, resizeObserver: false });
+  return r.lines === '20' && r.resize(498, 8.4) === '15';
 });
 
 let failed = 0;

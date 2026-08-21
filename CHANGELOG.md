@@ -29,11 +29,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   reservation exists to prevent, on the viewport where it is scored hardest. Only
   the browser knows the box's width and the font's advance, so `terminal.js` now
   measures both and writes the corrected count back before the first character is
-  typed — and again when a rotate changes the width or JetBrains Mono arrives
-  under `font-display:swap`. What the template emits is unchanged and becomes the
-  floor: the number a reader gets before the script runs, or without it. Not a
-  regression from the entry below: v0.4.0 reserved the identical height by a
-  different route and carried the same `pre-wrap`, so this is older than both.
+  typed — and again whenever the box changes size or JetBrains Mono arrives under
+  `font-display:swap`. Width is counted in terminal cells rather than characters,
+  so a full-width glyph costs the two it really takes: a Japanese subtitle would
+  otherwise model at half its width and the box would come out short again, which
+  is this bug wearing the fix as a disguise. The blinking cursor is counted too —
+  it belongs to no line of the script, and the closing prompt is where it comes to
+  rest. What the template emits is unchanged and becomes the floor: the number a
+  reader gets before the script runs, or without it. Not a regression from the
+  entry below: v0.4.0 reserved the identical height by a different route and
+  carried the same `pre-wrap`, so this is older than both.
 - Hero terminal: the reserved height follows the commands that actually render.
   It was a constant `12` lines plus one per post, which was right only while all
   three commands always rendered; drop one and the box reserved three lines it
