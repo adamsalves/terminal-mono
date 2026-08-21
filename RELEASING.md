@@ -43,11 +43,23 @@ the theme:
 | bump | when |
 |---|---|
 | **patch** — `0.2.2` → `0.2.3` | bug fixes, CSS corrections, internal tooling, docs |
-| **minor** — `0.2.3` → `0.3.0` | new params, new partials, new features — existing sites keep working |
-| **major** — `0.3.0` → `1.0.0` | a consumer must change their config or templates to upgrade |
+| **minor** — `0.2.3` → `0.3.0` | new params, new partials, new features — and, while the theme is `0.x`, breaking changes too |
+| **major** — `1.0.0` → `2.0.0` | a consumer must change their config or templates to upgrade |
 
 Renaming or removing a `param`, changing a partial's contract, or dropping a
 CSS class a consumer might override is breaking, even if the theme still builds.
+
+While the theme is `0.x`, a breaking change goes in the **minor** — `0.3.0` →
+`0.4.0`, not `1.0.0`. [SemVer §4](https://semver.org/#spec-item-4) puts major
+version zero outside the stability guarantee: the public API is not yet
+something a major bump can be said to break. The `Changed` entry in the
+changelog carries the migration note instead — what breaks, and what to write
+to keep the old behaviour.
+
+`1.0.0` is therefore a decision rather than an arithmetic consequence. It says
+the config and partial contracts are stable from that point on — no single
+breaking change triggers it, which is why the **major** row above counts from
+`1.0.0` and not from `0.x`.
 
 ## What the command does
 
