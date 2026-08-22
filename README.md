@@ -65,6 +65,7 @@ Copy the folder into `themes/terminal-mono/` and set `theme = "terminal-mono"` i
 ```
 terminal-mono/
   theme.toml                 # theme metadata
+  hugo.toml                  # theme config: the module mounts (see Languages)
   assets/
     css/terminal.css         # styles (pipeline: minify + fingerprint)
     js/terminal.js           # menu, progress bar, typewriter
@@ -370,14 +371,22 @@ WARN  terminal-mono: no UI strings for language "es" — the interface is fallin
 English. Copy the theme's i18n/en.toml to i18n/es.toml in your site and translate it.
 ```
 
-A partially translated file gets the other half of that message — how many strings are
-missing, and which ones.
+That covers every language, not just the default one. The count comes from reading the
+translation files rather than from asking Hugo for each value, because a value cannot
+tell you where it came from: in a language Hugo has already substituted the default
+language's string for, `i18n "about"` returns the English, so `[languages.es]` with no
+`i18n/es.toml` — step 3 skipped, exactly the site this section tells you how to build —
+used to warn about nothing at all.
 
-One edge worth knowing: if your site ships its own `i18n/en.toml`, that file *replaces*
-the theme's as the fallback source rather than merging with it — Hugo's filesystem
-returns the first match, which is not how the translation lookup itself behaves. Override
-three English strings and the fallback table has three keys; the warning still names
-everything that is missing.
+A partially translated file gets the other half of that message — how many strings are
+missing, and which ones, named up to twelve at a time. A key written as `other = ""`
+counts as missing: a blank label is the failure the warning exists to make visible.
+
+Your own `i18n/en.toml` is merged over the theme's, key by key, the same way the
+translation lookup itself merges — so a site that renames `projects` to `work` in English
+gets `work` in the languages falling back to English too, and the strings it did not
+override keep coming from the theme. If that file cannot be parsed, the build says so and
+keeps the theme's English rather than failing.
 
 > Single-language sites work too: keep one `[languages.*]`, or none — the switcher hides
 > itself and the lone table drives every string.

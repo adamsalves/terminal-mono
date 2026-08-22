@@ -19,11 +19,14 @@
              serve every language. The identifier itself is the last resort,
              so a link is never blank.
 
-             try() is not optional here: with --printI18nWarnings and
-             --panicOnWarning together (what ci.yml runs the exampleSite
-             under) a missing key makes i18n return an error rather than an
-             empty string, so a plain `i18n .id | default .name` would abort
-             the build at the lookup instead of falling back. */ -}}
+             Through t.html, not a bare `i18n`, so the theme's English is the
+             floor here too: an untranslated language gets the English label,
+             not the identifier that happens to spell it. t.html also carries
+             the try() the lookup needs — with --printI18nWarnings and
+             --panicOnWarning together (what ci.yml runs the exampleSite under)
+             a missing key makes i18n return an error rather than an empty
+             string, and a menu identifier the theme has no string for is
+             exactly that case. */ -}}
       {{- /* A pageRef entry gets .Name filled in from the target page's
              title, so .Name alone cannot tell "the config said this" from
              "Hugo derived this". Treat it as explicit only when it differs
@@ -35,9 +38,7 @@
       {{- end -}}
       {{- $label := $explicit -}}
       {{- if and (not $label) $id -}}
-        {{- with try (i18n $id) -}}
-          {{- if not .Err -}}{{- $label = .Value -}}{{- end -}}
-        {{- end -}}
+        {{- $label = partial "t.html" $id -}}
       {{- end -}}
       {{- if not $label -}}{{- $label = .name -}}{{- end -}}
       {{- if not $label -}}{{- $label = $id -}}{{- end -}}

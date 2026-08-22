@@ -4,10 +4,11 @@
        not the theme's i18n/en.toml. A site whose default language is `es` and
        which had not written i18n/es.toml therefore rendered every label as the
        empty string — `// ` for the hero intro, `[  ]` for the contact button,
-       nav links with no text — on a green build with no warning. The theme's
-       English table is the last resort here instead, so an untranslated language
-       renders in English: wrong language, but a page you can read and a state
-       you can see. i18n-check.html says which strings are in that state.
+       nav links with no text — on a green build with no warning. An English
+       table is the last resort here instead — i18n-en.html: the theme's own
+       strings, with the site's English merged over them — so an untranslated
+       language renders in English: wrong language, but a page you can read and
+       a state you can see. i18n-check.html says which strings are in that state.
 
        Context: the key as a string,
 
@@ -25,28 +26,66 @@
        Nothing here may print (see params-scalar.html). */ -}}
 {{- $key := . -}}
 {{- $ctx := false -}}
+{{- /* Presence, not truth: a bare count of 0 is a valid context and `if $ctx`
+       would drop it, calling i18n with no data and rendering the wrong plural. */ -}}
+{{- $hasCtx := false -}}
 {{- if reflect.IsMap . -}}
   {{- $key = .key -}}
-  {{- $ctx = .ctx -}}
+  {{- if isset . "ctx" -}}
+    {{- $hasCtx = true -}}
+    {{- $ctx = .ctx -}}
+  {{- end -}}
 {{- end -}}
 {{- $s := "" -}}
-{{- if $ctx -}}
-  {{- $s = i18n $key $ctx -}}
+{{- /* try() is not optional here: with --printI18nWarnings and --panicOnWarning
+       together (what ci.yml runs the exampleSite under) a missing key makes i18n
+       return an error rather than an empty string, so a plain `i18n $key` would
+       abort the build at the lookup — inside the very partial whose job is to
+       keep that from happening. */ -}}
+{{- if $hasCtx -}}
+  {{- with try (i18n $key $ctx) -}}
+    {{- if not .Err -}}{{- $s = .Value -}}{{- end -}}
+  {{- end -}}
 {{- else -}}
-  {{- $s = i18n $key -}}
+  {{- with try (i18n $key) -}}
+    {{- if not .Err -}}{{- $s = .Value -}}{{- end -}}
+  {{- end -}}
 {{- end -}}
 {{- if not $s -}}
   {{- with index (partialCached "i18n-en.html" "en") $key -}}
-    {{- $s = .other -}}
+    {{- $entry := . -}}
+    {{- if reflect.IsMap $entry -}}
+      {{- /* The table is English, and English has two plural forms. Pick between
+             them the way Hugo would, so a `one` added to i18n/en.toml is used
+             here too rather than silently ignored. Compared as text because the
+             count arrives as int, int64 or float depending on the caller. */ -}}
+      {{- $form := "other" -}}
+      {{- if $hasCtx -}}
+        {{- $count := $ctx -}}
+        {{- if reflect.IsMap $ctx -}}{{- $count = index $ctx "count" -}}{{- end -}}
+        {{- if and (isset $entry "one") (eq (printf "%v" $count) "1") -}}
+          {{- $form = "one" -}}
+        {{- end -}}
+      {{- end -}}
+      {{- with index $entry $form -}}{{- $s = . -}}{{- end -}}
+    {{- else -}}
+      {{- /* `key = "value"`, the flat spelling Hugo also accepts. */ -}}
+      {{- $s = $entry -}}
+    {{- end -}}
     {{- /* The English string is data, not a template — Hugo renders a translation
            as one, but there is no way to hand a bare string back to the template
            engine from here. `{{ .count }}` and friends are substituted literally
-           instead, which covers the interpolation the strings actually use. A
-           replacement is a number or a name, never a `$1`, so replaceRE's own
-           group syntax has nothing to bite on. */ -}}
+           instead, which covers the interpolation the strings actually use.
+           replaceRE expands `$1` and `$name` in its replacement, so a value that
+           contains a `$` is escaped first; and the pattern is built from the key,
+           so keys that are not plain identifiers — which `{{ .x }}` could not
+           name anyway — are skipped rather than compiled into a regexp. */ -}}
     {{- if reflect.IsMap $ctx -}}
       {{- range $k, $v := $ctx -}}
-        {{- $s = replaceRE (printf `\{\{\s*\.%s\s*\}\}` $k) (printf "%v" $v) $s -}}
+        {{- if findRE `^\w+$` $k -}}
+          {{- $rep := replace (printf "%v" $v) "$" "$$" -}}
+          {{- $s = replaceRE (printf `\{\{\s*\.%s\s*\}\}` $k) $rep $s -}}
+        {{- end -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}

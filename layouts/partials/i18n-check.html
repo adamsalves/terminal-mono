@@ -6,22 +6,56 @@
        the rule sections.html set and the params-* guards enforce: a build never
        fails on configuration, and configuration never fails in silence.
 
-       The count comes from calling `i18n` on every English key rather than from
-       reading i18n/<lang>.toml, because that is the only thing that sees what
-       Hugo actually resolved: the site's file merged over the theme's, key by
-       key. Reading the file would miss the merge in both directions — a site
-       that translates ten of the theme's Portuguese strings would be reported as
-       having only ten.
+       The count comes from the translation *files*, not from calling i18n on
+       every key, because the resolved value cannot tell a translation from a
+       fallback: Hugo substitutes the site's defaultContentLanguage for a missing
+       key, so `i18n "about"` in an untranslated `es` returns the English string,
+       not "". Asking the value therefore saw nothing wrong with any language but
+       the default one — a site with `[languages.es]` and no i18n/es.toml, which
+       is the setup the README walks you through, warned about nothing at all.
+
+       Both halves of Hugo's merge are covered. The theme's own tables come from
+       data/ (see i18n-en.html and the theme's hugo.toml); the site's come from
+       the union filesystem, which returns the site's file when there is one. A
+       site that translates ten of the theme's 49 Portuguese strings is reported
+       as missing none of them, because the theme's own pt table is read here too.
 
        Called from head.html through partialCached keyed on the language, so it
-       is 49 lookups per language per build, not per page. Prints nothing. */ -}}
+       is one pass per language per build, not per page. Prints nothing. */ -}}
 {{- $lang := site.Language.Lang -}}
 {{- $en := partialCached "i18n-en.html" "en" -}}
+{{- $have := dict -}}
+{{- with index hugo.Data "terminal_mono_i18n" $lang -}}
+  {{- if reflect.IsMap . -}}{{- $have = merge $have . -}}{{- end -}}
+{{- end -}}
+{{- /* Hugo accepts any of these for a translation table, so look for all of
+       them. try() because the file is the site's to write and a malformed one
+       must warn, not abort the build. */ -}}
+{{- range $ext := slice "toml" "yaml" "yml" "json" -}}
+  {{- $path := printf "i18n/%s.%s" $lang $ext -}}
+  {{- if os.FileExists $path -}}
+    {{- with try (transform.Unmarshal (os.ReadFile $path)) -}}
+      {{- if .Err -}}
+        {{- warnf "terminal-mono: could not parse %s (%s), so this build cannot say which UI strings it translates. Anything missing still falls back to English." $path .Err -}}
+      {{- else if reflect.IsMap .Value -}}
+        {{- $have = merge $have .Value -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
 {{- $missing := slice -}}
 {{- range $key, $_ := $en -}}
-  {{- if not (i18n $key) -}}
-    {{- $missing = $missing | append $key -}}
+  {{- $answered := false -}}
+  {{- with index $have $key -}}
+    {{- if reflect.IsMap . -}}
+      {{- /* A key whose every plural form is "" is a blank label on the page,
+             which is the state this whole path exists to make visible. */ -}}
+      {{- range $text := . -}}{{- if $text -}}{{- $answered = true -}}{{- end -}}{{- end -}}
+    {{- else -}}
+      {{- $answered = true -}}
+    {{- end -}}
   {{- end -}}
+  {{- if not $answered -}}{{- $missing = $missing | append $key -}}{{- end -}}
 {{- end -}}
 {{- with $missing -}}
   {{- if eq (len .) (len $en) -}}

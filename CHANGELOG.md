@@ -91,23 +91,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
   Every UI string now goes through `partials/t.html`, which asks Hugo first and the
   theme's own English table second, so the floor is a readable page in the wrong
-  language rather than an unreadable one in the right language. The English table is
-  read from `i18n/en.toml` through Hugo's union filesystem — the theme's real
-  translation file, not a copy of it, whether the theme is vendored, a submodule or a
-  Hugo Module. One caveat, documented in the README: a site that ships its own
-  `i18n/en.toml` shadows the theme's as the fallback source, because that filesystem
-  returns the first match instead of merging the way the translation lookup does.
+  language rather than an unreadable one in the right language. That table is the
+  theme's real `i18n/en.toml`, not a copy of it, whether the theme is vendored, a
+  submodule or a Hugo Module — reached through a second mount the theme's own
+  `hugo.toml` declares at `data/terminal_mono_i18n`, which is what keeps a site's own
+  `i18n/en.toml` from taking its place: `os.ReadFile` returns the first match on Hugo's
+  union filesystem instead of merging, so overriding three English strings used to leave
+  a three-key fallback behind and blank the other 46 labels. Your English is merged over
+  the theme's now, key by key, the way the translation lookup itself merges. Hugo parses
+  that mount, so no template has to guess a file format either — one comma in a comment
+  used to make `transform.Unmarshal` read the file as CSV and abort the build.
 
   `partials/i18n-check.html` warns once per language, naming the file to create when a
-  language has no strings at all and listing the missing keys when it has some. The
-  count comes from calling `i18n` on every English key rather than from reading the
-  language's file, so it reports what Hugo actually resolved — site merged over theme —
-  and not what one file happens to contain.
+  language has no strings at all and listing the missing keys when it has some, with
+  `other = ""` counting as missing. The count comes from the translation files — the
+  theme's through that same mount, the site's through the union filesystem, unioned —
+  because a resolved value cannot say where it came from: in any language but the
+  default one Hugo has already substituted the default language's string, so asking
+  `i18n` for it saw a fully translated site every time. `[languages.es]` alongside a
+  translated `en`, the multilingual setup the README walks you through, warned about
+  nothing at all.
+
+  Every lookup is wrapped in `try()`. With `--printI18nWarnings` and `--panicOnWarning`
+  together — what CI runs the exampleSite under — a missing key makes `i18n` return an
+  error rather than an empty string, which would otherwise abort the build inside the
+  partial that exists to prevent exactly that. Nav labels go through `t.html` too, so a
+  menu identifier the theme has no string for falls back to the theme's English rather
+  than to the identifier.
 
   Strings that interpolate a value keep working through the fallback: `{{ .count }}` and
   friends are substituted literally, which is what the one such string in the theme
-  (`posts_tagged`) needs. Nothing in the rendered output changed for a site that has its
-  translations — the exampleSite builds byte-identical to v0.5.0.
+  (`posts_tagged`) needs — a `$` in the value survives, and a `one` form added to
+  `i18n/en.toml` is used when the count is 1 instead of being ignored for `other`.
+  Nothing in the rendered output changed for a site that has its translations — the
+  exampleSite builds byte-identical to v0.5.0.
 
 - README: the language section says which half of adding a language is configuration
   (all of it — switcher, `hreflang`, `og:locale:alternate`, menu and dates follow from

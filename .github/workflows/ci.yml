@@ -101,13 +101,13 @@ jobs:
       # defaultContentLanguage, not the theme's i18n/en.toml — so a site whose
       # default language the theme ships no strings for rendered every label as
       # the empty string, on a green build, until t.html put English underneath
-      # (see #32). --panicOnWarning is deliberately absent: this fixture is
-      # supposed to warn, and the warning is half of what is asserted.
+      # (see #32). --panicOnWarning is deliberately absent from the fixtures that
+      # are meant to warn: the warning is half of what they assert.
       - name: Assert an untranslated language falls back to English
         run: |
           set -eo pipefail
           d=/tmp/untranslated
-          rm -rf "$d"; mkdir -p "$d/themes"
+          rm -rf "$d"; mkdir -p "$d/themes" "$d/content/blogs"
           ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
           cat > "$d/hugo.toml" <<'TOML'
           baseURL = "https://example.com/"
@@ -117,11 +117,20 @@ jobs:
           [languages.es]
             locale = "es-ES"
             weight = 1
-            [languages.es.params.hero]
-              title = "Hola"
             [languages.es.params.contact]
               btnLink = "mailto:hola@example.com"
           TOML
+          # A tagged post, because the one string that takes a count and
+          # interpolates it is the only caller that hands t.html a dict, and
+          # a site with no content never renders it.
+          cat > "$d/content/blogs/uno.md" <<'MD'
+          +++
+          title = "Uno"
+          date = 2026-01-01
+          tags = ["hugo"]
+          +++
+          Contenido.
+          MD
           hugo --source "$d" --gc --minify 2>&1 | tee "$d/build.log"
           if ! grep -q 'terminal-mono: no UI strings for language "es"' "$d/build.log"; then
             echo 'untranslated: the build said nothing about the missing strings'
@@ -137,6 +146,189 @@ jobs:
               exit 1
             fi
           done
+          if ! grep -qF '1 post(s) tagged' "$d/public/tags/hugo/index.html"; then
+            echo 'untranslated: the counted string did not interpolate its count'
+            grep -o '<p>[^<]*' "$d/public/tags/hugo/index.html" | head -2
+            exit 1
+          fi
+      # The fixture above only ever exercised the *default* language, and that
+      # is the one case Hugo cannot paper over. For any other language it
+      # substitutes the default language's string, so asking `i18n` for the
+      # value — which is what the check used to do — could never see a second
+      # language as untranslated: [languages.es] with no i18n/es.toml, the setup
+      # the README walks you through, warned about nothing at all.
+      - name: Assert an untranslated second language is reported
+        run: |
+          set -eo pipefail
+          d=/tmp/second-language
+          rm -rf "$d"; mkdir -p "$d/themes"
+          ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          cat > "$d/hugo.toml" <<'TOML'
+          baseURL = "https://example.com/"
+          title = "Two Languages"
+          theme = "terminal-mono"
+          defaultContentLanguage = "en"
+          [languages.en]
+            weight = 1
+          [languages.es]
+            weight = 2
+          TOML
+          hugo --source "$d" --gc --minify 2>&1 | tee "$d/build.log"
+          if ! grep -q 'terminal-mono: no UI strings for language "es"' "$d/build.log"; then
+            echo 'second-language: es has no strings file and the build did not say so'
+            exit 1
+          fi
+          if grep -q 'for language "en"' "$d/build.log"; then
+            echo 'second-language: en is fully translated and was reported anyway'
+            exit 1
+          fi
+          if ! grep -qF 'Skip to content' "$d/public/es/index.html"; then
+            echo 'second-language: /es/ did not fall back to English'
+            exit 1
+          fi
+      # The fallback table used to come from os.ReadFile "i18n/en.toml", and the
+      # union filesystem returns the *first* match for that path: a site with a
+      # one-key i18n/en.toml left a one-key fallback behind and the other 48
+      # labels went blank again — #32, unfixed, on a green build. It comes from
+      # the theme's own mount at data/terminal_mono_i18n now, with the site's
+      # English merged over it. The comma and colon in the comment are the other
+      # half of the fixture: handed a bare string, transform.Unmarshal sniffs the
+      # format from the first `=`, `:`, `,` or `{` it finds, so a comma there
+      # read the whole file as CSV and took the build down with it.
+      - name: Assert a site's own i18n/en.toml cannot collapse the fallback
+        run: |
+          set -eo pipefail
+          d=/tmp/site-english
+          rm -rf "$d"; mkdir -p "$d/themes" "$d/i18n"
+          ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          cat > "$d/hugo.toml" <<'TOML'
+          baseURL = "https://example.com/"
+          title = "Own English"
+          theme = "terminal-mono"
+          defaultContentLanguage = "es"
+          [languages.es]
+            weight = 1
+            [languages.es.params.about]
+              content = "hola"
+          [[menu.main]]
+            identifier = "about"
+            url = "#about"
+            weight = 1
+          TOML
+          cat > "$d/i18n/en.toml" <<'TOML'
+          # UI strings, English: with a comma and a colon
+          [about]
+          other = "who I am"
+          TOML
+          hugo --source "$d" --gc --minify 2>&1 | tee "$d/build.log"
+          if ! grep -qF 'Skip to content' "$d/public/index.html"; then
+            echo 'site-english: an unparseable site i18n/en.toml collapsed the fallback'
+            exit 1
+          fi
+          if ! grep -q 'terminal-mono: could not parse i18n/en.toml' "$d/build.log"; then
+            echo 'site-english: the file could not be read and the build did not say so'
+            exit 1
+          fi
+          # Same file, now parseable: the string the site overrode wins, in the
+          # section heading and in the nav — the nav label goes through t.html
+          # for exactly this reason.
+          cat > "$d/i18n/en.toml" <<'TOML'
+          # English overrides
+          [about]
+          other = "who I am"
+          TOML
+          hugo --source "$d" --gc --minify 2>&1 | tee "$d/build.log"
+          if [ "$(grep -cF 'who I am' "$d/public/index.html")" -lt 2 ]; then
+            echo 'site-english: the override did not reach both the nav and the heading'
+            grep -o '#about">[^<]*' "$d/public/index.html" || true
+            exit 1
+          fi
+          if ! grep -qF 'Skip to content' "$d/public/index.html"; then
+            echo 'site-english: overriding one string collapsed the other 48'
+            exit 1
+          fi
+      # The branch that names the missing keys had never run in CI, and neither
+      # had a key whose value is "" — a blank label is the failure the whole
+      # path exists to make visible, so an empty string counts as missing.
+      - name: Assert a partial translation names what is missing
+        run: |
+          set -eo pipefail
+          d=/tmp/partial-i18n
+          rm -rf "$d"; mkdir -p "$d/themes" "$d/i18n"
+          ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          cat > "$d/hugo.toml" <<'TOML'
+          baseURL = "https://example.com/"
+          title = "Parcial"
+          theme = "terminal-mono"
+          defaultContentLanguage = "es"
+          [languages.es]
+            weight = 1
+          TOML
+          cat > "$d/i18n/es.toml" <<'TOML'
+          [skip_to_content]
+          other = "Ir al contenido"
+          [about]
+          other = ""
+          TOML
+          hugo --source "$d" --gc --minify 2>&1 | tee "$d/build.log"
+          if ! grep -qE 'terminal-mono: [0-9]+ of [0-9]+ UI strings are missing for language "es"' "$d/build.log"; then
+            echo 'partial-i18n: a half-translated language was not reported as one'
+            exit 1
+          fi
+          if ! grep -q 'add them to i18n/es.toml: about, ' "$d/build.log"; then
+            echo 'partial-i18n: the message did not name the missing keys'
+            exit 1
+          fi
+          if ! grep -qF 'Ir al contenido' "$d/public/index.html"; then
+            echo 'partial-i18n: the one translated string did not render'
+            exit 1
+          fi
+      # --printI18nWarnings and --panicOnWarning together (what the exampleSite
+      # build above runs under) make a missing key return an *error* from i18n
+      # rather than an empty string. Without the try() in t.html the build aborts
+      # at the lookup, inside the partial whose whole job is to keep that from
+      # happening — and a menu identifier the theme ships no string for is the
+      # ordinary way to reach it.
+      - name: Assert the strict i18n flags do not abort on a missing key
+        run: |
+          set -eo pipefail
+          d=/tmp/strict-i18n
+          rm -rf "$d"; mkdir -p "$d/themes"
+          ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          cat > "$d/hugo.toml" <<'TOML'
+          baseURL = "https://example.com/"
+          title = "Strict"
+          theme = "terminal-mono"
+          [[menu.main]]
+            identifier = "portfolio"
+            url = "#projects"
+            weight = 1
+          TOML
+          if ! hugo --source "$d" --gc --minify --printI18nWarnings --panicOnWarning > "$d/build.log" 2>&1; then
+            cat "$d/build.log"
+            echo 'strict-i18n: a menu identifier with no translation aborted the build'
+            exit 1
+          fi
+          if ! grep -q '>portfolio<' "$d/public/index.html"; then
+            echo 'strict-i18n: the entry never rendered, so nothing was looked up'
+            exit 1
+          fi
+      # Declaring any [[module.mounts]] replaces the default mounts for every
+      # component, not just the one declared, so the theme's hugo.toml spells out
+      # the ones it needs. Add a component directory and forget the line and it
+      # stops shipping — silently for archetypes, which nothing else here builds.
+      - name: Assert every component directory is mounted
+        run: |
+          set -eo pipefail
+          rc=0
+          for c in archetypes assets content data i18n layouts static; do
+            [ -d "$GITHUB_WORKSPACE/$c" ] || continue
+            if ! grep -q "source = \"$c\"" "$GITHUB_WORKSPACE/hugo.toml"; then
+              echo "mounts: $c/ exists in the theme but hugo.toml does not mount it"
+              rc=1
+            fi
+          done
+          exit $rc
       # The exampleSite ships lime with [params.theme] commented out, so without
       # this step four of the five palettes, the override block, the per-palette
       # favicon and the theme-color are all shipped unexecuted — 400-odd lines
