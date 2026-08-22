@@ -1,0 +1,37 @@
+# Theme-level configuration, merged into the site's own.
+#
+# One thing lives here: a second, read-only view of the theme's own i18n/ under
+# data/, so t.html can reach the theme's English strings even on a site that
+# ships an i18n/en.toml of its own.
+#
+# The i18n lookup merges site over theme key by key, but Hugo's union filesystem
+# does not: os.ReadFile "i18n/en.toml" returns the *first* match, so a site with
+# a one-key i18n/en.toml used to leave a one-key fallback table behind and the
+# other 48 labels rendered blank — the bug the fallback exists to prevent. Data
+# files are keyed by mount target, and no site mounts anything at
+# data/terminal_mono_i18n, so this view is the theme's alone. Hugo parses it, so
+# nothing here has to guess a file format either.
+#
+# Declaring any mount replaces the default mounts for *every* component, not
+# just the one declared — hence the five defaults spelled out below. Add a
+# component directory to the theme and it needs a line here; ci.yml asserts that.
+[module]
+  [[module.mounts]]
+    source = "archetypes"
+    target = "archetypes"
+  [[module.mounts]]
+    source = "assets"
+    target = "assets"
+  [[module.mounts]]
+    source = "i18n"
+    target = "i18n"
+  [[module.mounts]]
+    source = "layouts"
+    target = "layouts"
+  [[module.mounts]]
+    source = "static"
+    target = "static"
+  # The extra view. Same source, second target.
+  [[module.mounts]]
+    source = "i18n"
+    target = "data/terminal_mono_i18n"

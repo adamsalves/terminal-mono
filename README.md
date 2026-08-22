@@ -14,7 +14,7 @@ the bundled `exampleSite/`, which is exactly what the demo serves.
 - ⚡ Hugo asset pipeline (minify + fingerprint + SRI in production).
 - 🔎 SEO ready: Open Graph, Twitter Card, JSON-LD, RSS and `canonical`.
 - ♿ Accessible: "skip to content" link, visible focus and `prefers-reduced-motion`.
-- 🌍 Multilingual via Hugo i18n — **English + Portuguese** included, with a language switcher and localized dates.
+- 🌍 Multilingual via Hugo i18n — **English + Portuguese** included, with a language switcher and localized dates. Any other language falls back to English rather than rendering blank labels.
 
 Requires **Hugo extended ≥ 0.158**.
 
@@ -65,6 +65,7 @@ Copy the folder into `themes/terminal-mono/` and set `theme = "terminal-mono"` i
 ```
 terminal-mono/
   theme.toml                 # theme metadata
+  hugo.toml                  # theme config: the module mounts (see Languages)
   assets/
     css/terminal.css         # styles (pipeline: minify + fingerprint)
     js/terminal.js           # menu, progress bar, typewriter
@@ -78,7 +79,7 @@ terminal-mono/
       head.html  nav.html  footer.html  lang-switch.html
       hero.html  projects.html  about.html  experience.html  contact.html
       post-card.html  pager.html
-  i18n/                      # en.toml (default), pt.toml
+  i18n/                      # en.toml (default + fallback for every language), pt.toml
   static/                    # favicon.svg + one per palette (amber, cyberpunk, ice, mono)
   archetypes/                # default.md, blogs.md
   exampleSite/               # bilingual demo site + commented config
@@ -329,28 +330,70 @@ hugo new blogs/my-post.md
 
 ## Languages (i18n)
 
-UI strings live in `i18n/en.toml` (the default / fallback) and `i18n/pt.toml`. The
-bundled `exampleSite` is bilingual — **English at `/`, Portuguese at `/pt/`** — and shows
-a language switcher in the nav (rendered automatically when the site has more than one
-language). Missing keys fall back to `defaultContentLanguage`; dates are localized from
-each language's `locale`.
+UI strings live in `i18n/en.toml` and `i18n/pt.toml`. The bundled `exampleSite` is
+bilingual — **English at `/`, Portuguese at `/pt/`** — and shows a language switcher in
+the nav, rendered automatically when the site has more than one language.
 
-To add a language (e.g. Spanish):
+**Adding a language is configuration. Translating the interface is one file.** They are
+separate steps, and it is worth knowing which is which:
 
-1. Copy `i18n/en.toml` to `i18n/es.toml` and translate the values.
-2. Declare the language and translate its content params:
+1. Declare the language and translate its content params:
+
    ```toml
    [languages.es]
-     label = "Español"
-     locale = "es-ES"
+     label  = "Español"   # `languageName` is the pre-0.158 spelling, now deprecated
+     locale = "es-ES"     # likewise `languageCode`; sets <html lang> and og:locale
      weight = 3
      [languages.es.params]
        # title, description, hero, about, experience, projects, contact …
    ```
-3. Translate posts with the filename convention: `my-post.es.md`.
 
-> Single-language sites work too: just keep one `[languages.*]` (or none) — the switcher
-> hides itself and the lone i18n table drives every string.
+   Everything the theme does per language follows from that, with nothing else to write:
+   the switcher, `hreflang`, `og:locale:alternate`, the menu, and post dates — which are
+   localized from the language key itself, so `[languages.es]` prints `14 mar 2026`
+   whether or not `locale` is set.
+
+2. Translate posts with the filename convention: `my-post.es.md`.
+
+3. Copy `i18n/en.toml` to `i18n/es.toml` **in your own site** and translate the values.
+   Hugo merges your `i18n/` over the theme's key by key, so this never requires vendoring
+   or forking the theme.
+
+**A language with no strings file renders in English, and says so.** Hugo's fallback for
+a missing key is the site's `defaultContentLanguage`, not the theme's `i18n/en.toml` — so
+a Spanish-default site without `i18n/es.toml` rendered every label as the empty string:
+`// ` for the hero intro, `[  ]` for the contact button, nav links with no text, on a
+green build with no warning. The theme now puts its own English table underneath every
+lookup and warns once per language:
+
+```
+WARN  terminal-mono: no UI strings for language "es" — the interface is falling back to
+English. Copy the theme's i18n/en.toml to i18n/es.toml in your site and translate it.
+```
+
+That covers every language, not just the default one. The count comes from reading the
+translation files rather than from asking Hugo for each value, because a value cannot
+tell you where it came from: in a language Hugo has already substituted the default
+language's string for, `i18n "about"` returns the English, so `[languages.es]` with no
+`i18n/es.toml` — step 3 skipped, exactly the site this section tells you how to build —
+used to warn about nothing at all.
+
+A partially translated file gets the other half of that message — how many strings are
+missing, and which ones, named up to twelve at a time. A key written as `other = ""`
+counts as missing: a blank label is the failure the warning exists to make visible.
+
+Your own `i18n/en.toml` is merged over the theme's, key by key, the same way the
+translation lookup itself merges — so a site that renames `projects` to `work` in English
+gets `work` in the languages falling back to English too, and the strings it did not
+override keep coming from the theme. If that file cannot be parsed, the build says so and
+keeps the theme's English rather than failing.
+
+> Single-language sites work too: keep one `[languages.*]`, or none — the switcher hides
+> itself and the lone table drives every string.
+>
+> **Left-to-right only.** `languageDirection = "rtl"` does reach the page as
+> `<html dir="rtl">`, but `terminal.css` is written with physical `left`/`right`
+> properties and does not mirror. RTL is untested and unclaimed.
 
 ## Colors
 

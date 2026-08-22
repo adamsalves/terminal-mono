@@ -1,0 +1,51 @@
+{{- /* The English strings this site would render, as a map, so t.html has
+       something to fall back to when the reader's language has no translation
+       for a key.
+
+       The base is the theme's own i18n/en.toml — the same 49 strings the real
+       translation table is built from, with no second copy to keep in sync. It
+       is reached through data/ rather than through os.ReadFile "i18n/en.toml",
+       because the union filesystem returns the *first* match for that path and a
+       site's own i18n/en.toml therefore shadowed it: override three strings and
+       the fallback table had three keys, leaving the other 46 to render blank —
+       the exact failure this partial exists to prevent. The theme's hugo.toml
+       mounts i18n/ a second time at data/terminal_mono_i18n, a path no site
+       writes to, and Hugo parses it there. See that file for the mount.
+
+       A site's own English is then merged over it, key by key, the way Hugo's
+       i18n lookup itself merges: a site that renames "projects" to "work" in
+       English means that in the languages falling back to English too.
+
+       Returns the table shaped as it is written — {"email": {"other": "email"}} —
+       so the plural forms are reachable; t.html picks one.
+
+       Nothing here may print: this partial returns a value, so every action is
+       whitespace-trimmed (see params-scalar.html). */ -}}
+{{- $table := index hugo.Data "terminal_mono_i18n" "en" -}}
+{{- if not (reflect.IsMap $table) -}}
+  {{- /* Without it the floor is whatever the merge below happens to find, which
+         is the pre-#32 behaviour: a site's own file if it ships one, blank
+         labels for every key that file does not carry, and i18n-check.html —
+         which draws its key list from here — quiet about all of it. Say so
+         rather than degrade in silence. */ -}}
+  {{- warnf "terminal-mono: the theme's English strings did not load from data/terminal_mono_i18n/en.toml — a [module] block that remounts the theme replaces its mounts, so keep the theme's own or copy them. The English fallback is running on whichever i18n/en.toml the union filesystem returns, and labels that file does not carry will render blank." -}}
+  {{- $table = dict -}}
+{{- end -}}
+{{- /* try(), because handed a bare string transform.Unmarshal sniffs the format
+       from the content — first `=`, `:`, `,` or `{` wins — so one comma in a
+       comment makes it read a TOML file as CSV and fail. That file is the site's
+       to write: it must warn, not take the build down. Hugo accepts any of these
+       spellings for a translation table, so look for all of them. */ -}}
+{{- range $ext := slice "toml" "yaml" "yml" "json" -}}
+  {{- $path := printf "i18n/en.%s" $ext -}}
+  {{- if os.FileExists $path -}}
+    {{- with try (transform.Unmarshal (os.ReadFile $path)) -}}
+      {{- if .Err -}}
+        {{- warnf "terminal-mono: could not parse %s (%s) — falling back to the theme's own English strings, which is only wrong where you overrode one." $path .Err -}}
+      {{- else if reflect.IsMap .Value -}}
+        {{- $table = merge $table .Value -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- return $table -}}

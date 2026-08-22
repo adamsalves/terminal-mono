@@ -128,7 +128,7 @@
         <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
         <span class="term__title">{{ site.Params.terminalUser | default "adams@portfolio" }}: ~</span>
       </div>
-      <pre id="hero-term" class="term__body" aria-label="{{ i18n "aria_terminal" }}"
+      <pre id="hero-term" class="term__body" aria-label="{{ partial "t.html" "aria_terminal" }}"
         style="--hero-lines:{{ $lines }}"
         data-user="{{ site.Params.terminalUser | default "adams@portfolio" }}"
         data-name="{{ site.Params.title }}"
@@ -141,25 +141,25 @@
 
     {{/* identity */}}
     <div class="hero__id fadeup">
-      <div class="hero__intro">// {{ $hero.intro | default (i18n "hero_intro") }}</div>
+      <div class="hero__intro">// {{ $hero.intro | default (partial "t.html" "hero_intro") }}</div>
       <h1>{{ site.Params.title }}</h1>
       <div class="hero__role">&gt; {{ $hero.subtitle }}</div>
       <p class="hero__bio">{{ $hero.content }}</p>
 
       <div class="btn-row">
-        {{ if $hasProjects }}<a class="btn btn--solid" href="#projects">{{ i18n "view_projects" }} →</a>{{ end }}
-        {{ with $contact.btnLink }}<a class="btn btn--ghost" href="{{ . }}">{{ i18n "email" }}</a>{{ end }}
+        {{ if $hasProjects }}<a class="btn btn--solid" href="#projects">{{ partial "t.html" "view_projects" }} →</a>{{ end }}
+        {{ with $contact.btnLink }}<a class="btn btn--ghost" href="{{ . }}">{{ partial "t.html" "email" }}</a>{{ end }}
       </div>
 
       <div class="social">
         {{ range $i, $s := $icons }}
-          {{- $label := (i18n "link_default") -}}
+          {{- $label := (partial "t.html" "link_default") -}}
           {{- $ext := true -}}
           {{- if in $s.icon "github" }}{{ $label = "github" }}{{ end -}}
           {{- if in $s.icon "linkedin" }}{{ $label = "linkedin" }}{{ end -}}
           {{- if in $s.icon "twitter" }}{{ $label = "twitter" }}{{ end -}}
           {{- if or (in $s.icon "x-twitter") (eq $s.icon "fab fa-x-twitter") }}{{ $label = "x" }}{{ end -}}
-          {{- if in $s.icon "envelope" }}{{ $label = (i18n "email") }}{{ $ext = false }}{{ end -}}
+          {{- if in $s.icon "envelope" }}{{ $label = (partial "t.html" "email") }}{{ $ext = false }}{{ end -}}
           {{ if $i }}<span class="sep" aria-hidden="true">·</span>{{ end }}
           <a href="{{ $s.url }}"{{ if $ext }} target="_blank" rel="noopener noreferrer"{{ end }}>{{ $label }}</a>
         {{ end }}

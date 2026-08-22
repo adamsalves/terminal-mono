@@ -6,7 +6,7 @@
   <article class="article fadeup">
 
     <div style="padding:44px 0 0">
-      <a class="back-link" href="{{ $blog }}">← {{ i18n "back_to_blog" }}</a>
+      <a class="back-link" href="{{ $blog }}">← {{ partial "t.html" "back_to_blog" }}</a>
     </div>
 
     {{/* Same guard head.html puts on this param, for the same relURL cast —
@@ -32,14 +32,14 @@
     <div class="post-meta">
       <span>{{ .Date | time.Format ":date_medium" }}</span>
       <span class="sep" aria-hidden="true">·</span>
-      <span>{{ .ReadingTime }} {{ i18n "min_read" }}</span>
+      <span>{{ .ReadingTime }} {{ partial "t.html" "min_read" }}</span>
       <span class="sep" aria-hidden="true">·</span>
       <span>{{ with .Params.author }}{{ . }}{{ else }}{{ site.Params.title }}{{ end }}</span>
     </div>
 
     {{ if and (ne .Params.toc false) (gt (len .TableOfContents) 60) }}
       <div class="toc">
-        <div class="toc__label">{{ i18n "toc_label" }}</div>
+        <div class="toc__label">{{ partial "t.html" "toc_label" }}</div>
         {{ .TableOfContents }}
       </div>
     {{ end }}
@@ -51,15 +51,15 @@
     <div class="share-row">
       <div class="hashtags">{{ range .Params.tags }}<span>#{{ . }}</span>{{ end }}</div>
       <div class="share">
-        <span class="cmt">$ {{ i18n "share_label" }}:</span>
+        <span class="cmt">$ {{ partial "t.html" "share_label" }}:</span>
         <a href="https://www.linkedin.com/sharing/share-offsite/?url={{ .Permalink }}" target="_blank" rel="noopener noreferrer">linkedin</a>
         <a href="https://twitter.com/intent/tweet?url={{ .Permalink }}&amp;text={{ .Title }}" target="_blank" rel="noopener noreferrer">x</a>
-        <a href="#" data-copy="{{ .Permalink }}" onclick="if(navigator.clipboard){navigator.clipboard.writeText(this.dataset.copy);this.textContent='{{ i18n "copied" }}';}return false;">{{ i18n "copy_link" }}</a>
+        <a href="#" data-copy="{{ .Permalink }}" onclick="if(navigator.clipboard){navigator.clipboard.writeText(this.dataset.copy);this.textContent='{{ partial "t.html" "copied" }}';}return false;">{{ partial "t.html" "copy_link" }}</a>
       </div>
     </div>
 
     <div style="padding:30px 0 90px">
-      <a class="back-link" style="color:var(--accent)" href="{{ $blog }}">← {{ i18n "back_to_blog" }}</a>
+      <a class="back-link" style="color:var(--accent)" href="{{ $blog }}">← {{ partial "t.html" "back_to_blog" }}</a>
     </div>
 
   </article>

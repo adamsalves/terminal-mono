@@ -7,11 +7,11 @@
 {{- $contact := partialCached "params-table.html" (dict "value" site.Params.contact "path" "[params.contact]") "contact" site.Language.Lang -}}
 <div class="container">
   <footer class="footer">
-    <span><span class="cmt">&gt;_</span> © {{ now.Year }} {{ $footer.copyright | default site.Params.title }} — {{ i18n "made_with" }} <a href="https://gohugo.io/" target="_blank" rel="noopener noreferrer" style="color:inherit">Hugo</a> &amp; <a href="https://github.com/adamsalves/terminal-mono" target="_blank" rel="noopener noreferrer" style="color:inherit">terminal-mono</a></span>
+    <span><span class="cmt">&gt;_</span> © {{ now.Year }} {{ $footer.copyright | default site.Params.title }} — {{ partial "t.html" "made_with" }} <a href="https://gohugo.io/" target="_blank" rel="noopener noreferrer" style="color:inherit">Hugo</a> &amp; <a href="https://github.com/adamsalves/terminal-mono" target="_blank" rel="noopener noreferrer" style="color:inherit">terminal-mono</a></span>
     <div class="social">
       {{ with $social.github }}<a href="{{ . }}" target="_blank" rel="noopener noreferrer">github</a>{{ end }}
       {{ with $social.linkedin }}<a href="{{ . }}" target="_blank" rel="noopener noreferrer">linkedin</a>{{ end }}
-      {{ with $contact.btnLink }}<a href="{{ . }}">{{ i18n "email" }}</a>{{ end }}
+      {{ with $contact.btnLink }}<a href="{{ . }}">{{ partial "t.html" "email" }}</a>{{ end }}
     </div>
   </footer>
 </div>

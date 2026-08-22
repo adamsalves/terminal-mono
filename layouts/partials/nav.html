@@ -28,7 +28,7 @@
       {{- partial "nav-links.html" $links }}
     </div>
     {{ if $hasMenu }}
-    <button class="hamburger" id="hamburger" type="button" aria-label="{{ i18n "menu_open" }}" aria-controls="mobile-menu" aria-expanded="false">
+    <button class="hamburger" id="hamburger" type="button" aria-label="{{ partial "t.html" "menu_open" }}" aria-controls="mobile-menu" aria-expanded="false">
       <span></span><span></span><span></span>
     </button>
     {{ end }}
