@@ -3,12 +3,12 @@
 
   <div class="blog-head">
     <div class="section__head">
-      <h2><span class="cmt">//</span> {{ .Title | default (i18n "blog") | lower }}</h2>
+      <h2><span class="cmt">//</span> {{ .Title | default (partial "t.html" "blog") | lower }}</h2>
       <div class="rule"></div>
     </div>
-    <div class="prompt" style="margin-bottom:6px">{{ i18n "prompt_blog_posts" }}</div>
+    <div class="prompt" style="margin-bottom:6px">{{ partial "t.html" "prompt_blog_posts" }}</div>
     {{ with .Content }}<div class="blog-head__intro">{{ . }}</div>
-    {{ else }}<p>{{ i18n "blog_intro" }}</p>{{ end }}
+    {{ else }}<p>{{ partial "t.html" "blog_intro" }}</p>{{ end }}
   </div>
 
   {{ $pages := where .RegularPages "Type" "blogs" }}
@@ -18,7 +18,7 @@
     {{ range $paginator.Pages }}
       {{ partial "post-card.html" . }}
     {{ else }}
-      <p style="color:var(--dim)">{{ i18n "no_posts" }} <span class="cmt"># {{ i18n "check_back" }}</span></p>
+      <p style="color:var(--dim)">{{ partial "t.html" "no_posts" }} <span class="cmt"># {{ partial "t.html" "check_back" }}</span></p>
     {{ end }}
   </div>
 

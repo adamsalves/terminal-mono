@@ -81,6 +81,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   arrives as an integer and `%q` on an integer is a rune literal, so it announced that the
   requested palette was `'\x03'`; `palette = true` reported `%!q(bool=true)`.
 
+- An untranslated language rendered a blank interface. Hugo's fallback for a missing
+  i18n key is the site's `defaultContentLanguage`, not the theme's `i18n/en.toml`, so a
+  site whose default language the theme ships no strings for — `defaultContentLanguage
+  = "es"` with no `i18n/es.toml` — rendered every label as the empty string: `// ` for
+  the hero intro, `[  ]` for the contact button, nav links with no text, the 404 with no
+  message. The build was green and said nothing. A language declared *alongside* `en`
+  was never affected, which is why the bilingual exampleSite never showed it.
+
+  Every UI string now goes through `partials/t.html`, which asks Hugo first and the
+  theme's own English table second, so the floor is a readable page in the wrong
+  language rather than an unreadable one in the right language. The English table is
+  read from `i18n/en.toml` through Hugo's union filesystem — the theme's real
+  translation file, not a copy of it, whether the theme is vendored, a submodule or a
+  Hugo Module. One caveat, documented in the README: a site that ships its own
+  `i18n/en.toml` shadows the theme's as the fallback source, because that filesystem
+  returns the first match instead of merging the way the translation lookup does.
+
+  `partials/i18n-check.html` warns once per language, naming the file to create when a
+  language has no strings at all and listing the missing keys when it has some. The
+  count comes from calling `i18n` on every English key rather than from reading the
+  language's file, so it reports what Hugo actually resolved — site merged over theme —
+  and not what one file happens to contain.
+
+  Strings that interpolate a value keep working through the fallback: `{{ .count }}` and
+  friends are substituted literally, which is what the one such string in the theme
+  (`posts_tagged`) needs. Nothing in the rendered output changed for a site that has its
+  translations — the exampleSite builds byte-identical to v0.5.0.
+
+- README: the language section says which half of adding a language is configuration
+  (all of it — switcher, `hreflang`, `og:locale:alternate`, menu and dates follow from
+  `[languages.<lang>]`) and which half is a file you write. It also records that `label`
+  and `locale` are the current spellings — `languageName` and `languageCode` are
+  deprecated as of Hugo 0.158, the theme's own minimum — and that dates localize from
+  the language key with or without `locale`. Finally it states what the theme does not
+  do: `languageDirection = "rtl"` reaches the page as `<html dir="rtl">`, but the
+  stylesheet is written in physical `left`/`right` properties and does not mirror, so
+  RTL is untested and unclaimed rather than quietly broken.
+
 ## [0.5.0] — 2026-08-21
 
 ### Fixed

@@ -6,8 +6,8 @@
       <h2><span class="cmt">#</span> {{ .Title | lower }}</h2>
       <div class="rule"></div>
     </div>
-    <div class="prompt" style="margin-bottom:6px">{{ i18n "prompt_grep" }} "#{{ .Title | lower }}" ~/blog</div>
-    <p>{{ i18n "posts_tagged" (dict "count" (len .Pages)) }} <strong style="color:var(--accent)">#{{ .Title | lower }}</strong>. <a class="back-link" href="{{ "tags/" | relLangURL }}">{{ i18n "see_all_tags" }} →</a></p>
+    <div class="prompt" style="margin-bottom:6px">{{ partial "t.html" "prompt_grep" }} "#{{ .Title | lower }}" ~/blog</div>
+    <p>{{ partial "t.html" (dict "key" "posts_tagged" "ctx" (dict "count" (len .Pages))) }} <strong style="color:var(--accent)">#{{ .Title | lower }}</strong>. <a class="back-link" href="{{ "tags/" | relLangURL }}">{{ partial "t.html" "see_all_tags" }} →</a></p>
   </div>
 
   {{ $paginator := .Paginate .Pages }}

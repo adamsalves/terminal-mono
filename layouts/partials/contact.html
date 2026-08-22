@@ -8,10 +8,10 @@
     <div class="contact-box">
       <div class="glow" aria-hidden="true"></div>
       <div class="inner">
-        <div class="prompt" style="margin-bottom:12px">{{ i18n "prompt_contact" }}</div>
-        <h2>{{ $contact.title | default (i18n "contact_title") }}</h2>
+        <div class="prompt" style="margin-bottom:12px">{{ partial "t.html" "prompt_contact" }}</div>
+        <h2>{{ $contact.title | default (partial "t.html" "contact_title") }}</h2>
         <p>{{ $contact.content }}</p>
-        {{ with $contact.btnLink }}<a class="btn btn--solid" href="{{ . }}">[ {{ $contact.btnName | default (i18n "contact_btn") }} ]</a>{{ end }}
+        {{ with $contact.btnLink }}<a class="btn btn--solid" href="{{ . }}">[ {{ $contact.btnName | default (partial "t.html" "contact_btn") }} ]</a>{{ end }}
       </div>
     </div>
   </div>

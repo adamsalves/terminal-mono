@@ -2,7 +2,7 @@
      otherwise to the target language's home. Hidden on single-language sites. */}}
 {{- if gt (len hugo.Sites) 1 -}}
 {{- $page := . -}}
-<div class="lang-switch" aria-label="{{ i18n "aria_language" }}">
+<div class="lang-switch" aria-label="{{ partial "t.html" "aria_language" }}">
   {{- range hugo.Sites -}}
     {{- $s := . -}}
     {{- $href := .Home.RelPermalink -}}

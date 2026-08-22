@@ -5,7 +5,7 @@
   {{ partial "head.html" . }}
 </head>
 <body>
-  <a class="skip-link" href="#main">{{ i18n "skip_to_content" }}</a>
+  <a class="skip-link" href="#main">{{ partial "t.html" "skip_to_content" }}</a>
 
   {{ if site.Params.showScanlines | default true }}<div class="scanlines" aria-hidden="true"></div>{{ end }}
   {{ if and (.IsPage) (site.Params.readingProgress | default true) }}<div class="progress" id="progress" aria-hidden="true"></div>{{ end }}

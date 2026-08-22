@@ -1,3 +1,8 @@
+{{- /* Warn once per language when the interface is not fully translated. It
+       lives here because head.html is the one partial every page goes through,
+       and partialCached on the language keeps it to one pass per language per
+       build rather than one per page. */ -}}
+{{- partialCached "i18n-check.html" . site.Language.Lang -}}
 {{- $isHome := .IsHome -}}
 {{- $siteName := or site.Params.title site.Title -}}
 {{- $hero := partialCached "params-table.html" (dict "value" site.Params.hero "path" "[params.hero]") "hero" site.Language.Lang -}}

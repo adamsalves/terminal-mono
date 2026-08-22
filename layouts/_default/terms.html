@@ -3,18 +3,18 @@
 
   <div class="blog-head">
     <div class="section__head">
-      <h2><span class="cmt">//</span> {{ .Title | default (i18n "tags") | lower }}</h2>
+      <h2><span class="cmt">//</span> {{ .Title | default (partial "t.html" "tags") | lower }}</h2>
       <div class="rule"></div>
     </div>
-    <div class="prompt" style="margin-bottom:6px">{{ i18n "prompt_tags" }}</div>
-    <p>{{ i18n "browse_by_topic" }}</p>
+    <div class="prompt" style="margin-bottom:6px">{{ partial "t.html" "prompt_tags" }}</div>
+    <p>{{ partial "t.html" "browse_by_topic" }}</p>
   </div>
 
   <div class="tag-cloud">
     {{ range .Data.Terms.ByCount }}
       <a class="tag-chip" href="{{ .Page.RelPermalink }}"># {{ .Page.Title | lower }} <span>{{ .Count }}</span></a>
     {{ else }}
-      <p style="color:var(--dim)">{{ i18n "no_tags" }}</p>
+      <p style="color:var(--dim)">{{ partial "t.html" "no_tags" }}</p>
     {{ end }}
   </div>
 

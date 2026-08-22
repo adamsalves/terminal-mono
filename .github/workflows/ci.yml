@@ -97,6 +97,46 @@ jobs:
             grep -o '<title>[^<]*</title>' /tmp/bare/public/index.html
             exit 1
           fi
+      # Hugo's fallback for a missing translation is the site's own
+      # defaultContentLanguage, not the theme's i18n/en.toml — so a site whose
+      # default language the theme ships no strings for rendered every label as
+      # the empty string, on a green build, until t.html put English underneath
+      # (see #32). --panicOnWarning is deliberately absent: this fixture is
+      # supposed to warn, and the warning is half of what is asserted.
+      - name: Assert an untranslated language falls back to English
+        run: |
+          set -eo pipefail
+          d=/tmp/untranslated
+          rm -rf "$d"; mkdir -p "$d/themes"
+          ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          cat > "$d/hugo.toml" <<'TOML'
+          baseURL = "https://example.com/"
+          title = "Sin Traducir"
+          theme = "terminal-mono"
+          defaultContentLanguage = "es"
+          [languages.es]
+            locale = "es-ES"
+            weight = 1
+            [languages.es.params.hero]
+              title = "Hola"
+            [languages.es.params.contact]
+              btnLink = "mailto:hola@example.com"
+          TOML
+          hugo --source "$d" --gc --minify 2>&1 | tee "$d/build.log"
+          if ! grep -q 'terminal-mono: no UI strings for language "es"' "$d/build.log"; then
+            echo 'untranslated: the build said nothing about the missing strings'
+            exit 1
+          fi
+          # The strings the reader sees, not just the ones the log mentions.
+          # Three partials, three shapes: the hero intro reaches the page through
+          # a `default` chain, the contact button through `with`, and the skip
+          # link straight — and the empty render was visible in all three.
+          for s in 'hi, my name is' 'send email' 'Skip to content'; do
+            if ! grep -qF "$s" "$d/public/index.html"; then
+              echo "untranslated: \"$s\" did not fall back to English"
+              exit 1
+            fi
+          done
       # The exampleSite ships lime with [params.theme] commented out, so without
       # this step four of the five palettes, the override block, the per-palette
       # favicon and the theme-color are all shipped unexecuted — 400-odd lines

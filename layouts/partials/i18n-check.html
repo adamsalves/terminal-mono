@@ -1,0 +1,42 @@
+{{- /* Say out loud what t.html quietly papers over.
+
+       The fallback keeps an untranslated site readable; it does not make it
+       translated, and nothing else on the page reports that. So this counts the
+       keys the reader's language cannot answer and warns once per language —
+       the rule sections.html set and the params-* guards enforce: a build never
+       fails on configuration, and configuration never fails in silence.
+
+       The count comes from calling `i18n` on every English key rather than from
+       reading i18n/<lang>.toml, because that is the only thing that sees what
+       Hugo actually resolved: the site's file merged over the theme's, key by
+       key. Reading the file would miss the merge in both directions — a site
+       that translates ten of the theme's Portuguese strings would be reported as
+       having only ten.
+
+       Called from head.html through partialCached keyed on the language, so it
+       is 49 lookups per language per build, not per page. Prints nothing. */ -}}
+{{- $lang := site.Language.Lang -}}
+{{- $en := partialCached "i18n-en.html" "en" -}}
+{{- $missing := slice -}}
+{{- range $key, $_ := $en -}}
+  {{- if not (i18n $key) -}}
+    {{- $missing = $missing | append $key -}}
+  {{- end -}}
+{{- end -}}
+{{- with $missing -}}
+  {{- if eq (len .) (len $en) -}}
+    {{- warnf "terminal-mono: no UI strings for language %q — the interface is falling back to English. Copy the theme's i18n/en.toml to i18n/%s.toml in your site and translate it." $lang $lang -}}
+  {{- else -}}
+    {{- /* Named, because a list of keys is what you act on and a count is not.
+           Capped, because a file with three strings in it would otherwise print
+           the other 46 into the build log every run. */ -}}
+    {{- $sorted := sort . -}}
+    {{- $shown := $sorted -}}
+    {{- $tail := "" -}}
+    {{- if gt (len $sorted) 12 -}}
+      {{- $shown = first 12 $sorted -}}
+      {{- $tail = printf " and %d more" (sub (len $sorted) 12) -}}
+    {{- end -}}
+    {{- warnf "terminal-mono: %d of %d UI strings are missing for language %q and fall back to English — add them to i18n/%s.toml: %s%s" (len .) (len $en) $lang $lang (delimit $shown ", ") $tail -}}
+  {{- end -}}
+{{- end -}}

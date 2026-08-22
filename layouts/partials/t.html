@@ -1,0 +1,54 @@
+{{- /* One UI string, in the reader's language, with English as the floor.
+
+       Hugo's fallback for a missing key is the *site's* `defaultContentLanguage`,
+       not the theme's i18n/en.toml. A site whose default language is `es` and
+       which had not written i18n/es.toml therefore rendered every label as the
+       empty string — `// ` for the hero intro, `[  ]` for the contact button,
+       nav links with no text — on a green build with no warning. The theme's
+       English table is the last resort here instead, so an untranslated language
+       renders in English: wrong language, but a page you can read and a state
+       you can see. i18n-check.html says which strings are in that state.
+
+       Context: the key as a string,
+
+           {{ partial "t.html" "view_projects" }}
+
+       or, for a string that interpolates something, a dict:
+
+           {{ partial "t.html" (dict "key" "posts_tagged" "ctx" (dict "count" 3)) }}
+
+       Returns a plain string on purpose. `return` keeps the value out of
+       template.HTML, so the call site escapes it exactly the way `{{ i18n "x" }}`
+       always did — a translation is site configuration, and configuration does
+       not get to inject markup.
+
+       Nothing here may print (see params-scalar.html). */ -}}
+{{- $key := . -}}
+{{- $ctx := false -}}
+{{- if reflect.IsMap . -}}
+  {{- $key = .key -}}
+  {{- $ctx = .ctx -}}
+{{- end -}}
+{{- $s := "" -}}
+{{- if $ctx -}}
+  {{- $s = i18n $key $ctx -}}
+{{- else -}}
+  {{- $s = i18n $key -}}
+{{- end -}}
+{{- if not $s -}}
+  {{- with index (partialCached "i18n-en.html" "en") $key -}}
+    {{- $s = .other -}}
+    {{- /* The English string is data, not a template — Hugo renders a translation
+           as one, but there is no way to hand a bare string back to the template
+           engine from here. `{{ .count }}` and friends are substituted literally
+           instead, which covers the interpolation the strings actually use. A
+           replacement is a number or a name, never a `$1`, so replaceRE's own
+           group syntax has nothing to bite on. */ -}}
+    {{- if reflect.IsMap $ctx -}}
+      {{- range $k, $v := $ctx -}}
+        {{- $s = replaceRE (printf `\{\{\s*\.%s\s*\}\}` $k) (printf "%v" $v) $s -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- return $s -}}

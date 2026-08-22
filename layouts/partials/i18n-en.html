@@ -1,0 +1,29 @@
+{{- /* The theme's English strings, as a map, so t.html has something to fall
+       back to when the reader's language has no translation for a key.
+
+       `os.ReadFile` reads through Hugo's union filesystem, which spans the
+       project and every theme mounted into it — so this reaches the theme's own
+       i18n/en.toml whether the theme is vendored, a submodule or a Hugo Module,
+       and there is no second copy of the 49 strings to keep in sync with the
+       real translation table.
+
+       One caveat, and it is why i18n-check.html still warns even with a fallback
+       in place: if the *site* ships its own i18n/en.toml, that file shadows the
+       theme's here. The union filesystem returns the first match, it does not
+       merge — unlike the i18n lookup itself, which does merge site over theme
+       key by key. So a site that overrides three English strings and nothing
+       else leaves a three-key fallback table behind, and the other 46 keys fall
+       through to "" the way they did before this partial existed.
+
+       Returns the table shaped as it is written — {"email": {"other": "email"}} —
+       so a plural form added later is reachable without changing this.
+
+       Nothing here may print: this partial returns a value, so every action is
+       whitespace-trimmed (see params-scalar.html). */ -}}
+{{- $table := dict -}}
+{{- if os.FileExists "i18n/en.toml" -}}
+  {{- with os.ReadFile "i18n/en.toml" -}}
+    {{- $table = . | transform.Unmarshal -}}
+  {{- end -}}
+{{- end -}}
+{{- return $table -}}
