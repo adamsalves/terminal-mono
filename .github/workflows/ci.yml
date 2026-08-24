@@ -122,11 +122,19 @@ jobs:
           }
           build /  "$d/out-rooted"
           build "" "$d/out-bare"
-          # The third case is the escape hatch the trim leaves open: an absolute
-          # URL has no leading slash to cut, so it has to arrive untouched.
-          printf 'baseURL = "https://example.com/t/"\ntitle = "Sub"\ntheme = "terminal-mono"\n[params]\n  favicon = "https://cdn.example/fav.svg"\n  ogImage = "https://cdn.example/og.png"\n' > "$d/hugo.toml"
-          printf -- '---\ntitle: "P"\ndate: 2026-01-01\nimage: "https://cdn.example/banner.png"\n---\nbody\n' > "$d/content/blogs/p.md"
-          hugo --source "$d" --gc --minify --panicOnWarning --destination "$d/out-cdn"
+          # The escape hatch the trim has to leave open, in both spellings of
+          # "another host": a scheme-ful URL, and a network-path reference
+          # (//host/path, RFC 3986 4.2). Neither has a single leading slash to
+          # cut — but relURL and absURL recognise the second by its leading "//",
+          # so a trim that ran unguarded would hand them /cdn.example/x and they
+          # would rewrite it onto this site. $1 is the host prefix.
+          offsite() {
+            printf 'baseURL = "https://example.com/t/"\ntitle = "Sub"\ntheme = "terminal-mono"\n[params]\n  favicon = "%sfav.svg"\n  ogImage = "%sog.png"\n' "$1" "$1" > "$d/hugo.toml"
+            printf -- '---\ntitle: "P"\ndate: 2026-01-01\nimage: "%sbanner.png"\n---\nbody\n' "$1" > "$d/content/blogs/p.md"
+            hugo --source "$d" --gc --minify --panicOnWarning --destination "$2"
+          }
+          offsite https://cdn.example/ "$d/out-cdn"
+          offsite //cdn.example/       "$d/out-proto"
           python3 - <<'PY'
           import pathlib, re, sys
 
@@ -136,7 +144,7 @@ jobs:
           # Minified HTML drops the quotes around any value that has no spaces in
           # it, so every read here has to accept both `href="/t/x"` and `href=/t/x`.
           def attr(tag, name):
-              m = re.search(r'%s=(?:"([^"]*)"|\'([^\']*)\'|([^"\'>\s]+))' % name, tag)
+              m = re.search(r'\b%s=(?:"([^"]*)"|\'([^\']*)\'|([^"\'>\s]+))' % name, tag)
               if not m:
                   return None
               return next(g for g in m.groups() if g is not None)
@@ -206,17 +214,27 @@ jobs:
                              % (page, seen['out-rooted'][page],
                                 seen['out-bare'][page]))
 
-          cdn = pathlib.Path('/tmp/subpath/out-cdn')
-          for page in PAGES:
-              for label, url in emitted((cdn / page).read_text()).items():
-                  if label in WANT[page] and not url.startswith('https://cdn.example/'):
-                      bad.append('out-cdn %s: %s did not pass through — %s'
-                                 % (page, label, url))
+          # Driven by WANT, not by what the build emitted: iterating what was
+          # found would let a page that emitted nothing at all pass this arm in
+          # silence, which is the same hole the two arms above already close.
+          for name, prefix in [('out-cdn', 'https://cdn.example/'),
+                               ('out-proto', '//cdn.example/')]:
+              off = pathlib.Path('/tmp/subpath') / name
+              for page in PAGES:
+                  found = emitted((off / page).read_text())
+                  for label in WANT[page]:
+                      url = found.get(label)
+                      if url is None:
+                          bad.append('%s %s: emitted no %s' % (name, page, label))
+                      elif not url.startswith(prefix):
+                          bad.append('%s %s: %s did not pass through — %s'
+                                     % (name, page, label, url))
 
           if bad:
               sys.exit('\n'.join(bad))
           print('sub-path: both spellings of favicon, ogImage and image resolve '
-                'inside the baseURL, and an absolute URL passes through')
+                'inside the baseURL, and both spellings of an off-site URL pass '
+                'through')
           PY
       # Hugo's fallback for a missing translation is the site's own
       # defaultContentLanguage, not the theme's i18n/en.toml — so a site whose
