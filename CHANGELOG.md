@@ -73,6 +73,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   build, which is the rule `sections.html` set and the `params-*.html` guards enforce.
 
 ### Fixed
+- **`[params.favicon]`, `[params.ogImage]` and a post's `image` now resolve inside the
+  `baseURL`**, not at the host root. `relURL` and `absURL` read a path with a leading
+  slash as rooted at the host, so on a site published under a sub-path — the demo is
+  one — `"/img/og.png"` dropped the sub-path and resolved to a URL that 404s, while
+  `"img/og.png"` resolved correctly. The theme's own `exampleSite` documented the first
+  spelling. All three call sites now go through one partial, `asset-path.html`, that
+  trims the leading slash before the conversion, so both spellings work — and a path
+  that names another host still passes through untouched, whether it carries a scheme
+  or is written `//cdn.example/og.png`. Fixes #37.
+
+  Nothing about it was visible: a favicon that 404s is a blank tab, an `og:image` that
+  404s only fails in someone else's link card, and a post banner that 404s renders as a
+  reserved empty block that looks deliberate. The build was green because the templates
+  did exactly what they were told. A site that really did mean the host root — an image
+  served from outside Hugo — writes the absolute URL, which is the spelling that always
+  meant that unambiguously.
+
+  The other half was the gap that let it through: the `exampleSite` leaves all three
+  params empty, so the documented path was never built by CI. A new step builds under a
+  sub-path `baseURL` with the three filled in, in both spellings, and asserts that every
+  URL the build emits names a file the build actually published, that the two spellings
+  agree, and that both spellings of an off-site URL arrive untouched.
+
 - Colors that did not follow the accent because they never went through it. Eight
   `rgba(182,255,60,…)` washes were spelled out in `terminal.css` — the solid button's
   glow, the reading-progress bar, the contact box, the tag hover, the blockquote, the

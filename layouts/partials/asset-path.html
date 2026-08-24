@@ -1,0 +1,35 @@
+{{- /* An asset path from the config or the front matter, normalised for relURL
+       and absURL.
+
+       Both read a path with a leading slash as rooted at the *host*, not at the
+       baseURL. On a site published under a sub-path — the theme's own demo is
+       one — "/img/og.png" emits https://example.com/img/og.png and drops the
+       sub-path on the floor, while "img/og.png" emits the URL that resolves.
+       Both are what a person writes, and the theme's own exampleSite documented
+       the first one: #37. Nothing warned, because the templates did exactly what
+       they were told — a favicon that 404s is a tab with no icon, an og:image
+       that 404s only fails in someone else's link card, and a post banner that
+       404s is an empty block that looks deliberate.
+
+       So the slash comes off before the conversion. The one path that must keep
+       it is a network-path reference — "//cdn.example/og.png", RFC 3986 §4.2 —
+       which names another host and leaves the scheme to the page. relURL and
+       absURL both hand that kind back untouched, and both decide by looking for
+       the leading "//": trimming first would give them "/cdn.example/og.png",
+       which they would dutifully rewrite onto this site. A scheme-ful URL needs
+       no guard, having no single leading slash to cut.
+
+       One partial rather than the trim spelled out at each call site, because
+       the three do not merely resemble each other: head.html turns this very
+       param into og:image while single.html turns it into the banner, on the
+       same page, so a rule that drifted between the two would put the card and
+       the body image at two different URLs.
+
+       Context: the raw path. Returns it ready for relURL or absURL — which one
+       stays with the call site, since og:image needs the absolute form.
+
+       Nothing here may print: this partial returns a value, so every action is
+       whitespace-trimmed. An untrimmed line breaks `return`. */ -}}
+{{- $v := . -}}
+{{- if not (hasPrefix $v "//") -}}{{- $v = strings.TrimPrefix "/" $v -}}{{- end -}}
+{{- return $v -}}
