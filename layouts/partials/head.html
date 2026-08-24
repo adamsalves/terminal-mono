@@ -33,6 +33,11 @@
 {{- $themeFavicon := "favicon.svg" -}}
 {{- if ne $theme.palette "lime" -}}{{- $themeFavicon = printf "favicon-%s.svg" $theme.palette -}}{{- end -}}
 {{- $favicon := or (partialCached "params-scalar.html" (dict "value" site.Params.favicon "path" "[params.favicon]") "favicon" site.Language.Lang) $themeFavicon -}}
+{{- /* Normalised for the relURL below: a rooted "/favicon.svg" is rooted at the
+       *host*, so under a sub-path baseURL it dropped the sub-path and the tab
+       lost its icon in silence. asset-path.html carries the whole of it. The
+       theme's own default is already unrooted, so this is a no-op for it. */ -}}
+{{- $favicon = partial "asset-path.html" $favicon -}}
 {{- $desc := or .Description .Summary $siteDesc -}}
 {{- $desc = $desc | plainify | truncate 200 -}}
 <meta charset="utf-8">
@@ -63,7 +68,12 @@
        half of the warning anyway. */ -}}
 {{- $pageImg := partial "params-scalar.html" (dict "value" .Params.image "path" (printf "image in %s" .RelPermalink)) -}}
 {{- $ogImage := partialCached "params-scalar.html" (dict "value" site.Params.ogImage "path" "[params.ogImage]") "ogImage" site.Language.Lang -}}
-{{- with or $pageImg $ogImage }}{{ $img = . | absURL }}{{ end -}}
+{{- /* Normalised for absURL the same way, and this one is the worst of the
+       three: the same param feeds og:image here and the banner in single.html,
+       so a rooted spelling broke twice on one page — and og:image only fails
+       *outside* the site, in someone else's link card, where the author never
+       sees it. */ -}}
+{{- with or $pageImg $ogImage }}{{ $img = partial "asset-path.html" . | absURL }}{{ end -}}
 <meta property="og:type" content="{{ cond $isHome "website" "article" }}">
 <meta property="og:title" content="{{ cond $isHome $siteName .Title }}">
 <meta property="og:description" content="{{ $desc }}">
