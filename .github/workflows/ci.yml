@@ -46,6 +46,33 @@ jobs:
       # than as one assertion inside a unittest summary.
       - name: Assert every palette clears WCAG AA
         run: python3 scripts/check_contrast.py
+      # The other half of the same PR, and the half a build cannot show: the
+      # entrance animation used to fade opacity from 0, which keeps the largest
+      # element on the page invisible for 500ms and takes FCP/LCP with it. It
+      # renders identically either way — the only difference is a number in a
+      # Lighthouse run nobody is looking at when the regression lands.
+      - name: Assert the entrance animation does not hide the LCP element
+        run: |
+          set -eo pipefail
+          frames=$(grep -o '@keyframes fadeup{[^}]*}[^}]*}' assets/css/terminal.css)
+          if [ -z "$frames" ]; then
+            echo 'fadeup: @keyframes fadeup is gone — this check has nothing to look at'
+            exit 1
+          fi
+          if printf '%s' "$frames" | grep -q 'opacity'; then
+            echo 'fadeup: animating opacity again — Chrome does not count an element'
+            echo 'at opacity:0 towards FCP or LCP, so this holds the main content'
+            echo 'out of the metric for the whole animation. Animate transform alone.'
+            printf '%s\n' "$frames"
+            exit 1
+          fi
+          echo 'fadeup: transform only, the LCP element stays visible'
+      # The stylesheet says the two .woff2 are what fonts.gstatic.com serves for
+      # JetBrains Mono v24, committed unmodified. Without this the claim is a
+      # comment, and `immutable` in netlify.toml rests on it: a font swapped in
+      # place under the same filename would be served from cache for a year.
+      - name: Assert the font binaries are the ones that were reviewed
+        run: cd static/fonts && sha256sum -c SHA256SUMS
 
   build:
     runs-on: ubuntu-latest
@@ -109,16 +136,26 @@ jobs:
           # file that was published, and carrying crossorigin — a font is fetched
           # in CORS mode whether or not it is same-origin, so a preload without it
           # sits in a different cache slot than the request it was meant to serve.
-          links = [m.group(0) for m in re.finditer(r'<link[^>]*rel=["\']?preload["\']?[^>]*>', html)
+          # Same attr() as "Assert the asset params resolve under a sub-path"
+          # below, deliberately spelled the same way: minified HTML drops the
+          # quotes around a value, and two steps in one job disagreeing about
+          # how to read an attribute is how one of them starts passing on
+          # output the other rejects.
+          def attr(tag, name):
+              m = re.search(r'\b%s=(?:"([^"]*)"|\'([^\']*)\'|([^"\'>\s]+))' % name, tag)
+              if not m:
+                  return None
+              return next(g for g in m.groups() if g is not None)
+
+          links = [m.group(0) for m in re.finditer(r'<link\b[^>]*\brel=["\']?preload\b[^>]*>', html)
                    if 'font' in m.group(0)]
           if not links:
               bad.append('no <link rel=preload as=font> in the head')
           for link in links:
-              href = re.search(r'href=["\']?([^"\' >]+)', link)
-              if not href:
+              url = attr(link, 'href')
+              if url is None:
                   bad.append('a font preload with no href: %s' % link)
                   continue
-              url = href.group(1)
               if not url.startswith('/terminal-mono/fonts/'):
                   bad.append('preload href %s is not under the baseURL sub-path' % url)
               if 'crossorigin' not in link:
@@ -154,14 +191,14 @@ jobs:
           ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
           printf 'baseURL = "https://example.com/t/"\ntitle = "Ext"\ntheme = "terminal-mono"\n[params.fonts]\n  latinExt = true\n' > "$d/hugo.toml"
           hugo --source "$d" --gc --minify --panicOnWarning > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
-          n=$(grep -o 'rel=preload' "$d/public/index.html" | wc -l)
+          n=$(grep -o '<link[^>]*rel=preload[^>]*as=font[^>]*>' "$d/public/index.html" | wc -l)
           if [ "$n" != 2 ]; then
             echo "font: latinExt = true should preload both subsets, found $n"
             grep -o '<link rel=preload[^>]*>' "$d/public/index.html"
             exit 1
           fi
           # …and the default does not, which is the half that would rot silently.
-          if [ "$(grep -o 'rel=preload' exampleSite/public/index.html | wc -l)" != 1 ]; then
+          if [ "$(grep -o '<link[^>]*rel=preload[^>]*as=font[^>]*>' exampleSite/public/index.html | wc -l)" != 1 ]; then
             echo 'font: the default build preloads more than latin'
             grep -o '<link rel=preload[^>]*>' exampleSite/public/index.html
             exit 1

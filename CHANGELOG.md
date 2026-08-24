@@ -29,14 +29,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   that never writes those codepoints never requests it and shipping it costs nothing;
   only `latin` is preloaded, since a preload the page does not use is a wasted round
   trip and a console warning. The font is SIL OFL 1.1, redistributed with its licence
-  at `static/fonts/OFL.txt`.
+  at `static/fonts/OFL.txt` and named in `LICENSE`, which is where someone vendoring
+  the theme looks.
+
+  The binaries are the ones `fonts.gstatic.com` serves for v24, committed unmodified,
+  and `static/fonts/SHA256SUMS` is what makes that checkable: CI verifies it, so the
+  claim is not a sentence in a comment. It also enforces the premise the `immutable`
+  cache header rests on — the font's version is in the filename because serving it for
+  a year is only safe if replacing the bytes means writing a different name, and
+  swapping them in place now fails the build instead.
 
 - `[params.fonts] latinExt = true` adds the second `<link rel=preload>`, for sites
   that write mostly in Polish, Czech, Turkish, Romanian or Hungarian. It changes
   nothing about what is published — both subsets always are — only which of them
   starts downloading in the first round trip.
 
-- `scripts/check_contrast.py`, run by CI, asserts two properties of all five palettes
+- `scripts/check_contrast.py`, run by CI, asserts three properties of all five palettes
   at once: every token the stylesheet reads as a text color clears 4.5:1 against every
   ground the palette declares, and `--dim < --dim-2 < --muted-2 < --muted < --prose <
   --soft < --text` by relative luminance. The first is the defect below. The second is
@@ -45,6 +53,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   palette is meant to be a list of hex values, and this is what stops one from entering
   the theme with a rung that fails. It reads the stylesheet only — no build, no
   browser, no network.
+
+  The third property is the checker checking itself. It reads `#rgb` and `#rrggbb`, and
+  anything else — `rgb()`, `color-mix()`, `#rrggbbaa` — is now a named failure rather
+  than a token it walks past: a `--dim` written `rgb(106,106,106)` used to never enter
+  the parser at all, so a stylesheet failing AA came back clean, which is the exact rot
+  the checker exists to prevent. A ground written that way was worse, because it also
+  fell back to `lime`'s value and made the failure line name a hex the palette never
+  declared. It also fails if the stylesheet declares a background token that is not
+  among the four it compares against, since that list is written by hand while the text
+  tokens are discovered.
 
 - The palette is configuration. `[params.theme] palette = "…"` picks one of five —
   `lime` (the default, and what every earlier version rendered), `amber`, `cyberpunk`,
@@ -96,7 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   a post — but the token is read by thirteen rules (`.footer`, `.post-meta`, `.pager`,
   `.tl-date`, `.lang-switch`, `figcaption`, Chroma's line numbers…), all of it at
   12–13.5 px, where the threshold is 4.5:1 rather than the 3:1 large text gets. It
-  measured between 3.44:1 and 3.94:1 depending on the palette, worst against
+  measured between 3.44:1 and 3.81:1 depending on the palette, worst against
   `--surface-2` — the *lightest* ground, not `--bg`. Each palette's value is lifted the
   minimum needed to clear 4.5:1 against that worst case, preserving its hue:
   `#6b7263 → #798071` (lime), `#776a56 → #887b67` (amber), `#6d6390 → #8076a3`
@@ -121,15 +139,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   that renders immediately. The keyframes now animate `transform` alone — the motion is
   unchanged, and a partial fade would not have worked, since Chrome's heuristic is not
   a threshold on the computed value. `prefers-reduced-motion` still switches it off.
-
-- `netlify.toml` serves `/css/*`, `/js/*` and `/fonts/*` with
-  `max-age=31536000, immutable`. All three are immutable by construction — the CSS and
-  the JS carry a SHA-256 of their contents in the filename and the fonts carry the
-  font's version — and were going out with Netlify's default `max-age=600`, which
-  Lighthouse scored at an 8% cache hit probability. The README now documents the
-  equivalent for Cloudflare Pages, Vercel and nginx, and says plainly that GitHub Pages
-  cannot set headers at all, because nothing in the built output tells a consumer that
-  the theme fingerprints its assets.
+  CI asserts the keyframes animate `transform` alone — it is the one change here that
+  renders identically when it regresses, so nothing else would have caught it coming
+  back.
 
 - Colors that did not follow the accent because they never went through it. Eight
   `rgba(182,255,60,…)` washes were spelled out in `terminal.css` — the solid button's
@@ -237,6 +249,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   do: `languageDirection = "rtl"` reaches the page as `<html dir="rtl">`, but the
   stylesheet is written in physical `left`/`right` properties and does not mirror, so
   RTL is untested and unclaimed rather than quietly broken.
+
+### Changed
+
+- `netlify.toml` serves `/css/*`, `/js/*` and `/fonts/*.woff2` with
+  `max-age=31536000, immutable`. All three are immutable by construction — the CSS and
+  the JS carry a SHA-256 of their contents in the filename and the fonts carry the
+  font's version — and were going out with Netlify's default `max-age=600`, which
+  Lighthouse scored at an 8% cache hit probability. The README now documents the
+  equivalent for Cloudflare Pages, Vercel and nginx, and says plainly that GitHub Pages
+  cannot set headers at all, because nothing in the built output tells a consumer that
+  the theme fingerprints its assets. The glob is `*.woff2` rather than the whole
+  directory because `OFL.txt` and `SHA256SUMS` live there too, and nothing renames
+  those when they change.
 
 ## [0.5.0] — 2026-08-21
 

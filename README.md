@@ -102,6 +102,7 @@ terminal-mono/
 | Footer | `params.footer.copyright`, `params.footer.socialNetworks.github/linkedin` |
 | Blog | `content/blogs/*.md` → `title`, `date`, `tags`, `description`, `image` (optional), `toc` |
 | Colors | `params.theme.palette` (optional, default `lime`) and `params.theme.colors.*` (optional) — see [Colors](#colors) |
+| Fonts | `params.fonts.latinExt` (optional, default `false`) — see [Fonts](#fonts) |
 
 ### Latest posts in the hero terminal
 
@@ -510,7 +511,17 @@ Two subsets are declared:
 | `jetbrains-mono-v24-latin-ext.woff2` | 11.6 KB | Polish, Czech, Turkish, Romanian, Hungarian… |
 
 Both are variable fonts covering `400 800`, so every weight the theme uses comes out
-of one file per subset.
+of one file per subset. They are the files `fonts.gstatic.com` serves for JetBrains Mono
+v24, committed unmodified; `static/fonts/SHA256SUMS` records their checksums and CI
+verifies them, so "unmodified" is something you can check rather than something this
+paragraph asserts.
+
+**Glyphs outside both ranges fall back.** The `unicode-range` pair is the one Google
+serves, and it does not include the arrows the theme itself prints (`→` in the hero
+button and the project links, `←` in the pager and the back-links). Those render in
+whatever monospace font the reader's system supplies, which is what happened with the
+Google-hosted font too — it is unchanged behaviour, not a regression, and re-subsetting
+would mean the binaries stop being the reviewable upstream ones.
 
 **`latin-ext` costs nothing to ship.** It is declared with a `unicode-range`, so a
 browser only requests it when the page actually contains a codepoint in that range —
@@ -558,9 +569,9 @@ drop the `preload` with an `extend-head.html` that does not emit it.
 - **Accessibility:** respects `prefers-reduced-motion` (disables the typewriter and animations),
   and every palette's text tokens clear WCAG AA (4.5:1) against every background it declares —
   `scripts/check_contrast.py` asserts it on every PR.
-- **Licences:** the theme is MIT (`LICENSE`). The bundled JetBrains Mono is **SIL OFL 1.1**,
-  a separate licence, redistributed with the font at `static/fonts/OFL.txt`. Keep that file
-  wherever the `.woff2` files go.
+- **Licences:** the theme is MIT (`LICENSE`, which spells the split out). The bundled
+  JetBrains Mono is **SIL OFL 1.1**, a separate licence, redistributed with the font at
+  `static/fonts/OFL.txt`. Keep that file wherever the `.woff2` files go.
 
 ## Cache headers
 
@@ -581,7 +592,7 @@ does it for the demo; here is the equivalent everywhere else.
   for = "/css/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
-# …the same for /js/* and /fonts/*
+# …the same for /js/* and /fonts/*.woff2
 ```
 
 **Cloudflare Pages / Vercel-style `_headers`** (put it in `static/_headers` so Hugo
@@ -592,7 +603,7 @@ copies it into the build):
   Cache-Control: public, max-age=31536000, immutable
 /js/*
   Cache-Control: public, max-age=31536000, immutable
-/fonts/*
+/fonts/*.woff2
   Cache-Control: public, max-age=31536000, immutable
 ```
 
@@ -602,7 +613,13 @@ copies it into the build):
 {
   "headers": [
     {
-      "source": "/(css|js|fonts)/(.*)",
+      "source": "/(css|js)/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/fonts/(.*).woff2",
       "headers": [
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
@@ -614,7 +631,7 @@ copies it into the build):
 **nginx**:
 
 ```nginx
-location ~* ^/(css|js|fonts)/ {
+location ~* (^/(css|js)/|^/fonts/.*\.woff2$) {
     add_header Cache-Control "public, max-age=31536000, immutable";
 }
 ```

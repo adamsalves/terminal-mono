@@ -93,6 +93,46 @@ class Verdicts(unittest.TestCase):
     def test_a_stylesheet_it_cannot_read_is_a_failure_not_a_pass(self):
         self.assertTrue(self.run_on(":root{--bg:#000}"))
 
+    def test_a_text_token_it_cannot_measure_is_a_failure_not_a_skip(self):
+        # The failure this checker exists to not have. rgb(106,106,106) is the
+        # same color as mono's old --dim, at 3.44:1 -- and while the parser read
+        # hex only, it never entered the token dict, the loop skipped it for
+        # being absent, and a stylesheet failing AA came back clean.
+        css = stylesheet().replace("--dim:#7d7d7d", "--dim:rgb(106,106,106)")
+        failures = self.run_on(css)
+        self.assertTrue(any("--dim" in f and "cannot measure" in f
+                            for f in failures), failures)
+
+    def test_a_ground_it_cannot_measure_is_a_failure_not_a_skip(self):
+        # Worse than the token case: a ground that drops out of the comparison
+        # also falls back to lime's value, so the failure line for some other
+        # token names a hex this palette never declared.
+        css = stylesheet().replace("--surface-2:#131313", "--surface-2:rgb(19,19,19)")
+        failures = self.run_on(css)
+        self.assertTrue(any("--surface-2" in f and "cannot measure" in f
+                            for f in failures), failures)
+
+    def test_eight_digit_hex_does_not_come_back_as_a_plausible_number(self):
+        # #rrggbbaa used to reach relative_luminance(), lose its alpha in
+        # silence and measure as the opaque color it is not.
+        css = stylesheet().replace("--dim:#7d7d7d", "--dim:#7d7d7dff")
+        self.assertTrue(any("cannot measure" in f for f in self.run_on(css)))
+        with self.assertRaises(ValueError):
+            cc.relative_luminance("#7d7d7dff")
+
+    def test_a_new_ground_cannot_enter_unmeasured(self):
+        # GROUNDS is written by hand while the text tokens are discovered, so
+        # nothing else would notice a background token being added.
+        css = stylesheet().replace("--surface-3:#0c0e0b",
+                                   "--surface-3:#0c0e0b; --surface-4:#3a3a3a")
+        failures = self.run_on(css)
+        self.assertTrue(any("--surface-4" in f for f in failures), failures)
+
+    def test_a_missing_file_aborts_with_a_message_not_a_traceback(self):
+        with self.assertRaises(cc.Abort) as caught:
+            cc.check("/nonexistent/terminal.css")
+        self.assertIn("cannot read", str(caught.exception))
+
     def run_on(self, css):
         import tempfile
         with tempfile.NamedTemporaryFile("w", suffix=".css", delete=False) as fh:

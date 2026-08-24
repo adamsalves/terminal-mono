@@ -36,7 +36,10 @@
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
+# .woff2 rather than /fonts/*, because the directory also carries OFL.txt and
+# SHA256SUMS. Those are documents, not versioned assets — nothing renames them
+# when they change, so `immutable` would be a promise the directory cannot keep.
 [[headers]]
-  for = "/fonts/*"
+  for = "/fonts/*.woff2"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"

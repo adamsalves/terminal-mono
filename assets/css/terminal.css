@@ -53,7 +53,7 @@
       a. Contrast. --dim ... --text are read at 12–13.5px, so the threshold
          is 4.5:1, not 3:1, and the worst case is --surface-2 — the lightest
          of the four grounds — not --bg. All five palettes shipped --dim
-         between 3.44 and 3.94 against it, which is the whole of what
+         between 3.44 and 3.81 against it, which is the whole of what
          Lighthouse was reporting as .term__title and .toc__label: the
          token was failing, not the two selectors that happened to be
          on screen. mono's --dim-2 was failing the same way at 4.45.
@@ -109,6 +109,15 @@
    The version is in the filename because netlify.toml serves /fonts/*
    with `immutable`: the guarantee is only true if replacing the font
    means writing a different name. Bump v24 when the font is replaced.
+
+   The two files are the ones Google serves for JetBrains Mono v24 at
+   `wght@400..800`, fetched from fonts.gstatic.com through the CSS API
+   (https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400..800)
+   and committed unmodified. Their checksums are in static/fonts/SHA256SUMS
+   and CI verifies them, which is what makes "unmodified" a claim someone
+   can check rather than a sentence in a comment — and what forces the
+   filename bump above, since replacing the bytes without replacing the
+   name fails the check.
 
    SIL Open Font License 1.1, redistributed alongside the binaries at
    static/fonts/OFL.txt.
