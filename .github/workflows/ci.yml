@@ -97,6 +97,145 @@ jobs:
             grep -o '<title>[^<]*</title>' /tmp/bare/public/index.html
             exit 1
           fi
+      # The three asset params — [params.favicon], [params.ogImage] and a post's
+      # `image` — are the only ones the exampleSite leaves empty, so the path
+      # they take was never built by CI: no warning, no broken build, and under
+      # a sub-path baseURL a rooted spelling silently resolved outside the site
+      # (#37). Two builds, one per spelling, and the assertion is the one that
+      # was missing — every URL the build emits has to name a file the build
+      # actually published.
+      - name: Assert the asset params resolve under a sub-path
+        run: |
+          set -eo pipefail
+          d=/tmp/subpath
+          rm -rf "$d"; mkdir -p "$d/themes" "$d/static/img" "$d/content/blogs"
+          ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          printf 'x' > "$d/static/my-favicon.svg"
+          printf 'x' > "$d/static/img/og.png"
+          printf 'x' > "$d/static/img/banner.png"
+          # $1 is the leading slash, or nothing — the two spellings a person
+          # writes. $2 is where the build lands.
+          build() {
+            printf 'baseURL = "https://example.com/t/"\ntitle = "Sub"\ntheme = "terminal-mono"\n[params]\n  favicon = "%smy-favicon.svg"\n  ogImage = "%simg/og.png"\n' "$1" "$1" > "$d/hugo.toml"
+            printf -- '---\ntitle: "P"\ndate: 2026-01-01\nimage: "%simg/banner.png"\n---\nbody\n' "$1" > "$d/content/blogs/p.md"
+            hugo --source "$d" --gc --minify --panicOnWarning --destination "$2"
+          }
+          build /  "$d/out-rooted"
+          build "" "$d/out-bare"
+          # The escape hatch the trim has to leave open, in both spellings of
+          # "another host": a scheme-ful URL, and a network-path reference
+          # (//host/path, RFC 3986 4.2). Neither has a single leading slash to
+          # cut — but relURL and absURL recognise the second by its leading "//",
+          # so a trim that ran unguarded would hand them /cdn.example/x and they
+          # would rewrite it onto this site. $1 is the host prefix.
+          offsite() {
+            printf 'baseURL = "https://example.com/t/"\ntitle = "Sub"\ntheme = "terminal-mono"\n[params]\n  favicon = "%sfav.svg"\n  ogImage = "%sog.png"\n' "$1" "$1" > "$d/hugo.toml"
+            printf -- '---\ntitle: "P"\ndate: 2026-01-01\nimage: "%sbanner.png"\n---\nbody\n' "$1" > "$d/content/blogs/p.md"
+            hugo --source "$d" --gc --minify --panicOnWarning --destination "$2"
+          }
+          offsite https://cdn.example/ "$d/out-cdn"
+          offsite //cdn.example/       "$d/out-proto"
+          python3 - <<'PY'
+          import pathlib, re, sys
+
+          BASE = 'https://example.com/t/'
+          bad = []
+
+          # Minified HTML drops the quotes around any value that has no spaces in
+          # it, so every read here has to accept both `href="/t/x"` and `href=/t/x`.
+          def attr(tag, name):
+              m = re.search(r'\b%s=(?:"([^"]*)"|\'([^\']*)\'|([^"\'>\s]+))' % name, tag)
+              if not m:
+                  return None
+              return next(g for g in m.groups() if g is not None)
+
+          def emitted(html):
+              """The three URLs the asset params put on a page, by name."""
+              out = {}
+              m = re.search(r'<link\b[^>]*\brel=["\']?icon\b[^>]*>', html, re.I)
+              if m:
+                  out['favicon'] = attr(m.group(0), 'href')
+              for tag in re.findall(r'<meta\b[^>]*>', html, re.I):
+                  key = attr(tag, 'property') or attr(tag, 'name') or ''
+                  if key.lower() in ('og:image', 'twitter:image'):
+                      out[key.lower()] = attr(tag, 'content')
+              m = re.search(r'background-image:\s*url\((["\']?)([^"\')]+)\1\)', html)
+              if m:
+                  out['banner'] = m.group(2)
+              return out
+
+          def resolves(out, where, label, url):
+              """A URL the build emitted names a file the build published."""
+              if '://' in url:
+                  if not url.startswith(BASE):
+                      bad.append('%s %s: %s left the site — %s'
+                                 % (out.name, where, label, url))
+                      return
+                  # Back to a host-rooted path, sub-path included: that prefix is
+                  # the whole point of the assertion, so it must survive the trim.
+                  path = '/' + url.split('://', 1)[1].split('/', 1)[1]
+              else:
+                  path = url
+              if not path.startswith('/t/'):
+                  bad.append('%s %s: %s dropped the sub-path — %s'
+                             % (out.name, where, label, url))
+              elif not (out / path[len('/t/'):]).is_file():
+                  bad.append('%s %s: %s points at %s, which is not in the build'
+                             % (out.name, where, label, url))
+
+          PAGES = ['index.html', 'blogs/p/index.html']
+          # The post page is the one that carries all three at once — its banner
+          # and its og:image come from the same front matter key by two different
+          # routes, which is exactly how #37 managed to fail twice on one page.
+          WANT = {'index.html': ['favicon', 'og:image', 'twitter:image'],
+                  'blogs/p/index.html': ['favicon', 'og:image', 'twitter:image',
+                                         'banner']}
+
+          seen = {}
+          for name in ['out-rooted', 'out-bare']:
+              out = pathlib.Path('/tmp/subpath') / name
+              seen[name] = {}
+              for page in PAGES:
+                  found = emitted((out / page).read_text())
+                  seen[name][page] = found
+                  for label in WANT[page]:
+                      url = found.get(label)
+                      if url is None:
+                          bad.append('%s %s: emitted no %s' % (name, page, label))
+                      else:
+                          resolves(out, page, label, url)
+
+          # And the two spellings have to agree. Asserting each one separately
+          # would still pass if they resolved to two different working URLs.
+          for page in PAGES:
+              if seen['out-rooted'][page] != seen['out-bare'][page]:
+                  bad.append('%s: the two spellings emit different URLs\n'
+                             '  "/img/x": %r\n   "img/x": %r'
+                             % (page, seen['out-rooted'][page],
+                                seen['out-bare'][page]))
+
+          # Driven by WANT, not by what the build emitted: iterating what was
+          # found would let a page that emitted nothing at all pass this arm in
+          # silence, which is the same hole the two arms above already close.
+          for name, prefix in [('out-cdn', 'https://cdn.example/'),
+                               ('out-proto', '//cdn.example/')]:
+              off = pathlib.Path('/tmp/subpath') / name
+              for page in PAGES:
+                  found = emitted((off / page).read_text())
+                  for label in WANT[page]:
+                      url = found.get(label)
+                      if url is None:
+                          bad.append('%s %s: emitted no %s' % (name, page, label))
+                      elif not url.startswith(prefix):
+                          bad.append('%s %s: %s did not pass through — %s'
+                                     % (name, page, label, url))
+
+          if bad:
+              sys.exit('\n'.join(bad))
+          print('sub-path: both spellings of favicon, ogImage and image resolve '
+                'inside the baseURL, and both spellings of an off-site URL pass '
+                'through')
+          PY
       # Hugo's fallback for a missing translation is the site's own
       # defaultContentLanguage, not the theme's i18n/en.toml — so a site whose
       # default language the theme ships no strings for rendered every label as

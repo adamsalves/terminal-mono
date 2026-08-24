@@ -5,7 +5,7 @@ draft = true
 description = ""
 tags = []
 # toc = true   # show the table of contents (default: automatic on long posts)
-# image = ""   # post banner (optional)
+# image = ""   # post banner, relative to the baseURL: "img/post.png"
 +++
 
 Start writing here.
