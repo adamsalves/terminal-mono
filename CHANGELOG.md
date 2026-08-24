@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **`layouts/robots.txt`.** Hugo's built-in one is `User-agent: *` and nothing else — no
+  `Sitemap:` line, and nothing said either way about the crawlers that feed answer
+  engines. This one names them, in two groups that are not the same request: answer
+  engines fetch a page to answer a question now and cite the source back to the reader,
+  and dataset crawlers collect it into a corpus with no citation and no referral.
+  `[params.aeo] allowAI` and `allowTraining` switch them independently, both defaulting
+  to `true` — which is what the bare `User-agent: *` already meant, so an upgrade does
+  not quietly change what a site publishes. `[params.aeo] disallow` keeps paths out of
+  every group, the AI ones included: robots.txt groups do not inherit, so a path excluded
+  only from `*` would have stayed open to exactly the crawlers a site had just named.
+  A build that is not for indexing publishes `Disallow: /` instead, matching the `noindex`
+  meta head.html already emits — the two files disagreeing is how a deploy preview gets
+  crawled. Requires `enableRobotsTXT = true` in the *site's* config: it is a root key and
+  a theme's config is not merged for it. Part of #34.
+
+- **JSON-LD for what the theme actually renders.** `Person` (or `Organization`) and
+  `WebSite` on every page, `BlogPosting` on a post, `WebPage` on any other single page,
+  and `BreadcrumbList` on everything but the home page. Before this the site emitted a
+  `Person` on the home page and nothing anywhere else — a blog whose posts never said
+  they were posts, which is where the 0/20 on Schema Presence came from. The nodes are
+  linked rather than repeated: the publisher carries an `@id` and the post's `author` and
+  `publisher` point at it. `BlogPosting` carries `headline` (capped at the 110 characters
+  Google's documentation caps it at, since a longer one drops the field entirely),
+  `datePublished`, `dateModified`, `author`, `image`, `keywords` from the page's tags,
+  `wordCount` and `inLanguage`. Breadcrumbs are built from `.Ancestors` — the real content
+  tree, not the URL string — so a crumb cannot point somewhere that is not a page.
+  The 404 is the one page that emits none: it is not in the content tree, so a
+  breadcrumb there describes a hierarchy that does not contain it, and a `WebSite` node
+  invites a crawler to treat an error as a document.
+
+- `[params.schema] type = "Organization"` with a `logo`, for the sites that genuinely are
+  one. `Person` stays the default because this is a portfolio theme, and the type is a
+  statement about the site rather than a lever: an Organization on a personal site is
+  schema that lies. The two carry different fields — `jobTitle` belongs to a person,
+  `logo` to an organization, and each is dropped for the other type. An unknown value
+  warns and falls back to `Person`, the way an unknown palette falls back to lime.
+
+- `partials/params-bool.html`, the fourth of the `params-*.html` family and the one whose
+  failure mode is quietest. The other three reach a `range`, a field lookup or a cast, so
+  a wrong type either stops the build or renders something a consumer can see. A boolean
+  reaches an `if`, and `if` accepts anything: `allowAI = "false"` is a non-empty string,
+  which is *true*, so the switch a site wrote to turn something off turns it on instead,
+  and nothing warns. Only a real boolean counts and only an explicit `false` vetoes.
+
 - The palette is configuration. `[params.theme] palette = "…"` picks one of five —
   `lime` (the default, and what every earlier version rendered), `amber`, `cyberpunk`,
   `ice` and `mono` — and `[params.theme.colors]` overrides individual tokens on top of

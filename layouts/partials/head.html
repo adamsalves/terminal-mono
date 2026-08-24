@@ -121,32 +121,15 @@
 <style>:root:root{ {{ . | safeCSS }} }</style>
 {{- end }}
 
-{{/* JSON-LD */}}
-{{ if $isHome }}
-{{- /* footer is not a section, so sections.html never normalised it, and both
-       levels have to be read through the guard: [params.footer] being a table
-       is no promise that socialNetworks is one. */ -}}
-{{- $footer := partialCached "params-table.html" (dict "value" site.Params.footer "path" "[params.footer]") "footer" site.Language.Lang -}}
-{{- $social := partialCached "params-table.html" (dict "value" $footer.socialNetworks "path" "[params.footer.socialNetworks]") "footer.socialNetworks" site.Language.Lang -}}
-{{- $sameAs := slice -}}
-{{- with $social.github }}{{ $sameAs = $sameAs | append . }}{{ end -}}
-{{- with $social.linkedin }}{{ $sameAs = $sameAs | append . }}{{ end -}}
-{{- /* jobTitle and description are omitted when unset rather than emitted as
-       JSON null. jsonify renders a nil as `null`, which is valid JSON and so
-       was never the %!s(<nil>) defect above — but `"jobTitle":null` still
-       states that the person has no job title, where saying nothing states
-       only that this site did not fill the field in. */ -}}
-{{- $person := dict
-  "@context" "https://schema.org"
-  "@type" "Person"
-  "name" $siteName
-  "url" .Permalink
-  "sameAs" $sameAs -}}
-{{- with $hero.subtitle }}{{ $person = merge $person (dict "jobTitle" .) }}{{ end -}}
-{{- with $siteDesc }}{{ $person = merge $person (dict "description" .) }}{{ end -}}
-<script type="application/ld+json">
-{{- $person | jsonify (dict "indent" "  ") | safeJS -}}
-</script>
-{{ end }}
+{{/* JSON-LD — see schema.html. Everything it needs has already been resolved
+     and guarded above, so it is handed the values rather than reading the
+     params a second time. */}}
+{{ partial "schema.html" (dict
+  "page" .
+  "siteName" $siteName
+  "siteDesc" $siteDesc
+  "desc" $desc
+  "image" $img
+  "hero" $hero) }}
 
 {{ if templates.Exists "partials/extend-head.html" }}{{ partial "extend-head.html" . }}{{ end }}

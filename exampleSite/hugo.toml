@@ -130,6 +130,61 @@ summaryLength = 30
   # ogImage = "/img/og.png"  # default image for Open Graph/Twitter
   # twitter = "robinvale"    # handle (without @) for twitter:site
 
+  # ============================================================
+  #  AEO — Answer Engine Optimization.
+  #
+  #  Needs `enableRobotsTXT = true` at the top of this file. That is
+  #  a root config key and a theme's config is not merged for it, so
+  #  the theme ships layouts/robots.txt and cannot switch it on: with
+  #  the flag off, Hugo publishes nothing and none of this applies.
+  #
+  #  Two groups of crawlers, and they are not the same request:
+  #
+  #    allowAI        answer engines — they fetch a page to answer a
+  #                   question now and cite the source back to the
+  #                   reader. Being found by these is the whole point,
+  #                   so it defaults to true.
+  #    allowTraining  dataset crawlers — the page goes into a corpus a
+  #                   model is trained on later, with no citation and
+  #                   no referral. Defaults to true because that is
+  #                   what `User-agent: *` already meant, and it is
+  #                   the one people most often want off.
+  #
+  #  disallow is a list of paths kept out of every group, the site's
+  #  own and the AI ones alike — robots.txt groups do not inherit, so
+  #  the theme repeats them rather than letting a path excluded from
+  #  `*` stay open to everything named after it.
+  #
+  #  Nothing here applies to a non-production build without
+  #  `allowIndexing`: robots.txt is `Disallow: /` then, matching the
+  #  noindex meta the theme already puts on every page.
+  # ============================================================
+  # [params.aeo]
+  #   allowAI = true
+  #   allowTraining = true
+  #   disallow = ["/drafts/"]
+
+  # ============================================================
+  #  JSON-LD. The theme emits it on every page with no configuration
+  #  — Person + WebSite everywhere, BlogPosting on a post,
+  #  BreadcrumbList on anything that is not the home page — because a
+  #  blog whose posts never say they are posts is not a preference.
+  #
+  #  One thing is a choice, and it is a statement about the site
+  #  rather than a lever: who publishes it. Person is the default and
+  #  is what a portfolio has. Set Organization only if the site
+  #  genuinely is one — an agency, a studio, a company blog — and
+  #  give it a logo, which is what Google requires before it will use
+  #  an Organization at all.
+  #
+  #  The two carry different fields. jobTitle comes from
+  #  [params.hero] subtitle and belongs to a person; logo belongs to
+  #  an organization. Each is dropped for the other type.
+  # ============================================================
+  # [params.schema]
+  #   type = "Organization"
+  #   logo = "img/logo.png"
+
   [params.navbar]
     brandName = "robin.dev"
     # showBlog = true   # force the nav blog link on/off; default is auto (shown when the language has posts)
