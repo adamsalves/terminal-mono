@@ -322,7 +322,11 @@ hugo new blogs/my-post.md
 ```
 
 - `description` in the front matter becomes the card summary and the meta description.
-- `image` becomes the post banner; without it, we use the styled `~/blog/<slug>.md` banner.
+- `image` becomes the post banner and the `og:image` of the post; without it, we use the
+  styled `~/blog/<slug>.md` banner. The path is relative to the `baseURL` (`img/post.png`),
+  and the same goes for `params.favicon` and `params.ogImage` — a leading slash is trimmed,
+  because rooted at the *host* it would resolve outside a site published under a sub-path.
+  To point at something off the site, write the absolute URL.
 - `toc: true` forces the table of contents (by default it appears on long posts). `toc: false` disables it.
 - Tags generate the `/tags/` and `/tags/<tag>/` pages.
 - The navbar **blog link appears automatically** once a language has at least one post

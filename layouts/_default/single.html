@@ -11,9 +11,12 @@
 
     {{/* Same guard head.html puts on this param, for the same relURL cast —
          guarding it in one file and not the other would tolerate the typo in
-         the <head> and still abort on the body of the very same page. */}}
+         the <head> and still abort on the body of the very same page. The
+         leading-slash trim travels with it for the same reason: head.html
+         resolves this very param into og:image, and the two spellings of the
+         banner must not disagree with the card. */}}
     {{ with partial "params-scalar.html" (dict "value" .Params.image "path" (printf "image in %s" .RelPermalink)) }}
-      <div class="featured has-image" role="img" aria-label="{{ $.Title }}" style="background-image:url('{{ . | relURL }}')"></div>
+      <div class="featured has-image" role="img" aria-label="{{ $.Title }}" style="background-image:url('{{ strings.TrimPrefix "/" . | relURL }}')"></div>
     {{ else }}
       <div class="featured" aria-hidden="true">
         <span class="tick"></span>

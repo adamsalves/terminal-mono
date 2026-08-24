@@ -33,6 +33,18 @@
 {{- $themeFavicon := "favicon.svg" -}}
 {{- if ne $theme.palette "lime" -}}{{- $themeFavicon = printf "favicon-%s.svg" $theme.palette -}}{{- end -}}
 {{- $favicon := or (partialCached "params-scalar.html" (dict "value" site.Params.favicon "path" "[params.favicon]") "favicon" site.Language.Lang) $themeFavicon -}}
+{{- /* The leading slash goes before relURL sees it, and it is not cosmetic:
+       relURL reads a rooted path as rooted at the *host*, so under a baseURL
+       with a sub-path — the demo is one — "/favicon.svg" emits /favicon.svg and
+       drops the sub-path on the floor, while "favicon.svg" emits /t/favicon.svg.
+       Both spellings are what a person writes — the theme's own exampleSite
+       documented the first one — and only one of them resolved, silently: a
+       favicon that 404s is a tab with no icon and nothing else.
+
+       A site that really does mean the host root writes the absolute URL, which
+       has no leading slash to trim. The theme's own default is already unrooted,
+       so this is a no-op for it. */ -}}
+{{- $favicon = strings.TrimPrefix "/" $favicon -}}
 {{- $desc := or .Description .Summary $siteDesc -}}
 {{- $desc = $desc | plainify | truncate 200 -}}
 <meta charset="utf-8">
@@ -63,7 +75,12 @@
        half of the warning anyway. */ -}}
 {{- $pageImg := partial "params-scalar.html" (dict "value" .Params.image "path" (printf "image in %s" .RelPermalink)) -}}
 {{- $ogImage := partialCached "params-scalar.html" (dict "value" site.Params.ogImage "path" "[params.ogImage]") "ogImage" site.Language.Lang -}}
-{{- with or $pageImg $ogImage }}{{ $img = . | absURL }}{{ end -}}
+{{- /* Trimmed before absURL for the same reason as the favicon above, and this
+       one is the worst of the three: the same param feeds og:image here and the
+       banner in single.html, so a rooted spelling breaks twice on one page —
+       and og:image only fails *outside* the site, in someone else's link card,
+       where the author never sees it. */ -}}
+{{- with or $pageImg $ogImage }}{{ $img = strings.TrimPrefix "/" . | absURL }}{{ end -}}
 <meta property="og:type" content="{{ cond $isHome "website" "article" }}">
 <meta property="og:title" content="{{ cond $isHome $siteName .Title }}">
 <meta property="og:description" content="{{ $desc }}">
