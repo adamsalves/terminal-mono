@@ -47,6 +47,12 @@ jobs:
           ln -sfn "$GITHUB_WORKSPACE" exampleSite/themes/terminal-mono
       - name: Build exampleSite
         run: hugo --source exampleSite --gc --minify --baseURL "${{ steps.pages.outputs.base_url }}/"
+      # The structural half of the AEO check, run on the bytes that are about to
+      # be deployed. This one is authoritative: it reads the build, so it sees
+      # the demo's own robots.txt, llms.txt and markdown twins rather than
+      # whatever happens to sit at the host root.
+      - name: Check the AEO output
+        run: python3 scripts/check_aeo.py exampleSite/public
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -62,3 +68,40 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+      # Informational, never blocking, and worth reading with its limits in
+      # mind — which is why they are printed next to the score rather than left
+      # for someone to rediscover.
+      #
+      # aeo.js scans `new URL(target).origin`: for a project site published under
+      # a path it fetches robots.txt, llms.txt and sitemap.xml from the *host
+      # root*, which belongs to no deploy of this theme. Its HTML regexes also
+      # require quoted attributes, and `hugo --minify` emits valid unquoted
+      # HTML5 — so canonical and JSON-LD read as absent whatever is on the page.
+      # Both are upstream bugs, both are filed under limitations below, and both
+      # mean the number here is a floor and not a measurement.
+      - name: AEO score (informational)
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          url="${{ steps.deployment.outputs.page_url }}"
+          path=$(printf '%s' "$url" | sed -E 's|https?://[^/]+||')
+          {
+            echo "## AEO"
+            echo
+            echo "Scanned \`$url\` with \`npx aeo.js check\`."
+            echo
+            if [ -n "${path%/}" ]; then
+              echo "> **This score is not the theme's.** aeo.js scans the host root, and"
+              echo "> this demo is published under \`$path\`. Its robots.txt, llms.txt and"
+              echo "> sitemap.xml checks are reading files that belong to another site."
+              echo
+            fi
+            echo "> Its HTML checks require quoted attributes and this build is minified,"
+            echo "> so canonical and JSON-LD read as absent regardless of the page."
+            echo
+            echo '```'
+            npx -y aeo.js check "$url" 2>&1 | head -40 || echo "(the checker did not run)"
+            echo '```'
+            echo
+            echo "The authoritative check is \`scripts/check_aeo.py\`, run on the build in the job above."
+          } >> "$GITHUB_STEP_SUMMARY"

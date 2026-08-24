@@ -40,6 +40,12 @@ function makeNode(tag) {
     appendChild(c) { this.children.push(c); return c; },
     removeChild(c) { this.children = this.children.filter((n) => n !== c); },
     insertAdjacentHTML(pos, html) { this._html += html; this.appends++; },
+    /* The typewriter's tail is a text node whose .data is reassigned, so what a
+     * node "contains" is no longer only its innerHTML. Reading both is what lets
+     * a test still see a half-typed segment. */
+    get text() {
+      return this._html + this.children.map((c) => (c.nodeType === 3 ? c.data : c.text)).join('');
+    },
     /* The script measures with two nested probes and marks each one with
      * data-probe, so this reads the role instead of inferring it from the shape
      * of the tree: a stub that guessed would keep answering confidently — and
@@ -51,8 +57,30 @@ function makeNode(tag) {
   };
 }
 
+/* A text node. The script reassigns .data on one of these instead of rebuilding
+ * the tail's markup — writes counted so a test can assert the parser is never
+ * involved, which is the whole point of the change. */
+function makeText(data) {
+  return { nodeType: 3, _data: data || '', writes: 0,
+           set data(v) { this._data = v; this.writes++; },
+           get data() { return this._data; } };
+}
+
+/* One frame is 16ms of the fake clock. The typewriter budgets in milliseconds
+ * and writes once per frame, so the harness has to hand it a moving timestamp —
+ * a stub that always said 0 would credit no time and never type anything. */
+const FRAME_MS = 16;
+
+/* The <pre>'s children minus the measurement probe. The probe used to be created
+ * and destroyed inside one call and was never visible from here; it is kept in
+ * place now, so position in the child list is no longer a reliable way to find
+ * the two regions the typewriter writes into. It carries data-probe, so ask. */
+function typed(pre) {
+  return pre.children.filter((c) => !c.attrs || !c.attrs['data-probe']);
+}
+
 function run(dataset, { reduceMotion = false, runTimers = true, width = 0, char = 0,
-                       resizeObserver = true } = {}) {
+                       resizeObserver = true, frameMs = FRAME_MS } = {}) {
   const pre = makeNode('pre');
   pre.dataset = dataset;
   pre.clientWidth = width;
@@ -79,12 +107,15 @@ function run(dataset, { reduceMotion = false, runTimers = true, width = 0, char 
     getElementById: (id) => (id === 'hero-term' ? pre : null),
     documentElement: { scrollHeight: 0 },
     createElement: makeNode,
+    createTextNode: makeText,
     addEventListener: () => {},
     fonts: { ready: { then: (fn) => { fontCbs.push(fn); } } },
   };
+  const frames = [];
   global.window = {
     matchMedia: () => ({ matches: reduceMotion }),
     addEventListener: (type, fn) => { (listeners[type] = listeners[type] || []).push(fn); },
+    requestAnimationFrame: (fn) => frames.push(fn),
     scrollY: 0,
     innerHeight: 0,
   };
@@ -92,20 +123,35 @@ function run(dataset, { reduceMotion = false, runTimers = true, width = 0, char 
 
   new Function(fs.readFileSync(SRC, 'utf8'))();
 
-  // Drain the typewriter. Each tick enqueues the next one; cap it so a runaway
-  // loop fails the test instead of hanging CI.
+  // Drain the typewriter. Each frame schedules the next one; cap it so a runaway
+  // loop fails the test instead of hanging CI. The timer queue is drained too:
+  // nothing schedules on it while requestAnimationFrame exists, and a change
+  // that quietly went back to setTimeout should still produce a typed terminal
+  // rather than an empty one.
   let guard = 0;
-  while (runTimers && queue.length) {
+  let clock = 0;
+  let frameCount = 0;
+  while (runTimers && (queue.length || frames.length)) {
     if (++guard > 500000) throw new Error('typewriter did not terminate');
-    queue.shift()();
+    if (frames.length) {
+      clock += frameMs;
+      frameCount++;
+      frames.shift()(clock);
+    } else {
+      queue.shift()();
+    }
   }
 
-  const [done, tail] = pre.children;
+  const [done, tail] = typed(pre);
   return {
     pre,
     done,
     tail,
-    html: (done ? done.innerHTML : '') + (tail ? tail.innerHTML : ''),
+    frames: frameCount,
+    // The tail's text lives in a text node now, so `text` is what reads it. done
+    // is still markup — completed segments go through wrap(), which is where the
+    // escaping and the anchors happen.
+    html: (done ? done.innerHTML : '') + (tail ? tail.text : ''),
     // The height the box reserves, in lines. undefined when the script left the
     // template's own count standing.
     lines: pre.style.props['--hero-lines'],
@@ -161,25 +207,113 @@ check('a finished link is appended, never rebuilt', () => {
   return done.rebuilds === 0 && done.appends > 0;
 });
 
-check('a half-typed segment is never a link', () => {
-  // Stop after a handful of ticks: whatever is mid-flight must not be an anchor.
+/* Runs the script and stops mid-animation, handing back the state at each frame.
+ * The full-drain `run` above cannot see any of this: by the time it returns the
+ * tail is empty and every segment has been committed. */
+function runPartial(dataset, frameLimit, frameMs = FRAME_MS) {
   const pre = makeNode('pre');
-  pre.dataset = { ...BASE, posts: JSON.stringify(POSTS) };
+  pre.dataset = dataset;
+  pre.clientWidth = 0;
+  metrics = { width: 0, char: 0 };
   const queue = [];
-  global.document = { getElementById: (id) => (id === 'hero-term' ? pre : null), documentElement: { scrollHeight: 0 }, createElement: makeNode, addEventListener: () => {} };
-  global.window = { matchMedia: () => ({ matches: false }), addEventListener: () => {}, scrollY: 0, innerHeight: 0 };
+  const frames = [];
+  global.document = {
+    getElementById: (id) => (id === 'hero-term' ? pre : null),
+    documentElement: { scrollHeight: 0 },
+    createElement: makeNode,
+    createTextNode: makeText,
+    addEventListener: () => {},
+  };
+  global.window = {
+    matchMedia: () => ({ matches: false }),
+    addEventListener: () => {},
+    requestAnimationFrame: (fn) => frames.push(fn),
+    scrollY: 0,
+    innerHeight: 0,
+  };
   global.setTimeout = (fn) => queue.push(fn);
+  delete global.ResizeObserver;
   new Function(fs.readFileSync(SRC, 'utf8'))();
+  const states = [];
+  let clock = 0;
+  for (let i = 0; i < frameLimit && frames.length; i++) {
+    clock += frameMs;
+    frames.shift()(clock);
+    const [done, tail] = typed(pre);
+    states.push({ tail, text: tail ? tail.text : '', done });
+  }
+  return { pre, states };
+}
+
+check('a half-typed segment is never a link', () => {
+  // A text node cannot be an anchor, which is the point — but the tail's own
+  // children must not become one either, and the text must actually be arriving
+  // or this passes by never looking at anything.
+  const { pre, states } = runPartial({ ...BASE, posts: JSON.stringify(POSTS) }, 4000);
   let sawTailContent = false;
-  for (let i = 0; i < 4000 && queue.length; i++) {
-    queue.shift()();
-    const tail = pre.children[1];
-    if (tail && tail.innerHTML) {
-      sawTailContent = true;
-      if (tail.innerHTML.includes('<a ')) return false;
-    }
+  for (const st of states) {
+    if (st.text) sawTailContent = true;
+    if (st.tail.innerHTML.includes('<a ')) return false;
+    if (st.tail.children.some((c) => c.nodeType !== 3 && c.tagName === 'A')) return false;
   }
   return sawTailContent;
+});
+
+check('the measurement probe never outlives the measurement', () => {
+  // Keeping one was tried and rejected: it does not move forced-reflow-insight,
+  // and it leaves the ruler's "0123456789" inside the terminal's textContent for
+  // the life of the page — invisible to a reader and read by anything that
+  // extracts text from the rendered DOM.
+  const r = run({ ...BASE, posts: JSON.stringify(POSTS) }, { width: 400, char: 8 });
+  const probes = () => r.pre.children.filter((c) => c.attrs && c.attrs['data-probe']);
+  r.resize(360);
+  r.fontsReady(9);
+  return probes().length === 0;
+});
+
+check('the tail is never rebuilt through the HTML parser', () => {
+  // The 442 innerHTML assignments this replaced each destroyed and rebuilt a
+  // node identical to the one before it. Nothing may assign to the tail at all.
+  const { tail } = run({ ...BASE, posts: JSON.stringify(POSTS) });
+  return tail.rebuilds === 0 && tail.appends === 0;
+});
+
+check('the tail reuses one span and one text node for the whole animation', () => {
+  const { states } = runPartial({ ...BASE, posts: JSON.stringify(POSTS) }, 4000);
+  const span = states[0].tail.children[0];
+  const text = span.children[0];
+  return text.nodeType === 3 && text.writes > 0 &&
+    states.every((st) => st.tail.children.length === 1 &&
+                         st.tail.children[0] === span &&
+                         span.children.length === 1 &&
+                         span.children[0] === text);
+});
+
+check('one write per frame, not one per character', () => {
+  // 40ms frames on a throttled profile: two to three characters come due in each
+  // one, and they cost a single write between them.
+  const slow = run({ ...BASE, posts: JSON.stringify(POSTS) }, { frameMs: 40 });
+  const fast = run({ ...BASE, posts: JSON.stringify(POSTS) }, { frameMs: 16 });
+  return slow.frames > 0 && slow.frames * 2 < fast.frames;
+});
+
+check('a frame the reader was away for resumes typing instead of skipping it', () => {
+  // A backgrounded tab hands back one enormous delta. Spending it would paint
+  // the rest of the terminal at once, which is the animation being skipped.
+  // Ten frames of a minute each. Uncapped that is ten minutes of budget and the
+  // whole terminal in one paint; capped at 100ms it is a second of typing.
+  const { states } = runPartial({ ...BASE, posts: JSON.stringify(POSTS) }, 10, 60000);
+  const last = states[states.length - 1];
+  const printed = last.done.innerHTML + last.text;
+  return printed.length > 0 && !printed.includes('ls ~/blog');
+});
+
+check('the opening pause is still there', () => {
+  // 400ms before the first character. At 16ms a frame that is 25 frames of
+  // nothing, and a change that dropped it would show up here rather than as a
+  // reader noticing the terminal no longer waits.
+  const { states } = runPartial({ ...BASE, posts: '[]' }, 24);
+  return states.every((st) => st.text === '' && st.done.innerHTML === '');
 });
 
 check('no listing when the site has no posts', () => !run({ ...BASE, posts: '[]' }).html.includes('ls ~/blog'));

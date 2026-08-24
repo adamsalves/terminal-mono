@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **`llms.txt`, `llms-full.txt` and a markdown twin per post**, as Hugo output
+  formats. `/llms.txt` is the index an answer engine can read in one request instead
+  of crawling — title, summary, and every post as a linked list with a line of
+  context; `/llms-full.txt` is the content behind those links in one file, each post
+  preceded by its canonical URL; and each post publishes an `index.md` next to its
+  HTML. All three are per language: a bilingual site gets `/llms.txt` and
+  `/pt/llms.txt`, each listing its own posts. `llms.txt` links to the twins rather
+  than the HTML, which is what the spec asks for, and the canonical URL is the first
+  line inside each twin so a citation that follows the link still knows where to
+  point. Both use `.RawContent` — the markdown as written, headings and code fences
+  intact — rather than `.Plain`, which is what is left after throwing that structure
+  away. Part of #34.
+
+  The theme defines the three formats; the site declares them, because Hugo does not
+  merge a theme's `[outputs]` into the site's. The README says so and CI asserts both
+  halves — that the files appear when a site declares the block, and that a site that
+  never does still builds, still gets its RSS feed, and gets no half-written index.
+
+- `scripts/check_aeo.py` grew the other half of its job: every link in every
+  `llms.txt` resolves to a file the build published, each language's index is rooted
+  at the site rather than at its own language directory, and every markdown twin
+  names its own page back. The link check found two of its own bugs while it was
+  being written — a percent-encoded tag (`tags/migração/` is linked as
+  `tags/migra%C3%A7%C3%A3o/`) and the second language's index, whose `- Home:` is
+  `/pt/` while its links are rooted at `/`.
+
+- The AEO score is printed to the GitHub Pages job summary on every deploy, as
+  information and never as a gate — with its two limits printed next to it, because
+  the number is a floor rather than a measurement. `npx aeo.js check` scans
+  `new URL(target).origin`, so for a project site published under a path it reads the
+  host root, which belongs to no deploy of this theme; and its HTML checks require
+  quoted attributes while `hugo --minify` emits valid unquoted HTML5, so canonical
+  and JSON-LD read as absent whatever is on the page. The authoritative check is
+  `check_aeo.py`, which now also runs on the bytes about to be deployed.
+
 - **`layouts/robots.txt`.** Hugo's built-in one is `User-agent: *` and nothing else — no
   `Sitemap:` line, and nothing said either way about the crawlers that feed answer
   engines. This one names them, in two groups that are not the same request: answer
@@ -73,6 +108,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   build, which is the rule `sections.html` set and the `params-*.html` guards enforce.
 
 ### Fixed
+- The typewriter no longer runs the HTML parser once per character. `wrap()` for an
+  unfinished segment always produces the same shape — one span with a color — so all
+  442 `tailEl.innerHTML` assignments were rebuilding a node identical to the one they
+  had just destroyed. The tail is now one span holding one text node, both built once,
+  with `.data` reassigned. Measured over three Lighthouse runs on a production build,
+  mobile: **HTML parsing 62 ms → 12 ms**, consistently and well outside the run-to-run
+  spread. Part of #34.
+
+  The loop moved from `setTimeout(…, 15)` to `requestAnimationFrame`, writing once per
+  frame instead of once per character. On a machine fast enough to render every 16 ms
+  that is the same number of writes minus the timer churn; on the throttled profile the
+  original measurement came from, two to four characters come due within one frame and
+  now cost one write between them. It also stops entirely in a background tab, where
+  the old timer kept typing to nobody. A frame boundary the reader was away for is
+  capped at 100 ms so a backgrounded tab resumes typing rather than dumping the rest of
+  the terminal in one paint. The opening pause, the per-character and per-newline
+  timings, and `prefers-reduced-motion` are all unchanged.
+
+  `.term__body` gets `contain: layout style`. The `min-height` above it already
+  guarantees the box does not change size while it fills, and this is the browser being
+  told so: without it every write invalidated the layout of the whole document, measured
+  at 172 invalidations across one run. Not `paint` or `content` — paint containment
+  clips, and the links inside carry an `outline-offset` that would be clipped with them.
+
+  Two things the original report projected did not survive being measured, and are
+  recorded here rather than quietly dropped. The **1.4 s** it attributed to the
+  typewriter is the cost of the animation *existing* — it came from an A/B against
+  `--force-prefers-reduced-motion`, which does not run it at all — not the cost of how
+  it is written; the implementation change is worth the 50 ms of parsing above plus the
+  work it stops doing in a hidden tab. And **`forced-reflow-insight` cannot be cleared**:
+  it fires on about half of Lighthouse's runs both before and after, because what is
+  forced is the document's first layout, which the hero's height reservation genuinely
+  needs. Reusing one persistent probe instead of building one per call was tried and
+  reverted — it moved the audit not at all and left the ruler's `0123456789` inside the
+  terminal's `textContent` for the life of the page, read by anything that extracts text
+  from the rendered DOM, which on this theme now includes the answer engines `llms.txt`
+  is for. Deferring the first measurement into `requestAnimationFrame` would clear the
+  audit by giving up the reservation, which is the layout shift the reservation exists
+  to prevent.
+
 - Colors that did not follow the accent because they never went through it. Eight
   `rgba(182,255,60,…)` washes were spelled out in `terminal.css` — the solid button's
   glow, the reading-progress bar, the contact box, the tag hover, the blockquote, the

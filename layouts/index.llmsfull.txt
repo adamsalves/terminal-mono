@@ -1,0 +1,44 @@
+{{- /* llms-full.txt — the content llms.txt indexes, in one request.
+
+       Markdown rather than the rendered HTML, and .RawContent rather than
+       .Plain: an answer engine wants the headings, the lists and the code
+       fences, which is exactly what .Plain throws away and .RawContent keeps.
+
+       Each post is preceded by its URL, so a model quoting from this file has
+       the citable address next to the text rather than having to match a title
+       back to the index. That is the whole difference between a corpus and a
+       source, and it is the only reason this file is worth publishing.
+
+       Built as a list of lines and joined, for the reason llms.txt gives: plain
+       text has no forgiving renderer behind it.
+
+       One per language, the same way llms.txt is. */ -}}
+{{- $siteName := or site.Params.title site.Title -}}
+{{- $siteDesc := partialCached "params-scalar.html" (dict "value" site.Params.description "path" "[params.description]") "description" site.Language.Lang -}}
+{{- $posts := where site.RegularPages "Type" "blogs" -}}
+{{- if not $posts }}{{ $posts = site.RegularPages }}{{ end -}}
+
+{{- $out := slice (printf "# %s" $siteName) "" -}}
+{{- with $siteDesc }}{{ $out = $out | append (printf "> %s" (. | plainify | strings.TrimSpace)) "" }}{{ end -}}
+{{- $out = $out | append (printf "- Language: %s" (or site.Language.Locale site.Language.Lang)) -}}
+{{- $out = $out | append (printf "- Home: %s" .Permalink) -}}
+{{- $out = $out | append (printf "- Posts: %d" (len $posts)) -}}
+
+{{- range $posts -}}
+  {{- $out = $out | append "" "---" "" (printf "## %s" .Title) "" -}}
+  {{- $out = $out | append (printf "- URL: %s" .Permalink) -}}
+  {{- with .OutputFormats.Get "markdown" -}}
+    {{- $out = $out | append (printf "- Markdown: %s" .Permalink) -}}
+  {{- end -}}
+  {{- if not .Date.IsZero }}{{ $out = $out | append (printf "- Published: %s" (.Date.Format "2006-01-02")) }}{{ end -}}
+  {{- if not .Lastmod.IsZero }}{{ $out = $out | append (printf "- Updated: %s" (.Lastmod.Format "2006-01-02")) }}{{ end -}}
+  {{- $tags := partial "params-list.html" (dict "value" .Params.tags "path" (printf "tags in %s" .RelPermalink) "maps" false) -}}
+  {{- with $tags }}{{ $out = $out | append (printf "- Tags: %s" (delimit . ", ")) }}{{ end -}}
+  {{- $out = $out | append (printf "- Words: %d" .WordCount) -}}
+  {{- /* The post's own headings start at ## in the source, so its title above is
+         a ## too and the document keeps one # for the site. RawContent is left
+         exactly as written otherwise: rewriting a reader's markdown to fit a
+         hierarchy is how a code fence stops being a code fence. */ -}}
+  {{- $out = $out | append "" (.RawContent | strings.TrimSpace) -}}
+{{- end -}}
+{{ delimit $out "\n" }}

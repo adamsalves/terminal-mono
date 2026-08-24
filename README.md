@@ -14,7 +14,8 @@ the bundled `exampleSite/`, which is exactly what the demo serves.
 - ⚡ Hugo asset pipeline (minify + fingerprint + SRI in production).
 - 🔎 SEO ready: Open Graph, Twitter Card, JSON-LD, RSS and `canonical`.
 - 🤖 **AEO ready**: `robots.txt` with a `Sitemap:` line and named groups for the AI crawlers,
-  plus `Person`/`Organization`, `WebSite`, `BlogPosting` and `BreadcrumbList` structured data.
+  `Person`/`Organization`, `WebSite`, `BlogPosting` and `BreadcrumbList` structured data, and
+  `llms.txt`, `llms-full.txt` and a markdown twin per post — all per language, all in Hugo templates.
 - ♿ Accessible: "skip to content" link, visible focus and `prefers-reduced-motion`.
 - 🌍 Multilingual via Hugo i18n — **English + Portuguese** included, with a language switcher and localized dates. Any other language falls back to English rather than rendering blank labels.
 
@@ -73,10 +74,13 @@ terminal-mono/
     js/terminal.js           # menu, progress bar, typewriter
   layouts/
     index.html               # home (portfolio)
+    index.llms.txt           # /llms.txt — the AEO index (needs [outputs])
+    index.llmsfull.txt       # /llms-full.txt — every post's markdown
     404.html
     robots.txt               # AI-crawler groups + Sitemap (needs enableRobotsTXT)
     _default/
       baseof.html  list.html  single.html  term.html  terms.html
+      single.markdown.md      # each post's markdown twin, next to its HTML
       _markup/                # render hooks (heading, image, link)
     partials/
       head.html  schema.html  nav.html  footer.html  lang-switch.html
@@ -571,6 +575,44 @@ Leave it alone for a portfolio. Set `Organization` only if the site genuinely is
 an agency, a studio, a company blog. The two carry different fields: `jobTitle` (from
 `[params.hero] subtitle`) belongs to a person and `logo` to an organization, and each is
 dropped for the other type.
+
+### `llms.txt`, `llms-full.txt` and the markdown twins
+
+An answer engine reading a site does two things badly: it crawls page by page to
+find out what is there, and it strips a page's chrome back off to get at the words.
+These three files answer both in one request each.
+
+| file | what it is |
+|---|---|
+| `/llms.txt` | the index — the site's title and summary, then every post as a linked list with a line of context. [Spec](https://llmstxt.org). |
+| `/llms-full.txt` | the content behind those links, in markdown, in one file, each post preceded by its canonical URL |
+| `…/index.md` | each post's markdown twin, published next to its HTML |
+
+**Your site must declare the outputs.** The theme defines the three formats in its
+own config, but Hugo does not merge a theme's `[outputs]` into the site's — so this
+block is yours to write, the same way `enableRobotsTXT` is:
+
+```toml
+# hugo.toml
+[outputs]
+  home = ["HTML", "RSS", "LLMS", "LLMSFULL"]
+  page = ["HTML", "MARKDOWN"]
+```
+
+Naming any format for a page kind **replaces the whole default list for that kind**.
+That is why `RSS` is restated above: leave it out and the feed stops being generated.
+Leave the block out entirely and nothing breaks — you simply get no `llms.txt` and no
+markdown twins.
+
+Everything is per language. A bilingual site publishes `/llms.txt` and `/pt/llms.txt`,
+each listing its own posts and naming its own language, and each post's twin sits
+next to the translation it belongs to. `llms.txt` links to the twins rather than to
+the HTML, which is what the spec asks for — the canonical URL is the first line
+inside each twin, so a citation that follows the link still knows where to point.
+
+The content in both is `.RawContent`: the markdown as written, headings and code
+fences intact. `.Plain` — the rendered HTML with the tags taken out — is what is
+left after throwing that structure away, which is the opposite of the point.
 
 ### Checking it
 

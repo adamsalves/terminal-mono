@@ -94,6 +94,53 @@ jobs:
             fi
           done
           echo 'aeo: the 404 stays out of the graph'
+          # Per language, and not by accident: Hugo renders a home page's output
+          # formats once per language, so a bilingual site gets two of each and
+          # each one has to list its own posts. A pt index that linked the en
+          # posts would still be a valid file and still be wrong.
+          for f in llms.txt llms-full.txt pt/llms.txt pt/llms-full.txt; do
+            if [ ! -f "exampleSite/public/$f" ]; then
+              echo "aeo: /$f is not in the build"
+              exit 1
+            fi
+          done
+          if ! grep -q 'pt-BR' exampleSite/public/pt/llms.txt; then
+            echo 'aeo: /pt/llms.txt does not say it is Portuguese'
+            exit 1
+          fi
+          if grep -qF "$(grep -m1 '^- \[' exampleSite/public/llms.txt)" exampleSite/public/pt/llms.txt; then
+            echo 'aeo: /pt/llms.txt lists the English posts'
+            exit 1
+          fi
+          echo 'aeo: llms.txt and llms-full.txt are per language, each listing its own'
+      # [outputs] is the half a consuming site has to write — Hugo does not merge
+      # a theme's — so the theme has to keep working without it. A site that
+      # never adds the block gets no llms.txt and no markdown twins, and that is
+      # a quiet absence rather than a broken build or a dangling link.
+      - name: Assert the AEO outputs are opt-in, not required
+        run: |
+          set -eo pipefail
+          d=/tmp/aeo-nooutputs
+          rm -rf "$d"; mkdir -p "$d/themes" "$d/content/blogs"
+          ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          printf 'baseURL = "https://example.com/t/"\ntitle = "No outputs"\ntheme = "terminal-mono"\nenableRobotsTXT = true\n' > "$d/hugo.toml"
+          printf -- '---\ntitle: "P"\ndate: 2026-01-01\n---\nbody\n' > "$d/content/blogs/p.md"
+          HUGO_ENV=production hugo --source "$d" --gc --minify --panicOnWarning > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
+          for f in llms.txt llms-full.txt blogs/p/index.md; do
+            if [ -f "$d/public/$f" ]; then
+              echo "aeo: $f was published without the site asking for it in [outputs]"
+              exit 1
+            fi
+          done
+          # …and the RSS feed the default [outputs] would have given it is still
+          # there, which is what a site loses by restating the block wrong.
+          if [ ! -f "$d/public/index.xml" ]; then
+            echo 'aeo: the feed disappeared from a site that declared no [outputs]'
+            exit 1
+          fi
+          # The structural checks still run, minus the two formats it did not ask for.
+          python3 scripts/check_aeo.py "$d/public" --no-llms --no-markdown
+          echo 'aeo: without [outputs] the site builds, keeps its feed, and gets no half-written index'
       # The switches, one fixture each. A veto nobody exercises is a claim.
       - name: Assert the AEO switches
         run: |

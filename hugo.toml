@@ -35,3 +35,41 @@
   [[module.mounts]]
     source = "i18n"
     target = "data/terminal_mono_i18n"
+
+# ── AEO output formats ──────────────────────────────────────────────────────
+# llms.txt is an index an answer engine can read in one request instead of
+# crawling: title, description, and every page as a linked list. llms-full.txt
+# is the content behind those links, in markdown, in one file. The per-page
+# Markdown output is the same content addressed the way a citation would want
+# it — /blogs/foo/index.md next to /blogs/foo/.
+#
+# All three are Hugo output formats, which is what keeps this a template change
+# rather than a dependency: the aeo.js package that generates these elsewhere is
+# 6.5MB of npm and has no Hugo integration, and its widget injects third-party
+# JS into a theme whose README promises none.
+#
+# notAlternative on all three: head.html renders a <link rel=alternate> for
+# every AlternativeOutputFormats entry, which is right for the RSS feed and
+# wrong for a plain-text index — it would advertise llms.txt to feed readers.
+[outputFormats]
+  [outputFormats.LLMS]
+    mediaType = "text/plain"
+    baseName = "llms"
+    isPlainText = true
+    notAlternative = true
+  [outputFormats.LLMSFULL]
+    mediaType = "text/plain"
+    baseName = "llms-full"
+    isPlainText = true
+    notAlternative = true
+  [outputFormats.MARKDOWN]
+    mediaType = "text/markdown"
+    baseName = "index"
+    isPlainText = true
+    notAlternative = true
+
+# HTML and RSS are the defaults for home, and naming any of them replaces the
+# whole list — so the feed has to be restated here or it stops being generated.
+[outputs]
+  home = ["HTML", "RSS", "LLMS", "LLMSFULL"]
+  page = ["HTML", "MARKDOWN"]

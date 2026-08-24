@@ -6,6 +6,22 @@ enableRobotsTXT = true
 enableEmoji = true
 summaryLength = 30
 
+# ── AEO output formats ──────────────────────────────────────────────────────
+# The theme defines LLMS, LLMSFULL and MARKDOWN in its own hugo.toml, but Hugo
+# does not merge a theme's [outputs] into the site's — so this block is the half
+# a consuming site has to write, the same way enableRobotsTXT above is.
+# Naming any format for a page kind replaces the whole default list for that
+# kind, which is why RSS is restated: leave it out and the feed stops existing.
+#
+#   /llms.txt        the index — what the site is, and every post as a link
+#   /llms-full.txt   the content behind those links, in one file
+#   …/index.md       each post's markdown twin, published next to its HTML
+#
+# Per language: /llms.txt and /pt/llms.txt each list their own posts.
+[outputs]
+  home = ["HTML", "RSS", "LLMS", "LLMSFULL"]
+  page = ["HTML", "MARKDOWN"]
+
 [pagination]
   pagerSize = 5
 
