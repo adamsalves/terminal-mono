@@ -25,6 +25,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   single-language site, where Hugo builds no index in the first place. Like the
   other switches it must be a real boolean — a string warns and changes nothing.
 
+  It is a whole-site param, not a per-language one: `/sitemap.xml` is one file, so
+  it is read from the first language by weight and any other language that sets a
+  different value is named in a warning. The README teaches
+  `[languages.<lang>.params…]` for other params, and silence here would be exactly
+  the failure `params-bool.html` exists to prevent.
+
+### Fixed
+- **The README's price for `keepQuotes` was wrong.** It said "about 150 bytes",
+  uncompressed and unattributed; on the exampleSite home page it is 436 (11,762 →
+  12,198) and 29 gzipped. Both numbers are documented now, and the snippet gained
+  the `[minify]` parent table it needs to be pasted into a `hugo.toml` as written.
+
 ## [0.6.0] — 2026-08-25
 
 ### Added

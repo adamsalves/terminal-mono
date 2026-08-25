@@ -602,57 +602,139 @@ jobs:
       # title, no structured data and no prose — and never reaches the site at
       # all. aeo.js v0.0.16 is one of those, and it cost adamsalves.dev 12 of 100
       # points for content already in the build. flatSitemap publishes one
-      # <urlset> instead. The default has to stay Hugo's own byte for byte:
-      # overriding sitemapindex.xml replaces the built-in, it does not extend it,
-      # so a drift here is a silently different sitemap for every site that never
-      # set the param.
+      # <urlset> instead.
+      #
+      # Two things are asserted here that a shape check alone does not reach.
+      # The default branch is compared against Hugo's own built-in output from
+      # the same content, because overriding sitemapindex.xml replaces the
+      # built-in rather than extending it, and a drift there is a silently
+      # different sitemap for every site that never set the param. And the flat
+      # branch is compared to the per-language sitemaps *semantically* — the set
+      # of URLs and each one's alternates — because the mutations that matter
+      # keep the counts right: dropping xmlns:xhtml, dropping the
+      # self-referential hreflang, printing an unformatted lastmod.
       - name: Assert the sitemap shape follows flatSitemap
         run: |
           set -eo pipefail
           d=/tmp/aeo-sitemap
-          rm -rf "$d"; mkdir -p "$d/themes" "$d/content/blogs"
+          bare=/tmp/aeo-sitemap-bare
+          rm -rf "$d" "$bare"; mkdir -p "$d/themes" "$d/content/blogs" "$bare"
           ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          # The same theme minus this template: what Hugo emits on its own.
+          # hugo.toml comes along because it carries the theme's [module.mounts]
+          # — including the second view of i18n at data/terminal_mono_i18n that
+          # i18n-en.html reads, without which this copy aborts on its own warning.
+          for p in layouts assets static i18n archetypes theme.toml hugo.toml go.mod; do
+            [ -e "$GITHUB_WORKSPACE/$p" ] && cp -r "$GITHUB_WORKSPACE/$p" "$bare/"
+          done
+          rm -f "$bare/layouts/sitemapindex.xml"
           # $1 is spliced in where [params.aeo] goes, so a case that wants no
           # param passes an empty string rather than a differently shaped config.
+          # %b, not %s: a literal newline here would end the YAML block scalar.
           conf() {
             printf 'baseURL = "https://example.com/"\ntitle = "S"\ntheme = "terminal-mono"\ndefaultContentLanguage = "en"\ndefaultContentLanguageInSubdir = false\n%b[languages.en]\n  locale = "en-US"\n  weight = 1\n[languages.pt]\n  locale = "pt-BR"\n  weight = 2\n' "$1" > "$d/hugo.toml"
           }
+          # Each case starts from an empty public/: the shapes differ in which
+          # files they write, and a stale one from the case before is a fixture
+          # nobody wrote reading as a pass.
+          build() { rm -rf "$d/public"; hugo --source "$d" --gc --minify "$@" > "$d.log" 2>&1 || { cat "$d.log"; exit 1; } ; }
           printf -- '---\ntitle: "P"\ndate: 2026-01-01\n---\nbody\n' > "$d/content/blogs/p.md"
           printf -- '---\ntitle: "Pt"\ndate: 2026-01-01\n---\ncorpo\n' > "$d/content/blogs/p.pt.md"
-          # The XML is minified onto one line, so counting matches beats counting
-          # lines: `grep -c` here would answer 1 for any sitemap that has any URL.
-          locs() { grep -o '<loc>' "$1" | wc -l; }
+          # A page that asked to stay out. The flat branch restates the built-in's
+          # `where … "Sitemap.Disable" "ne" true`, and with no such page in the
+          # fixture, dropping that filter is a change no assertion here would see.
+          printf -- '---\ntitle: "Hidden"\ndate: 2026-01-01\nsitemap:\n  disable: true\n---\nbody\n' > "$d/content/blogs/hidden.md"
 
-          # 1. Nothing set: Hugo's index, unchanged. This is the contract every
-          #    crawler that already knows the site was handed.
+          # 1. Nothing set: Hugo's index, byte for byte. This is the contract
+          #    every crawler that already knows the site was handed.
           conf ''
-          hugo --source "$d" --gc --minify --panicOnWarning > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
+          build --panicOnWarning
           if ! grep -q '<sitemapindex' "$d/public/sitemap.xml"; then
             echo 'sitemap: the default stopped being an index'
             cat "$d/public/sitemap.xml"
             exit 1
           fi
+          cp "$d/public/sitemap.xml" "$d/ours.xml"
+          ln -sfn "$bare" "$d/themes/terminal-mono"
+          build --panicOnWarning
+          if ! cmp -s "$d/ours.xml" "$d/public/sitemap.xml"; then
+            echo 'sitemap: the default branch no longer reproduces Hugo built-in'
+            diff <(cat "$d/ours.xml") <(cat "$d/public/sitemap.xml") || true
+            exit 1
+          fi
+          ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
 
-          # 2. flatSitemap: one urlset holding every page of both languages, with
-          #    the alternates intact — a flat sitemap that dropped hreflang would
-          #    trade one crawler's problem for every other crawler's.
+          # 2. flatSitemap: one urlset that is exactly the union of the
+          #    per-language sitemaps, alternates and lastmod included.
           conf '[params.aeo]\n  flatSitemap = true\n'
-          hugo --source "$d" --gc --minify --panicOnWarning > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
+          build --panicOnWarning
           if ! grep -q '<urlset' "$d/public/sitemap.xml"; then
             echo 'sitemap: flatSitemap left the index in place'
             exit 1
           fi
-          root=$(locs "$d/public/sitemap.xml")
-          en=$(locs "$d/public/en/sitemap.xml")
-          pt=$(locs "$d/public/pt/sitemap.xml")
-          if [ "$root" -eq 0 ] || [ "$root" -ne "$((en + pt))" ]; then
-            echo "sitemap: the flat root lists $root URLs, the languages list $en + $pt"
-            exit 1
-          fi
-          if ! grep -q 'hreflang="pt-BR"' "$d/public/sitemap.xml"; then
-            echo 'sitemap: the flat urlset dropped its hreflang alternates'
-            exit 1
-          fi
+          python3 - "$d/public" <<'PY'
+          import re, sys, pathlib, xml.etree.ElementTree as ET
+
+          SM = '{http://www.sitemaps.org/schemas/sitemap/0.9}'
+          XH = '{http://www.w3.org/1999/xhtml}'
+          LASTMOD = re.compile(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$')
+          pub = pathlib.Path(sys.argv[1])
+          fail = []
+
+          def urls(rel):
+              # ET.parse is half the assertion: a urlset that lost xmlns:xhtml, or any
+              # other malformed output, raises here instead of being grepped over.
+              root = ET.parse(pub / rel).getroot()
+              out = {}
+              for u in root.findall(SM + 'url'):
+                  loc = u.findtext(SM + 'loc')
+                  alts = frozenset((l.get('hreflang'), l.get('href')) for l in u.findall(XH + 'link'))
+                  out[loc] = (alts, u.findtext(SM + 'lastmod'))
+              return out
+
+          flat = urls('sitemap.xml')
+          per = {}
+          for lang in ('en', 'pt'):
+              for loc, v in urls(f'{lang}/sitemap.xml').items():
+                  per[loc] = v
+
+          if set(flat) != set(per):
+              fail.append(f'URL set differs\n  only in flat: {sorted(set(flat) - set(per))}'
+                          f'\n  only in per-language: {sorted(set(per) - set(flat))}')
+          for loc in sorted(set(flat) & set(per)):
+              if flat[loc][0] != per[loc][0]:
+                  fail.append(f'{loc}\n  flat alternates: {sorted(flat[loc][0])}'
+                              f'\n  per-language:    {sorted(per[loc][0])}')
+              if flat[loc][1] != per[loc][1]:
+                  fail.append(f'{loc}: lastmod {flat[loc][1]!r} != {per[loc][1]!r}')
+
+          # Every translated page carries one alternate per language, the self included.
+          # A count is what catches .AllTranslations quietly becoming .Translations: the
+          # self-referential hreflang disappears and every other assertion still holds.
+          translated = [loc for loc, (alts, _) in flat.items() if alts]
+          if not translated:
+              fail.append('no page in the flat sitemap has any hreflang alternate')
+          for loc in translated:
+              if len(flat[loc][0]) != 2:
+                  fail.append(f'{loc}: {len(flat[loc][0])} alternates, expected 2 (en + pt)')
+
+          for loc, (_, lastmod) in flat.items():
+              if lastmod is not None and not LASTMOD.match(lastmod):
+                  fail.append(f'{loc}: lastmod {lastmod!r} is not an ISO 8601 timestamp')
+
+          if any('hidden' in loc for loc in flat):
+              fail.append('a page with sitemap.disable is in the flat sitemap')
+          if not flat:
+              fail.append('the flat sitemap has no URLs at all')
+
+          if fail:
+              print('sitemap: the flat root is not the union of the per-language sitemaps')
+              for f in fail:
+                  print('  ' + f)
+              raise SystemExit(1)
+          print(f'sitemap: flat root == union of en + pt ({len(flat)} URLs, '
+                f'{len(translated)} translated, sitemap.disable honoured)')
+          PY
           # The per-language sitemaps are still published. Nothing links them any
           # more once the root is flat, but a crawler that already has one in its
           # index must not start getting a 404 for it.
@@ -666,7 +748,7 @@ jobs:
           # 3. Not a boolean: warns, and stays on the shape the site had. Without
           #    --panicOnWarning, because the warning is the thing being asserted.
           conf '[params.aeo]\n  flatSitemap = "true"\n'
-          hugo --source "$d" --gc --minify > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
+          build
           if ! grep -qF '[params.aeo] flatSitemap must be true or false' "$d.log"; then
             echo 'sitemap: flatSitemap = "true" did not warn'
             cat "$d.log"
@@ -677,16 +759,36 @@ jobs:
             exit 1
           fi
 
-          # 4. One language: Hugo never renders sitemapindex.xml at all, so the
+          # 4. Set per language, where it cannot be honoured. /sitemap.xml is one
+          #    file for the whole site, and the README teaches
+          #    [languages.<lang>.params…] for other params — so the param that is
+          #    about to be ignored has to say so rather than read as applied.
+          conf '[languages.pt.params.aeo]\n  flatSitemap = true\n'
+          build
+          if ! grep -qF '[languages.pt.params.aeo] flatSitemap = true is ignored' "$d.log"; then
+            echo 'sitemap: a per-language flatSitemap was ignored in silence'
+            cat "$d.log"
+            exit 1
+          fi
+          if ! grep -q '<sitemapindex' "$d/public/sitemap.xml"; then
+            echo 'sitemap: a per-language flatSitemap flattened the sitemap anyway'
+            exit 1
+          fi
+          # …and a site that wrote the param once, at the root, agrees with
+          # itself: every language inherits it, so nothing warns.
+          conf '[params.aeo]\n  flatSitemap = true\n'
+          build --panicOnWarning
+
+          # 5. One language: Hugo never renders sitemapindex.xml at all, so the
           #    param has nothing to act on and the site still gets its urlset.
           #    The README says the param is inert here; this is what says so too.
           printf 'baseURL = "https://example.com/"\ntitle = "S"\ntheme = "terminal-mono"\n[params.aeo]\n  flatSitemap = true\n' > "$d/hugo.toml"
-          hugo --source "$d" --gc --minify --panicOnWarning > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
+          build --panicOnWarning
           if ! grep -q '<urlset' "$d/public/sitemap.xml"; then
             echo 'sitemap: a single-language site lost its urlset'
             exit 1
           fi
-          echo 'sitemap: an index by default, one urlset on request, and a string changes nothing'
+          echo 'sitemap: Hugo built-in by default, one urlset on request, and neither a string nor a per-language override passes in silence'
       # Person is what a portfolio has; Organization is a claim a site makes
       # about itself, and Google will not use one without a logo. The two carry
       # different fields, so this asserts what each drops as well as what it adds.

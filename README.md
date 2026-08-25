@@ -590,6 +590,12 @@ Hugo never builds an index there, so `/sitemap.xml` is already a flat `<urlset>`
 Like the other switches, it has to be a real boolean; `flatSitemap = "true"` is a string,
 and the theme warns and leaves the sitemap alone.
 
+**Write it at the root, in `[params.aeo]`.** Unlike the section and hero params, this one
+is not per language: `/sitemap.xml` is a single file for the whole site, so it can only be
+flat or not, and a `[languages.pt.params.aeo] flatSitemap` is a statement the file cannot
+honour. It is read from the first language by weight, and any other language that
+disagrees is named in a build warning rather than ignored quietly.
+
 ### Structured data (JSON-LD)
 
 Emitted on every page, with no configuration, as one `<script>` per node:

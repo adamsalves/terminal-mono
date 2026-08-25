@@ -81,7 +81,7 @@ function typed(pre) {
 
 function run(dataset, { reduceMotion = false, runTimers = true, width = 0, char = 0,
                        resizeObserver = true, frameMs = FRAME_MS,
-                       docHeight = 0, viewport = 0 } = {}) {
+                       docHeight = 0, viewport = 0, scrollY = 0 } = {}) {
   const pre = makeNode('pre');
   pre.dataset = dataset;
   pre.clientWidth = width;
@@ -124,9 +124,15 @@ function run(dataset, { reduceMotion = false, runTimers = true, width = 0, char 
     matchMedia: () => ({ matches: reduceMotion }),
     addEventListener: (type, fn) => { (listeners[type] = listeners[type] || []).push(fn); },
     requestAnimationFrame: (fn) => frames.push(fn),
-    scrollY: 0,
+    scrollY,
     innerHeight: viewport,
   };
+  /* Captured, not read back off `global` later. The helpers below outlive the
+   * call that made them — a second run() reassigns global.window, and a handle
+   * from the first would then report the second's geometry. `metrics` has the
+   * same shape of problem one level down and is documented where it is defined;
+   * this one is cheap to simply not have. */
+  const win = global.window;
   global.setTimeout = (fn) => { queue.push(fn); return queue.length; };
 
   new Function(fs.readFileSync(SRC, 'utf8'))();
@@ -197,8 +203,18 @@ function run(dataset, { reduceMotion = false, runTimers = true, width = 0, char 
     // the event or on the next frame — what is asserted is where the bar ends
     // up, not which of the two ways it got there.
     scroll(y) {
-      window.scrollY = y;
+      win.scrollY = y;
       (listeners.scroll || []).forEach((fn) => fn());
+      const queued = frames.length;
+      for (let i = 0; i < queued; i++) frames.shift()(0);
+      return progress.style.width;
+    },
+    // A resize with no scroll. The bar listens for it because the document's
+    // height is what the percentage divides by, and that changes when the
+    // viewport does — a listener nothing exercised until now.
+    resizeViewport(h) {
+      win.innerHeight = h;
+      (listeners.resize || []).forEach((fn) => fn());
       const queued = frames.length;
       for (let i = 0; i < queued; i++) frames.shift()(0);
       return progress.style.width;
@@ -580,7 +596,9 @@ const PAGE = { ...PHONE, docHeight: 4000, viewport: 800 };
 check('the progress bar is painted before anything scrolls', () => {
   // Landing mid-document — a deep link, a scroll position the browser restored —
   // has to show the bar where the reader already is, not at zero until they move.
-  return run(SITE, PAGE).progressWidth === '0%';
+  // scrollY is what makes this the stated scenario rather than a check that the
+  // initial paint merely happened: at 0 it reads '0%' either way.
+  return run(SITE, { ...PAGE, scrollY: 1600 }).progressWidth === '50%';
 });
 
 check('the bar reports how far down the document the reader is', () => {
@@ -588,11 +606,27 @@ check('the bar reports how far down the document the reader is', () => {
 });
 
 check('a document with nowhere to scroll leaves the bar at zero', () => {
-  // A short page, or a viewport taller than it, makes the denominator zero or
-  // negative — the one input that turns the percentage into NaN or -0 and puts
-  // `width: NaN%` on the element.
-  const r = run(SITE, { ...PAGE, docHeight: 400 });
-  return r.progressWidth === '0%' && r.scroll(0) === '0%';
+  // A viewport as tall as the page, or taller, makes the denominator zero or
+  // negative — the inputs that turn the percentage into NaN% and -50%.
+  //
+  // Both are scrolled on purpose. The obvious fixture, `scrollY: 0` against a
+  // negative denominator, cannot fail: `0 / -400 * 100` is -0, and `String(-0)`
+  // is "0", so it reads '0%' with the guard removed and passes a version that
+  // has no guard at all. Verified by deleting `h > 0 ? … : 0` — the suite stayed
+  // green. These two do not: unguarded they read '-50%' and 'NaN%'.
+  const negative = run(SITE, { ...PAGE, docHeight: 400 });   // h = -400
+  const exact = run(SITE, { ...PAGE, docHeight: 800 });      // h = 0
+  return negative.progressWidth === '0%' && negative.scroll(200) === '0%'
+      && exact.scroll(100) === '0%';
+});
+
+check('a resize with no scroll re-reads the height the bar divides by', () => {
+  // The bar listens for resize because the denominator is the document height
+  // minus the viewport, and the second term is what a rotate changes. Halving
+  // the viewport of a reader standing still moves them from a quarter down to
+  // a fifth, without a scroll event anywhere.
+  const r = run(SITE, { ...PAGE, scrollY: 800 });
+  return r.progressWidth === '25%' && r.resizeViewport(400) === '22.22222222222222%';
 });
 
 let failed = 0;

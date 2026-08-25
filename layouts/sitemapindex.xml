@@ -36,9 +36,40 @@
        Context: []*hugolib.Site, one per language, in config order. A
        single-language site never renders this template at all — Hugo writes its
        sitemap.xml straight from sitemap.xml — so `flatSitemap` is inert there
-       and the README says so. */ -}}
-{{- $aeo := partial "params-table.html" (dict "value" site.Params.aeo "path" "[params.aeo]") -}}
+       and the README says so.
+
+       One more thing about 0.158, because it is the version theme.toml declares
+       and the trap is shaped like a fix: its embedded sitemap.xml ranges over
+       `.Translations` and emits a separate self-link *outside* the range, where
+       0.163 ranges over `.AllTranslations`, which already includes the self.
+       The two produce the same set of alternates in a different order, and
+       order carries no meaning to sitemaps.org. The 0.163 form is the same
+       statement made once, so it is the one copied — "correcting" it back to
+       .Translations drops every self-referential hreflang, which is a real
+       regression and one a grep for a single hreflang value will not see.
+
+       `site` here is sites[0] — the first language by weight, *not*
+       defaultContentLanguage — which is a distinction this file does not want
+       to depend on. It reads `(index . 0)` instead, so the code says what it
+       means, and then checks every other language for a flatSitemap that
+       disagrees. This is one file for the whole site: it can only be flat or
+       not, and a per-language override is a statement that cannot be honoured.
+       The README says to write the param at the root; this is what happens when
+       someone follows the `[languages.<lang>.params…]` pattern the README
+       teaches everywhere else instead. Silence there would be exactly the
+       failure params-bool.html exists to prevent. */ -}}
+{{- $primary := index . 0 -}}
+{{- $aeo := partial "params-table.html" (dict "value" $primary.Params.aeo "path" "[params.aeo]") -}}
 {{- $flat := partial "params-bool.html" (dict "value" $aeo.flatSitemap "path" "[params.aeo] flatSitemap" "default" false) -}}
+{{- /* A root [params.aeo] is merged into every language, so a site that wrote
+       the param once agrees with itself here and says nothing. Only a genuine
+       per-language override reaches the warning. */ -}}
+{{- range . -}}
+  {{- $own := (partial "params-table.html" (dict "value" .Params.aeo "path" "[params.aeo]")).flatSitemap -}}
+  {{- if and (ne $own nil) (ne $own $flat) -}}
+    {{- warnf "terminal-mono: [languages.%s.params.aeo] flatSitemap = %v is ignored — /sitemap.xml is one file for the whole site, and %s wins as the first language by weight. Set it in [params.aeo] at the root instead." .Language.Lang $own $primary.Language.Lang -}}
+  {{- end -}}
+{{- end -}}
 {{ printf "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>" | safeHTML }}
 {{- if $flat }}
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
