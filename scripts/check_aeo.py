@@ -230,7 +230,12 @@ def check_page(rel, html):
     return problems
 
 
-LINK_RE = re.compile(r"\[[^\]]*\]\((\S+?)\)")
+# The link text may carry an escaped bracket, because aeo-text.html puts one
+# there: a title like "TIL: array[0]" would otherwise close the link early.
+# Reading the escape is what keeps this check and that partial agreeing --
+# a regex that stopped at the backslash would report the correct output as
+# the broken markdown it exists to catch.
+LINK_RE = re.compile(r"\[(?:[^\[\]\\]|\\.)*\]\((\S+?)\)")
 
 
 def local_path(public, base, url):
@@ -262,7 +267,7 @@ def check_llms(public):
 
     for path in files:
         rel = "/" + str(path.relative_to(public))
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         lines = text.splitlines()
         if not lines or not lines[0].startswith("# "):
             problems.append("%s: does not start with an H1" % rel)
@@ -294,8 +299,25 @@ def check_llms(public):
         elif "llms-full.txt" not in text:
             problems.append("%s: does not link the llms-full.txt next to it" % rel)
 
+        # Every `- ` item under an `## ` heading is supposed to be a link, so
+        # the count of items and the count of links have to agree. Matching the
+        # links alone was the fail-open: a title carrying a `]` breaks the link
+        # it sits in, LINK_RE stops matching it, and the item is simply not
+        # checked -- two of four posts were corrupt in the fixture that found
+        # this and the file came back clean, because the links in another
+        # section still matched. It is the same "quietly matched nothing" this
+        # script's own docstring is written against.
+        items = [l for l in lines if l.startswith("- [")]
+        links = LINK_RE.findall(text)
+        item_links = [l for l in items if LINK_RE.search(l)]
+        if len(item_links) != len(items):
+            for line in items:
+                if not LINK_RE.search(line):
+                    problems.append("%s: a list item is not a link -- something in "
+                                    "it broke the markdown: %s" % (rel, line[:90]))
+
         seen = 0
-        for url in LINK_RE.findall(text):
+        for url in links:
             target = local_path(public, base, url)
             if target is None:
                 continue
@@ -310,11 +332,20 @@ def check_llms(public):
         # takes markdown literally, and it is the exact failure a line-joined
         # template produces when one value arrives with a trailing newline.
         for i, line in enumerate(lines[:-1]):
-            if line.startswith("- ") and lines[i + 1] == "" and \
-               i + 2 < len(lines) and lines[i + 2].startswith("- "):
+            if not line.startswith("- ") or i + 2 >= len(lines):
+                continue
+            nxt, after = lines[i + 1], lines[i + 2]
+            if not after.startswith("- "):
+                continue
+            if nxt == "":
                 problems.append("%s: a blank line splits the list at line %d"
                                 % (rel, i + 2))
-                break
+            elif not nxt.startswith("- "):
+                # A newline inside a title does not leave a blank line, it
+                # leaves the rest of the title on a line of its own -- the same
+                # broken list, one the blank-line net did not catch.
+                problems.append("%s: line %d continues the item above instead of "
+                                "starting one: %s" % (rel, i + 2, nxt[:90]))
     return problems
 
 
@@ -328,16 +359,24 @@ def check_markdown(public):
         rel = "/" + str(path.relative_to(public))
         if not (path.parent / "index.html").is_file():
             problems.append("%s: has no index.html beside it" % rel)
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         if not text.startswith("# "):
             problems.append("%s: does not start with an H1" % rel)
         url = re.search(r"^- URL:\s*(\S+)\s*$", text, re.M)
         if not url:
             problems.append("%s: names no canonical URL, so a citation that "
                             "lands here has nothing to cite" % rel)
-        elif not url.group(1).rstrip("/").endswith(path.parent.name):
-            problems.append("%s: names %s, which is a different page"
-                            % (rel, url.group(1)))
+        else:
+            # The whole path from the site root, not the last segment: ".../
+            # other/xxx-one" ends with "one" and is a different page entirely.
+            # A twin that names one is worse than no twin, because a citation
+            # follows it.
+            here = path.parent.relative_to(public).as_posix()
+            named = url.group(1).split("://", 1)[-1]
+            named = named.split("/", 1)[1] if "/" in named else ""
+            if not named.strip("/").endswith(here):
+                problems.append("%s: names %s, which is a different page"
+                                % (rel, url.group(1)))
     return problems
 
 

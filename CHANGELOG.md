@@ -16,14 +16,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `/pt/llms.txt`, each listing its own posts. `llms.txt` links to the twins rather
   than the HTML, which is what the spec asks for, and the canonical URL is the first
   line inside each twin so a citation that follows the link still knows where to
-  point. Both use `.RawContent` — the markdown as written, headings and code fences
-  intact — rather than `.Plain`, which is what is left after throwing that structure
-  away. Part of #34.
+  point. Both use `.RenderShortcodes` — the markdown as written, headings and code
+  fences intact, with the shortcodes resolved — rather than `.Plain`, which is what is
+  left after throwing that structure away, or `.RawContent`, which hands the reader
+  unrendered Hugo template syntax where the figure was supposed to be. Part of #34.
 
-  The theme defines the three formats; the site declares them, because Hugo does not
-  merge a theme's `[outputs]` into the site's. The README says so and CI asserts both
-  halves — that the files appear when a site declares the block, and that a site that
-  never does still builds, still gets its RSS feed, and gets no half-written index.
+  **All three honour `[params.aeo] disallow` and the same build condition robots.txt
+  uses.** A path excluded from crawlers whose full body sits in `llms-full.txt` is not
+  excluded, and answer engines are the audience that key names — the exclusion has to
+  reach the files written for them or it is not one. An excluded post is named nowhere,
+  its body is nowhere, and its twin says why instead of carrying it. A build that is
+  not for indexing publishes the files with the same answer robots.txt gives, which
+  keeps the four from contradicting each other the way robots.txt's own comment warns
+  about.
+
+  Every value that reaches a line is normalised for it. These are lines in a plain-text
+  file with no forgiving renderer behind them: a newline inside a title ends the list
+  it is in, and a `]` — `TIL: array[0]`, `Reading [a spec]` — closes the markdown link
+  early and turns the rest of the item into something else. `TrimSpace` was covering
+  the ends of the first of those.
+
+  The theme defines the three formats; the site declares them, because Hugo's default
+  config merge does not bring a theme's `[outputs]` into the site's. One exception, now
+  documented and asserted: a site with `_merge = "deep"` *does* inherit them, and one
+  that also declares its own `[outputs]` inherits the kinds it did not restate — which
+  means a markdown twin of every page it has. The README says so and CI asserts every
+  half: that the files appear when a site declares the block, that a site that never
+  does still builds and keeps its RSS feed, and what a deep merge actually gets.
+
+- `scripts/check_aeo.py` counts what it was supposed to check rather than only what it
+  managed to match. A list item whose link the parser cannot read is a problem now, not
+  silence — a title carrying a `]` broke the link it sat in, the regex stopped matching
+  it, and the item was simply not verified: two of four posts were corrupt in the
+  fixture that found this and the file still came back clean, because links in another
+  section matched. A line that continues the item above is caught alongside the blank
+  line that was already, and a twin that names a different page is compared on the whole
+  path rather than its last segment.
 
 - `scripts/check_aeo.py` grew the other half of its job: every link in every
   `llms.txt` resolves to a file the build published, each language's index is rooted
@@ -146,10 +174,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   spread. Part of #34.
 
   The loop moved from `setTimeout(…, 15)` to `requestAnimationFrame`, writing once per
-  frame instead of once per character. On a machine fast enough to render every 16 ms
-  that is the same number of writes minus the timer churn; on the throttled profile the
-  original measurement came from, two to four characters come due within one frame and
-  now cost one write between them. It also stops entirely in a background tab, where
+  frame instead of once per character — and only the frames in which a character came
+  due, since assigning the same string still marks the node dirty and the opening pause
+  is some twenty-five frames of exactly that. On a machine fast enough to render every
+  16 ms that is about the same number of writes minus the timer churn; on the throttled
+  profile the original measurement came from, two to four characters come due within
+  one frame and now cost one write between them. It also stops entirely in a background tab, where
   the old timer kept typing to nobody. A frame boundary the reader was away for is
   capped at 100 ms so a backgrounded tab resumes typing rather than dumping the rest of
   the terminal in one paint. The opening pause, the per-character and per-newline

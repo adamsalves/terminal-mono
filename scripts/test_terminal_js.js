@@ -124,10 +124,18 @@ function run(dataset, { reduceMotion = false, runTimers = true, width = 0, char 
   new Function(fs.readFileSync(SRC, 'utf8'))();
 
   // Drain the typewriter. Each frame schedules the next one; cap it so a runaway
-  // loop fails the test instead of hanging CI. The timer queue is drained too:
-  // nothing schedules on it while requestAnimationFrame exists, and a change
-  // that quietly went back to setTimeout should still produce a typed terminal
-  // rather than an empty one.
+  // loop fails the test instead of hanging CI. The timer queue is drained too,
+  // because the measurement path still uses it — nothing else schedules there
+  // while requestAnimationFrame exists.
+  //
+  // The one path this harness cannot exercise is terminal.js's own fallback for
+  // a browser with no requestAnimationFrame, which calls setTimeout(fn, 16) and
+  // reads Date.now(). The queue here drains instantly, so that clock never
+  // advances, no character ever comes due and the loop runs until the guard
+  // below stops it. In a browser the clock is real and it types. Covering it
+  // would take a fake clock the timer stub advances, which is a harness change
+  // for a branch no browser with ResizeObserver — which this script also
+  // requires — has taken since 2012.
   let guard = 0;
   let clock = 0;
   let frameCount = 0;
@@ -148,6 +156,12 @@ function run(dataset, { reduceMotion = false, runTimers = true, width = 0, char 
     done,
     tail,
     frames: frameCount,
+    // What the batching is actually about: how many times the tail's text node
+    // was assigned. Counting frames instead was counting the loop, not the work.
+    writes: (function count(node) {
+      return node.children.reduce(
+        (n, c) => n + (c.nodeType === 3 ? c.writes : count(c)), 0);
+    })(pre),
     // The tail's text lives in a text node now, so `text` is what reads it. done
     // is still markup — completed segments go through wrap(), which is where the
     // escaping and the anchors happen.
@@ -292,9 +306,27 @@ check('the tail reuses one span and one text node for the whole animation', () =
 check('one write per frame, not one per character', () => {
   // 40ms frames on a throttled profile: two to three characters come due in each
   // one, and they cost a single write between them.
+  //
+  // Compared on writes rather than frames. Writes were frames by construction,
+  // so asserting on frames was asserting that the loop ran — true of any
+  // implementation, including the one this replaced. The number that has to
+  // move is the number of times the DOM was touched.
+  //
+  // Two thirds rather than a half: skipping the frames where nothing changed
+  // took 54 writes off the fast profile, which is the improvement working and
+  // also what narrows the gap between the two. Measured 104 against 204.
   const slow = run({ ...BASE, posts: JSON.stringify(POSTS) }, { frameMs: 40 });
   const fast = run({ ...BASE, posts: JSON.stringify(POSTS) }, { frameMs: 16 });
-  return slow.frames > 0 && slow.frames * 2 < fast.frames;
+  return slow.frames > 0 && slow.writes > 0 && slow.writes * 3 < fast.writes * 2;
+});
+
+check('a frame where no character came due writes nothing', () => {
+  // The opening pause is ~25 frames long and nothing changes in any of them.
+  // Assigning the same string still marks the node dirty, so the guard is the
+  // difference between "one write per frame" and "one write per frame that
+  // changed something".
+  const fast = run({ ...BASE, posts: JSON.stringify(POSTS) }, { frameMs: 16 });
+  return fast.writes < fast.frames;
 });
 
 check('a frame the reader was away for resumes typing instead of skipping it', () => {

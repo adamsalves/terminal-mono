@@ -391,10 +391,18 @@
      timer happened to fire. On the throttled profile this was measured on — the
      one the score comes from — a frame takes long enough that two to four
      characters come due within it, and they now cost one write between them
-     rather than four. On a machine fast enough to render every 16ms it is the
-     same number of writes as before, minus the timer churn.
+     rather than four. On a machine fast enough to render every 16ms it is about
+     the same number of writes as before, minus the timer churn.
      It also stops entirely in a background tab, where rAF does not fire and the
-     old timer kept typing to nobody. */
+     old timer kept typing to nobody.
+
+     A frame in which no character came due writes nothing. Assigning the same
+     string to .data still marks the node dirty, and there are two stretches
+     where every frame is such a frame: the opening pause before the first
+     character, and any fast machine rendering faster than CHAR_MS. Skipping
+     them is what makes "one write per frame" mean the frames that changed
+     something. */
+  var wrote = '';
   function frame(now) {
     if (last === 0) last = now;
     var budget = now - last;
@@ -409,7 +417,8 @@
        every character up to a frame. */
     due -= budget;
     if (si >= segs.length) { tailText.data = ''; return; }
-    tailText.data = segs[si].t.slice(0, ci);
+    var next = segs[si].t.slice(0, ci);
+    if (next !== wrote) { tailText.data = next; wrote = next; }
     raf(frame);
   }
   raf(frame);

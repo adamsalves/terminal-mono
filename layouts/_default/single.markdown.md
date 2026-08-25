@@ -13,13 +13,26 @@
        .RawContent, not .Plain, for the reason llms-full.txt gives: headings,
        lists and code fences are the structure, and .Plain is what is left over
        after throwing them away. */ -}}
-{{- $out := slice (printf "# %s" .Title) "" -}}
+{{- $gate := partial "aeo-gate.html" . -}}
+{{- $allowed := partial "aeo-allowed.html" (dict "pages" (slice .) "disallow" $gate.disallow) -}}
+{{- if or (not $gate.indexable) (not $allowed) -}}
+{{- /* The twin is written per page, so it is published either way — what it
+       carries is the choice. A build that is not for indexing, or a page under
+       a [params.aeo] disallow prefix, gets the fact rather than the body: the
+       exclusion means nothing if the excluded text ships beside it in markdown.
+       */ -}}
+# {{ .Title }}
+
+- URL: {{ .Permalink }}
+- Not published here: {{ cond $gate.indexable "this page is excluded by [params.aeo] disallow" "this build is not for indexing" }}.
+{{- else -}}
+{{- $out := slice (printf "# %s" (partial "aeo-text.html" .Title)) "" -}}
 {{- $out = $out | append (printf "- URL: %s" .Permalink) -}}
-{{- with .Description }}{{ $out = $out | append (printf "- Summary: %s" (. | plainify | strings.TrimSpace)) }}{{ end -}}
+{{- with .Description }}{{ $out = $out | append (printf "- Summary: %s" (partial "aeo-text.html" .)) }}{{ end -}}
 {{- if not .Date.IsZero }}{{ $out = $out | append (printf "- Published: %s" (.Date.Format "2006-01-02")) }}{{ end -}}
 {{- if not .Lastmod.IsZero }}{{ $out = $out | append (printf "- Updated: %s" (.Lastmod.Format "2006-01-02")) }}{{ end -}}
 {{- $tags := partial "params-list.html" (dict "value" .Params.tags "path" (printf "tags in %s" .RelPermalink) "maps" false) -}}
-{{- with $tags }}{{ $out = $out | append (printf "- Tags: %s" (delimit . ", ")) }}{{ end -}}
+{{- with $tags }}{{ $out = $out | append (printf "- Tags: %s" (delimit (apply . "partial" "aeo-text.html" ".") ", ")) }}{{ end -}}
 {{- $out = $out | append (printf "- Words: %d" .WordCount) -}}
 {{- $out = $out | append (printf "- Language: %s" (or .Language.Locale .Language.Lang)) -}}
 {{- with .Translations -}}
@@ -27,5 +40,6 @@
     {{- $out = $out | append (printf "- Also published in %s: %s" (or .Language.Locale .Language.Lang) .Permalink) -}}
   {{- end -}}
 {{- end -}}
-{{- $out = $out | append "" (.RawContent | strings.TrimSpace) -}}
+{{- $out = $out | append "" (.RenderShortcodes | strings.TrimSpace) -}}
 {{ delimit $out "\n" }}
+{{- end -}}

@@ -260,18 +260,17 @@ a{color:inherit}
    family behind --mono — changes that measurement too, since the script reads them
    off the live box rather than being told. What the template emits is the floor:
    the value a reader gets before the script runs, or without it. */
-.term__body{margin:0; padding:22px; font-family:var(--mono); font-size:14px; line-height:1.85; white-space:pre-wrap; word-break:break-word; min-height:calc(var(--hero-lines,12) * 1.85em + 44px)}
-/* The typewriter writes into this box a few hundred times, and without this
-   every one of those writes invalidates the layout of the whole document —
-   measured at 172 layout invalidations across one run of the animation, each
-   one individually too small to show up as a shift and all of them real work.
-   `contain: layout` is the browser being told what the min-height above already
-   guarantees: the box does not change size while it fills, so nothing outside
-   it can need re-laying-out. `style` scopes counters and quotes, which this box
-   has none of and never should.
+/* The typewriter writes into this box a few hundred times, and without the
+   containment every one of those writes invalidates the layout of the whole
+   document — measured at 172 layout invalidations across one run of the
+   animation, each one individually too small to show up as a shift and all of
+   them real work. `contain: layout` is the browser being told what the
+   min-height already guarantees: the box does not change size while it fills,
+   so nothing outside it can need re-laying-out. `style` scopes counters and
+   quotes, which this box has none of and never should.
    Deliberately not `paint` or `content`: paint containment clips, and the links
    inside carry an outline-offset that would be clipped with them. */
-.term__body{contain:layout style}
+.term__body{margin:0; padding:22px; font-family:var(--mono); font-size:14px; line-height:1.85; white-space:pre-wrap; word-break:break-word; min-height:calc(var(--hero-lines,12) * 1.85em + 44px); contain:layout style}
 .term__body a{text-decoration:none; border-bottom:1px solid transparent; transition:border-color .18s}
 .term__body a:hover,.term__body a:focus-visible{border-bottom-color:currentColor}
 .term__body a:focus-visible{outline-offset:3px}

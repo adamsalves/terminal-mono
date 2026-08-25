@@ -596,8 +596,8 @@ These three files answer both in one request each.
 | `…/index.md` | each post's markdown twin, published next to its HTML |
 
 **Your site must declare the outputs.** The theme defines the three formats in its
-own config, but Hugo does not merge a theme's `[outputs]` into the site's — so this
-block is yours to write, the same way `enableRobotsTXT` is:
+own config, but Hugo's default config merge does not bring a theme's `[outputs]` into
+the site's — so this block is yours to write, the same way `enableRobotsTXT` is:
 
 ```toml
 # hugo.toml
@@ -610,6 +610,13 @@ Naming any format for a page kind **replaces the whole default list for that kin
 That is why `RSS` is restated above: leave it out and the feed stops being generated.
 Leave the block out entirely and nothing breaks — you simply get no `llms.txt` and no
 markdown twins.
+
+**One exception, and it is the one worth knowing:** a site that sets `_merge = "deep"`
+*does* inherit the theme's `[outputs]`, which is what that setting is for. Such a site
+publishes `llms.txt`, `llms-full.txt` and a twin per post without asking for them — and
+if it declares its own `[outputs]` too, the theme's `page = ["HTML", "MARKDOWN"]` merges
+in and every page gets a twin. If that is not what you want, name the kinds you do want
+explicitly, or drop the deep merge.
 
 Everything is per language. A bilingual site publishes `/llms.txt` and `/pt/llms.txt`,
 each listing its own posts and naming its own language, and each post's twin sits

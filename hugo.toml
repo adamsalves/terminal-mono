@@ -70,6 +70,13 @@
 
 # HTML and RSS are the defaults for home, and naming any of them replaces the
 # whole list — so the feed has to be restated here or it stops being generated.
+#
+# This block is what the theme's own exampleSite builds against. A consuming
+# site writes its own: Hugo's default merge does not bring a theme's [outputs]
+# across. The exception is a site with `_merge = "deep"`, which does inherit
+# this and starts publishing the three formats without having asked — documented
+# in the README under AEO, and asserted in CI, because the earlier claim that it
+# never merged was simply wrong.
 [outputs]
   home = ["HTML", "RSS", "LLMS", "LLMSFULL"]
   page = ["HTML", "MARKDOWN"]

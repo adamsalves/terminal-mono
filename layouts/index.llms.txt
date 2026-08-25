@@ -28,12 +28,33 @@
 {{- $siteName := or site.Params.title site.Title -}}
 {{- $hero := partialCached "params-table.html" (dict "value" site.Params.hero "path" "[params.hero]") "hero" site.Language.Lang -}}
 {{- $siteDesc := partialCached "params-scalar.html" (dict "value" site.Params.description "path" "[params.description]") "description" site.Language.Lang -}}
+{{- $gate := partial "aeo-gate.html" . -}}
+{{- /* A site with no blogs section still deserves an index, but calling the
+       result "Blog" is a label that lies — and it was pulling every regular
+       page in under it, an internal note included. The heading follows what is
+       actually in the list. */ -}}
 {{- $posts := where site.RegularPages "Type" "blogs" -}}
-{{- if not $posts }}{{ $posts = site.RegularPages }}{{ end -}}
+{{- $heading := partial "t.html" "blog" | title -}}
+{{- if not $posts -}}
+  {{- $posts = site.RegularPages -}}
+  {{- $heading = "Pages" -}}
+{{- end -}}
+{{- $posts = partial "aeo-allowed.html" (dict "pages" $posts "disallow" $gate.disallow) -}}
 
+{{- if not $gate.indexable -}}
+{{- /* The same answer robots.txt gives, in the format this file is read in. An
+       empty index is a truthful one: the build is not for indexing, so there is
+       nothing here to index. */ -}}
+# {{ $siteName }}
+
+> This build is not for indexing: it is not a production build, and
+> `allowIndexing` is not set. Every page also carries
+> `<meta name="robots" content="noindex, nofollow">`, and robots.txt
+> disallows everything.
+{{- else -}}
 {{- $out := slice (printf "# %s" $siteName) "" -}}
-{{- with $siteDesc }}{{ $out = $out | append (printf "> %s" (. | plainify | strings.TrimSpace)) "" }}{{ end -}}
-{{- with $hero.subtitle }}{{ $out = $out | append (. | plainify | strings.TrimSpace) "" }}{{ end -}}
+{{- with $siteDesc }}{{ $out = $out | append (printf "> %s" (partial "aeo-text.html" .)) "" }}{{ end -}}
+{{- with $hero.subtitle }}{{ $out = $out | append (partial "aeo-text.html" .) "" }}{{ end -}}
 
 {{- $out = $out | append (printf "- Language: %s" (or site.Language.Locale site.Language.Lang)) -}}
 {{- $out = $out | append (printf "- Home: %s" .Permalink) -}}
@@ -45,7 +66,7 @@
 {{- end -}}
 
 {{- with $posts -}}
-  {{- $out = $out | append "" (printf "## %s" (partial "t.html" "blog" | title)) "" -}}
+  {{- $out = $out | append "" (printf "## %s" $heading) "" -}}
   {{- range . -}}
     {{- /* The link goes to the markdown twin when there is one. That is what the
            spec asks for and what a model following it actually wants — the
@@ -55,13 +76,13 @@
            output gets the HTML permalink here instead. */ -}}
     {{- $href := .Permalink -}}
     {{- with .OutputFormats.Get "markdown" }}{{ $href = .Permalink }}{{ end -}}
-    {{- $line := printf "- [%s](%s)" .Title $href -}}
+    {{- $line := printf "- [%s](%s)" (partial "aeo-text.html" .Title) $href -}}
     {{- /* .Summary comes back with the trailing newline its <p> had, and
            plainify keeps it. One stray newline in a line-joined file is a blank
            line in the middle of the list, so every value that reaches a line
            here is trimmed rather than trusted. */ -}}
     {{- with or .Description .Summary -}}
-      {{- $line = printf "%s: %s" $line (. | plainify | strings.TrimSpace | truncate 200) -}}
+      {{- $line = printf "%s: %s" $line (partial "aeo-text.html" . | truncate 200) -}}
     {{- end -}}
     {{- $out = $out | append $line -}}
   {{- end -}}
@@ -72,15 +93,16 @@
   {{- range $name, $taxonomy := . -}}
     {{- with $taxonomy.Page -}}
       {{- $n := len $taxonomy.Pages -}}
-      {{- $out = $out | append (printf "- [%s](%s): %d post%s" $name .Permalink $n (cond (eq $n 1) "" "s")) -}}
+      {{- $out = $out | append (printf "- [%s](%s): %d post%s" (partial "aeo-text.html" $name) .Permalink $n (cond (eq $n 1) "" "s")) -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
 
-{{- with where site.Pages "Kind" "section" -}}
+{{- with partial "aeo-allowed.html" (dict "pages" (where site.Pages "Kind" "section") "disallow" $gate.disallow) -}}
   {{- $out = $out | append "" "## Optional" "" -}}
   {{- range . -}}
-    {{- $out = $out | append (printf "- [%s](%s): index of the posts listed above" .Title .Permalink) -}}
+    {{- $out = $out | append (printf "- [%s](%s): index of the posts listed above" (partial "aeo-text.html" .Title) .Permalink) -}}
   {{- end -}}
 {{- end -}}
 {{ delimit $out "\n" }}
+{{- end -}}
