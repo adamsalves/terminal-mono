@@ -15,12 +15,14 @@ So the build is the fixture and the assertions are the review:
                whole site off.
 
   JSON-LD      every block parses; every page carries a publisher and a WebSite;
-               posts carry a BlogPosting with the fields that make it one; every
-               @id a node references is defined by a node on the same page; and
-               a BreadcrumbList counts 1..n with no gaps and no self-link on its
-               last crumb.
+               posts carry a BlogPosting with the fields that make it one and a
+               list page carries a CollectionPage; every @id a node references is
+               defined by a node on the same page; a BreadcrumbList counts 1..n
+               with no gaps and no self-link on its last crumb, and the page it
+               describes is a node on that page rather than nothing at all.
 
 Run: python3 scripts/check_aeo.py <public-dir> [--no-robots] [--not-indexable]
+                                                [--training-blocked]
 """
 
 import json
@@ -32,6 +34,13 @@ import sys
 # the theme's default; a build where one of them is not is a defect unless the
 # site asked for it, and a site that asked is not what CI builds.
 MAJOR_BOTS = ["gptbot", "claudebot", "google-extended", "perplexitybot"]
+
+# Three of the four above are *training* crawlers, so a site that legitimately
+# sets [params.aeo] allowTraining = false fails this check three times for doing
+# exactly what the switch is for. --training-blocked says so; the theme's own CI
+# never passes it, because a build where the theme blocks them by default is the
+# defect this list is watching for.
+TRAINING_BOTS = ["gptbot", "claudebot", "google-extended"]
 
 LD_RE = re.compile(
     r"""<script[^>]*type=["']?application/ld\+json["']?[^>]*>(.*?)</script>""",
@@ -88,7 +97,7 @@ def allowed(groups, agent):
     return "/" not in star["disallow"] or "/" in star["allow"]
 
 
-def check_robots(public, indexable):
+def check_robots(public, indexable, training_blocked=False):
     problems = []
     path = public / "robots.txt"
     if not path.is_file():
@@ -120,9 +129,16 @@ def check_robots(public, indexable):
                             "in it applies" % agent)
 
     if indexable:
-        for bot in MAJOR_BOTS:
+        expected = ([b for b in MAJOR_BOTS if b not in TRAINING_BOTS]
+                    if training_blocked else MAJOR_BOTS)
+        for bot in expected:
             if not allowed(groups, bot):
                 problems.append("robots.txt: %s is blocked" % bot)
+        if training_blocked:
+            for bot in TRAINING_BOTS:
+                if allowed(groups, bot):
+                    problems.append("robots.txt: %s is still allowed, and this "
+                                    "build says training is blocked" % bot)
         star = groups.get("*", {"disallow": [], "allow": []})
         if "/" in star["disallow"]:
             problems.append("robots.txt: `User-agent: *` carries `Disallow: /` -- "
@@ -171,7 +187,8 @@ def check_page(rel, html):
     # A reference to an @id nothing on the page defines is a dangling edge: the
     # consumer resolves it to nothing and the author or publisher disappears.
     for node in nodes:
-        for field in ("author", "publisher", "isPartOf"):
+        for field in ("author", "publisher", "isPartOf", "breadcrumb",
+                      "mainEntityOfPage"):
             ref = node.get(field)
             if isinstance(ref, dict) and set(ref) == {"@id"} and ref["@id"] not in defined:
                 problems.append("%s: %s.%s points at %s, which no node here defines"
@@ -199,7 +216,15 @@ def check_page(rel, html):
                         "%s: headline %r is not the start of name %r -- they are "
                         "the same title, so one of them was transformed on the "
                         "way in" % (rel, headline, name))
+        # A BreadcrumbList is a trail to the page it sits on, so something on
+        # that page has to *be* that page. Without this the list pages carried a
+        # trail and nothing it led to -- the dangling shape one level up, which
+        # the @id check below cannot see because a BreadcrumbList names no @id.
         if node.get("@type") == "BreadcrumbList":
+            described = {"BlogPosting", "WebPage", "CollectionPage"}
+            if not (described & set(types)):
+                problems.append("%s: a BreadcrumbList and no %s to lead to"
+                                % (rel, "/".join(sorted(described))))
             crumbs = node.get("itemListElement", [])
             positions = [c.get("position") for c in crumbs]
             if positions != list(range(1, len(crumbs) + 1)):
@@ -214,11 +239,12 @@ def check_page(rel, html):
     return problems
 
 
-def check(public_dir, expect_robots=True, indexable=True):
+def check(public_dir, expect_robots=True, indexable=True,
+          training_blocked=False):
     public = pathlib.Path(public_dir)
     problems = []
     if expect_robots:
-        problems += check_robots(public, indexable)
+        problems += check_robots(public, indexable, training_blocked)
 
     pages = sorted(public.rglob("*.html"))
     if not pages:
@@ -255,20 +281,34 @@ def check(public_dir, expect_robots=True, indexable=True):
     return problems
 
 
+# Flag -> the check() keyword it sets, and whether passing the flag means True
+# or False. One mapping, because main() reads the flags and the guard below
+# rejects the rest: a second hand-written list is a real flag refused as unknown.
+FLAGS = {
+    "--no-robots": ("expect_robots", False),
+    "--not-indexable": ("indexable", False),
+    "--training-blocked": ("training_blocked", True),
+}
+
+
+def usage():
+    return [l for l in __doc__.strip().splitlines() if l.strip()][-2:]
+
+
 def main(argv):
     args = [a for a in argv[1:] if not a.startswith("--")]
     flags = {a for a in argv[1:] if a.startswith("--")}
     if not args:
-        print(__doc__.strip().splitlines()[-1], file=sys.stderr)
+        print("\n".join(usage()), file=sys.stderr)
         return 2
-    unknown = sorted(flags - {"--no-robots", "--not-indexable"})
+    unknown = sorted(flags - set(FLAGS))
     if unknown:
         print("unknown flag(s): %s" % " ".join(unknown), file=sys.stderr)
-        print(__doc__.strip().splitlines()[-1], file=sys.stderr)
+        print("\n".join(usage()), file=sys.stderr)
         return 2
-    problems = check(args[0],
-                     expect_robots="--no-robots" not in flags,
-                     indexable="--not-indexable" not in flags)
+    opts = {name: (on if flag in flags else not on)
+            for flag, (name, on) in FLAGS.items()}
+    problems = check(args[0], **opts)
     if problems:
         print("\n".join(problems), file=sys.stderr)
         print("\n%d problem(s) in the AEO output." % len(problems), file=sys.stderr)

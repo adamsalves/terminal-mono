@@ -47,7 +47,7 @@
 <meta name="author" content="{{ or .Params.author $siteName }}">
 {{ hugo.Generator }}
 <link rel="canonical" href="{{ .Permalink }}">
-{{- if not (or hugo.IsProduction site.Params.allowIndexing) }}
+{{- if not (partial "indexable.html" .) }}
 <meta name="robots" content="noindex, nofollow">
 {{- end }}
 <link rel="icon" href="{{ $favicon | relURL }}" type="image/svg+xml">

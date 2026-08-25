@@ -39,11 +39,11 @@
 {{- $allowAI := partial "params-bool.html" (dict "value" $aeo.allowAI "path" "[params.aeo] allowAI" "default" true) -}}
 {{- $allowTraining := partial "params-bool.html" (dict "value" $aeo.allowTraining "path" "[params.aeo] allowTraining" "default" true) -}}
 {{- $disallow := partial "params-list.html" (dict "value" $aeo.disallow "path" "[params.aeo] disallow" "maps" false) -}}
-{{- /* The same condition head.html puts on its `noindex` meta, read the same
-       way on purpose. A deploy preview that says noindex in the <head> and
+{{- /* The same condition head.html puts on its `noindex` meta, from the same
+       partial on purpose. A deploy preview that says noindex in the <head> and
        invites crawlers in robots.txt is worse than either alone, and the two
        files disagreeing is exactly how that happens. */ -}}
-{{- $indexable := or hugo.IsProduction site.Params.allowIndexing -}}
+{{- $indexable := partial "indexable.html" . -}}
 {{- $answerEngines := slice
   "OAI-SearchBot" "ChatGPT-User"
   "Claude-SearchBot" "Claude-User"
