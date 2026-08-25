@@ -30,6 +30,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   keeps the four from contradicting each other the way robots.txt's own comment warns
   about.
 
+  Posts in `llms-full.txt` are separated by a `--- post: <url> ---` line rather than a
+  bare `---`. A thematic break is ordinary markdown that someone writes inside a post
+  without thinking about this file at all, and it was indistinguishable from the line
+  that separates two posts — so was the setext underline under a heading. The boundary
+  now carries the answer to the question the split is being made to answer.
+
+  Every label and heading is English in every language's copy. They are keys, not prose:
+  a reader parsing `/pt/llms.txt` should not have to know the site is Portuguese to find
+  the post list, and `## Blog` translated is a section a parser written against the
+  spec's example cannot find. The values carry the language and `- Language:` states
+  which one. Half of it used to be translated, which was the worst of the two — neither
+  parseable by key nor readable as prose — and CI now asserts the two copies use the
+  same keys.
+
   Every value that reaches a line is normalised for it. These are lines in a plain-text
   file with no forgiving renderer behind them: a newline inside a title ends the list
   it is in, and a `]` — `TIL: array[0]`, `Reading [a spec]` — closes the markdown link

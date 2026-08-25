@@ -493,11 +493,11 @@ def main(argv):
     # run: saying "llms.txt checks out" after --no-llms turned it off is the
     # check reporting work it did not do.
     did = ["the JSON-LD graph"]
-    if off["expect_robots"]:
+    if opts["expect_robots"]:
         did.insert(0, "robots.txt")
-    if off["expect_llms"]:
+    if opts["expect_llms"]:
         did.append("llms.txt")
-    if off["expect_markdown"]:
+    if opts["expect_markdown"]:
         did.append("the markdown twins")
     print("%s: %s check out" % (args[0], ", ".join(did)))
     return 0

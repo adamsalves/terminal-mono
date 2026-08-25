@@ -420,6 +420,19 @@ class Wiring(unittest.TestCase):
         # caller asked for simply did not happen.
         self.assertEqual(aeo.main(["check_aeo.py", "somewhere", "--not-indexible"]), 2)
 
+    def test_main_returns_zero_on_a_clean_tree(self):
+        # The green path through main() -- the one that builds the summary line
+        # -- had no test at all, and a merge renamed the dict under it. Every
+        # other test calls check() directly, which walks straight past it.
+        with tempfile.TemporaryDirectory() as d:
+            pub = pathlib.Path(d)
+            (pub / "index.html").write_text(page(PUBLISHER, WEBSITE))
+            (pub / "p").mkdir()
+            (pub / "p" / "index.html").write_text(page(PUBLISHER, WEBSITE, POST))
+            self.assertEqual(
+                aeo.main(["check_aeo.py", d, "--no-robots", "--no-llms",
+                          "--no-markdown"]), 0)
+
     def test_every_flag_the_usage_line_documents_is_accepted(self):
         # The guard above and the flags main() reads are one mapping for a
         # reason: two hand-written lists disagree the moment a flag is added,

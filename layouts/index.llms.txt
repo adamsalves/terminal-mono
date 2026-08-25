@@ -22,6 +22,15 @@
        template like this is one more place to put it. Appending "" is a blank
        line stated on purpose.
 
+       Every label in this file is English on every language's copy, and the
+       headings are too. They are keys, not prose: a reader parsing /pt/llms.txt
+       should not have to know the site is Portuguese to find the post list, and
+       `## Blog` translated is a section a parser written against the spec's
+       example cannot find. The values carry the language — the titles, the
+       summaries — and `- Language:` states which one. Half-translating was the
+       worst of the two: `## Blog` localized beside a fixed `- Home:` is a file
+       that is neither parseable by key nor readable as prose.
+
        Everything below reads the same guarded params head.html does, and for
        the same reason: a scalar where a table belongs would abort the build,
        and this renders on the home page of every language. */ -}}
@@ -34,7 +43,7 @@
        page in under it, an internal note included. The heading follows what is
        actually in the list. */ -}}
 {{- $posts := where site.RegularPages "Type" "blogs" -}}
-{{- $heading := partial "t.html" "blog" | title -}}
+{{- $heading := "Blog" -}}
 {{- if not $posts -}}
   {{- $posts = site.RegularPages -}}
   {{- $heading = "Pages" -}}
@@ -89,7 +98,7 @@
 {{- end -}}
 
 {{- with site.Taxonomies.tags -}}
-  {{- $out = $out | append "" (printf "## %s" (partial "t.html" "tags" | title)) "" -}}
+  {{- $out = $out | append "" "## Tags" "" -}}
   {{- range $name, $taxonomy := . -}}
     {{- with $taxonomy.Page -}}
       {{- $n := len $taxonomy.Pages -}}

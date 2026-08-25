@@ -147,11 +147,32 @@ jobs:
             echo 'aeo: /pt/llms.txt does not say it is Portuguese'
             exit 1
           fi
-          if grep -qF "$(grep -m1 '^- \[' exampleSite/public/llms.txt)" exampleSite/public/pt/llms.txt; then
+          # `--` because the pattern is a whole list item and starts with "- ",
+          # which grep otherwise reads as an option: without it this exited 2
+          # with a usage error, the `if` saw non-zero, and the check passed
+          # without ever comparing anything.
+          first_en=$(grep -m1 '^- \[' exampleSite/public/llms.txt)
+          if [ -z "$first_en" ]; then
+            echo 'aeo: llms.txt has no post lines to compare'
+            exit 1
+          fi
+          if grep -qF -- "$first_en" exampleSite/public/pt/llms.txt; then
             echo 'aeo: /pt/llms.txt lists the English posts'
             exit 1
           fi
-          echo 'aeo: llms.txt and llms-full.txt are per language, each listing its own'
+          # Keys, not prose. A reader parsing /pt/llms.txt should not have to
+          # know the site is Portuguese to find the post list, so every label
+          # and heading is English in both copies and only the values carry the
+          # language. Half of it used to be translated, which is the worst of
+          # the two: neither parseable by key nor readable as prose.
+          keys() { grep -oE '^(## .*|- [A-Za-z][A-Za-z ]*:)' "$1" | sort -u; }
+          if ! diff <(keys exampleSite/public/llms.txt) \
+                    <(keys exampleSite/public/pt/llms.txt) > /tmp/keys.diff; then
+            echo 'aeo: the two languages do not use the same keys'
+            cat /tmp/keys.diff
+            exit 1
+          fi
+          echo 'aeo: llms.txt and llms-full.txt are per language, each listing its own, keyed the same'
       # [outputs] is the half a consuming site has to write — Hugo does not merge
       # a theme's — so the theme has to keep working without it. A site that
       # never adds the block gets no llms.txt and no markdown twins, and that is
@@ -257,21 +278,6 @@ jobs:
           [ "$fail" = 0 ] || exit 1
           echo 'gate: disallow and the build condition reach llms.txt, llms-full.txt and the twins'
 
-      # Every title in the exampleSite is plain ASCII and short, and none of its
-      # posts uses a shortcode — so the fields the theme transforms rather than
-      # copies were never built from content that could show the transform going
-      # wrong. Three of them were:
-      #
-      #   headline   `truncate` escapes a plain string, so an ampersand or an
-      #              apostrophe arrived as an HTML entity inside a JSON string,
-      #              contradicting the `name` built from the same title; and the
-      #              ellipsis lands *after* the limit, so a long title was 111
-      #              against a cap of 110.
-      #   llms.txt   a `]` in a title closes the markdown link early and a
-      #              newline splits the list item in two, and both survive
-      #              TrimSpace.
-      #   the twin   `.RawContent` handed the reader unrendered shortcode syntax.
-      - name: Assert hostile content survives every AEO output
       # `allowIndexing` reaches an `if`, and `if` accepts anything — so the
       # string "false" is a non-empty string, which is true, and the spelling
       # that most plainly means "do not index" was switching indexing on. On a
@@ -319,7 +325,21 @@ jobs:
           done
           [ "$fail" = 0 ] || exit 1
           echo 'indexable: only a real boolean opens a preview, and the head and robots.txt agree'
-      - name: Assert a hostile title survives the graph
+      # Every title in the exampleSite is plain ASCII and short, and none of its
+      # posts uses a shortcode — so the fields the theme transforms rather than
+      # copies were never built from content that could show the transform going
+      # wrong. Three of them were:
+      #
+      #   headline   `truncate` escapes a plain string, so an ampersand or an
+      #              apostrophe arrived as an HTML entity inside a JSON string,
+      #              contradicting the `name` built from the same title; and the
+      #              ellipsis lands *after* the limit, so a long title was 111
+      #              against a cap of 110.
+      #   llms.txt   a `]` in a title closes the markdown link early and a
+      #              newline splits the list item in two, and both survive
+      #              TrimSpace.
+      #   the twin   `.RawContent` handed the reader unrendered shortcode syntax.
+      - name: Assert hostile content survives every AEO output
         run: |
           set -eo pipefail
           d=/tmp/aeo-title
@@ -353,6 +373,11 @@ jobs:
           {{< highlight go >}}
           fmt.Println("hi")
           {{< /highlight >}}
+
+          ---
+
+          And a thematic break above, which is ordinary markdown and used to be
+          indistinguishable from the line that separates two posts.
           MD
           python3 - "$d" <<'PY'
           import pathlib, sys
@@ -401,6 +426,15 @@ jobs:
                   bad.append('llms.txt: a list item stopped being a link: %s' % line[:90])
           if 'array' not in llms:
               bad.append('llms.txt: the bracketed post is not in the index at all')
+
+          # The post separator names the post, so a thematic break inside one
+          # cannot be read as a boundary. Three posts, three separators.
+          full = (pub / 'llms-full.txt').read_text(encoding='utf-8')
+          seps = [l for l in full.splitlines() if l.startswith('--- post: ')]
+          if len(seps) != 3:
+              bad.append('llms-full.txt: %d post separators for 3 posts' % len(seps))
+          if '\n---\n' not in full:
+              bad.append('llms-full.txt: the fixture thematic break did not survive')
 
           # The twins and the full text: shortcodes are rendered, not shipped raw.
           for path in [pub / 'llms-full.txt'] + sorted(pub.glob('blogs/*/index.md')):
