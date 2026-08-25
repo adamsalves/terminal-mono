@@ -35,7 +35,19 @@ WEBSITE = ('{"@context":"https://schema.org","@type":"WebSite",'
 POST = ('{"@context":"https://schema.org","@type":"BlogPosting",'
         '"headline":"H","datePublished":"2026-01-01T00:00:00Z",'
         '"author":{"@id":"https://x/#person"},"inLanguage":"en",'
-        '"mainEntityOfPage":{"@id":"https://x/p/"},"wordCount":10}')
+        '"mainEntityOfPage":"https://x/p/","wordCount":10}')
+
+# A section index, a tag list, a term page: what the theme emits for the pages
+# whose content is the set of pages they link to.
+COLLECTION = ('{"@context":"https://schema.org","@type":"CollectionPage",'
+              '"@id":"https://x/blogs/#page","url":"https://x/blogs/",'
+              '"name":"Blog","isPartOf":{"@id":"https://x/#website"},'
+              '"inLanguage":"en","breadcrumb":{"@id":"https://x/blogs/#breadcrumb"}}')
+COLLECTION_CRUMBS = (
+    '{"@context":"https://schema.org","@type":"BreadcrumbList",'
+    '"@id":"https://x/blogs/#breadcrumb","itemListElement":['
+    '{"@type":"ListItem","position":1,"name":"Home","item":"https://x/"},'
+    '{"@type":"ListItem","position":2,"name":"Blog"}]}')
 CRUMBS = ('{"@context":"https://schema.org","@type":"BreadcrumbList",'
           '"itemListElement":['
           '{"@type":"ListItem","position":1,"name":"Home","item":"https://x/"},'
@@ -73,12 +85,12 @@ class RobotsParsing(unittest.TestCase):
 
 
 class RobotsChecks(unittest.TestCase):
-    def run_on(self, robots, indexable=True):
+    def run_on(self, robots, indexable=True, training_blocked=False):
         with tempfile.TemporaryDirectory() as d:
             pub = pathlib.Path(d)
             (pub / "sitemap.xml").write_text("<urlset/>")
             (pub / "robots.txt").write_text(robots)
-            return aeo.check_robots(pub, indexable)
+            return aeo.check_robots(pub, indexable, training_blocked)
 
     GOOD = ("User-agent: *\nAllow: /\n\n"
             "User-agent: GPTBot\nUser-agent: ClaudeBot\n"
@@ -122,6 +134,24 @@ class RobotsChecks(unittest.TestCase):
         # so the script's only preview mode rejected the theme's own output.
         preview = "User-agent: *\nDisallow: /\n"
         self.assertEqual(self.run_on(preview, indexable=False), [])
+
+    def test_a_site_that_blocks_training_is_not_three_failures(self):
+        # Three of the four MAJOR_BOTS are training crawlers, so a site using
+        # [params.aeo] allowTraining = false failed this check for doing exactly
+        # what the switch is for.
+        blocked = self.GOOD.replace(
+            "User-agent: GPTBot\nUser-agent: ClaudeBot\n"
+            "User-agent: Google-Extended\nUser-agent: PerplexityBot\nAllow: /",
+            "User-agent: PerplexityBot\nAllow: /\n\n"
+            "User-agent: GPTBot\nUser-agent: ClaudeBot\n"
+            "User-agent: Google-Extended\nDisallow: /")
+        self.assertTrue(any("is blocked" in p for p in self.run_on(blocked)))
+        self.assertEqual(self.run_on(blocked, training_blocked=True), [])
+
+    def test_training_blocked_is_an_assertion_not_a_mute(self):
+        # The inverse: claiming training is blocked on a build that allows it.
+        problems = self.run_on(self.GOOD, training_blocked=True)
+        self.assertTrue(any("still allowed" in p for p in problems), problems)
 
     def test_a_preview_that_still_points_at_a_sitemap_is_a_problem(self):
         preview = "User-agent: *\nDisallow: /\n\nSitemap: https://x/sitemap.xml\n"
@@ -317,6 +347,31 @@ class HeadlineChecks(unittest.TestCase):
         self.assertEqual(aeo.check_page("/p/", page(PUBLISHER, WEBSITE, ok)), [])
 
 
+class CollectionChecks(unittest.TestCase):
+    def test_a_list_page_passes(self):
+        self.assertEqual(
+            aeo.check_page("/blogs/", page(PUBLISHER, WEBSITE, COLLECTION,
+                                           COLLECTION_CRUMBS)), [])
+
+    def test_a_breadcrumb_leading_to_nothing(self):
+        # What a list page used to emit: a trail to a page the graph says
+        # nothing else about. It is the dangling shape one level up, and the
+        # @id check cannot see it because a BreadcrumbList names no @id.
+        problems = aeo.check_page("/blogs/", page(PUBLISHER, WEBSITE,
+                                                  COLLECTION_CRUMBS))
+        self.assertTrue(any("lead to" in p for p in problems), problems)
+
+    def test_a_phantom_mainentityofpage_is_caught(self):
+        # `dict "@type" "WebPage" "@id" .Permalink` declared a second node for
+        # the page -- no url, no name, at an @id nothing else defines -- beside
+        # the BlogPosting that is the thing being described.
+        bad = POST.replace('"mainEntityOfPage":"https://x/p/"',
+                           '"mainEntityOfPage":{"@id":"https://x/p/"}')
+        problems = aeo.check_page("/p/", page(PUBLISHER, WEBSITE, bad))
+        self.assertTrue(any("mainEntityOfPage" in p and "no node here defines" in p
+                            for p in problems), problems)
+
+
 class Wiring(unittest.TestCase):
     def test_an_empty_directory_is_a_failure_not_a_pass(self):
         with tempfile.TemporaryDirectory() as d:
@@ -366,9 +421,9 @@ class Wiring(unittest.TestCase):
         self.assertEqual(aeo.main(["check_aeo.py", "somewhere", "--not-indexible"]), 2)
 
     def test_every_flag_the_usage_line_documents_is_accepted(self):
-        # The guard above and the flags main() reads were two hand-written lists,
-        # and they disagreed the moment a flag was added: --no-llms was a real
-        # flag the guard rejected, which broke CI rather than a caller's typo.
+        # The guard above and the flags main() reads are one mapping for a
+        # reason: two hand-written lists disagree the moment a flag is added,
+        # and the failure is a real flag refused as unknown.
         documented = set(re.findall(r"--[a-z-]+", " ".join(aeo.usage())))
         self.assertEqual(documented, set(aeo.FLAGS), "usage line and FLAGS differ")
         with tempfile.TemporaryDirectory() as d:

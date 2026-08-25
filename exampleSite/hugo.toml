@@ -141,7 +141,8 @@ summaryLength = 30
   #   [params.theme.colors]
   #     accent = "#00ffd5"
   terminalUser = "robin@portfolio"
-  allowIndexing = true       # allow indexing even outside production
+  allowIndexing = true       # allow indexing even outside production (a real
+                             # boolean — "true" as a string warns and is ignored)
   # Both paths are relative to the baseURL, and written without a leading
   # slash on purpose: a rooted "/img/og.png" is rooted at the *host*, so on a
   # site published under a sub-path — this demo is one — it resolves outside

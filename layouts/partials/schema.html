@@ -43,7 +43,16 @@
 {{- $home := site.Home.Permalink -}}
 {{- /* The fragment stays #person even for an Organization: it is an opaque
        identifier, and changing it would repoint every reference below at a
-       node that does not exist on a site that switches type. */ -}}
+       node that does not exist on a site that switches type.
+
+       $home is the *language* home, so a bilingual site gets two ids —
+       https://x/#person and https://x/pt/#person — and that is deliberate.
+       The node they identify is not the same node: jobTitle comes from
+       [params.hero] subtitle, which is translated, so one id for both would be
+       one person holding two different job titles depending on which page a
+       consumer read last. Two ids is a site that says the same person twice in
+       two languages, which is what it is; merging them is a job for sameAs, not
+       for an identifier that has to resolve on the page it appears on. */ -}}
 {{- $personID := printf "%s#person" $home -}}
 {{- $graph := slice -}}
 
@@ -128,6 +137,14 @@
        headline is capped at 110 characters because Google's own documentation
        caps it there and drops the field entirely when it is longer — a long
        title should lose its tail rather than lose the whole property. */ -}}
+{{- /* Whether the BreadcrumbList below will exist, computed here because the
+       page node wants to reference it and is built first. It is the same
+       condition, not a second spelling of it: the list gets one entry per
+       ancestor plus one for the page, and it is only emitted when that comes to
+       more than one — which is exactly "this page has an ancestor". */ -}}
+{{- $hasCrumbs := and (not $p.IsHome) (gt (len $p.Ancestors) 0) -}}
+{{- $breadcrumbID := printf "%s#breadcrumb" $p.Permalink -}}
+
 {{- if $p.IsPage -}}
   {{- $isPost := eq $p.Section "blogs" -}}
   {{- /* Plain text, because that is what a schema.org name is: Title carries
@@ -157,9 +174,15 @@
            appends it *after* the limit, which put every long title at 111 and
            failed the 110 that check_aeo.py — and Google — enforce. */ -}}
     {{- $headline := truncate 109 "…" $title -}}
+    {{- /* mainEntityOfPage as a URL, which schema.org allows alongside the
+           CreativeWork form. Written as `dict "@type" "WebPage" "@id"
+           .Permalink` it declared a second node for this page — a WebPage with
+           no url and no name, at an @id nothing else on the page defines,
+           beside the BlogPosting that lives at {permalink}#page and is the
+           thing being described. One page, one node. */ -}}
     {{- $node = merge $node (dict
       "headline" $headline
-      "mainEntityOfPage" (dict "@type" "WebPage" "@id" $p.Permalink)
+      "mainEntityOfPage" $p.Permalink
       "publisher" (dict "@id" $personID)
       "wordCount" $p.WordCount) -}}
     {{- /* A zero date is Go's year 1, and `"datePublished":"0001-01-01T…"` is a
@@ -184,6 +207,28 @@
       {{- $node = merge $node (dict "author" (dict "@id" $personID)) -}}
     {{- end -}}
   {{- end -}}
+  {{- if $hasCrumbs }}{{ $node = merge $node (dict "breadcrumb" (dict "@id" $breadcrumbID)) }}{{ end -}}
+  {{- $graph = $graph | append $node -}}
+{{- else if not $p.IsHome -}}
+  {{- /* ---- CollectionPage ------------------------------------------------
+         A section index, a tag list, a term page: a page whose content is the
+         set of pages it links to. Without this they carried a BreadcrumbList
+         about a page the graph said nothing else about — a trail leading to a
+         node that was not there, which is the same dangling shape the @id
+         linking exists to avoid, one level up.
+
+         CollectionPage rather than WebPage because it is the narrower true
+         statement, and it is what tells a reader that the links are the point
+         of the page rather than decoration around prose. */ -}}
+  {{- $node := dict
+    "@type" "CollectionPage"
+    "@id" (printf "%s#page" $p.Permalink)
+    "url" $p.Permalink
+    "name" ($p.Title | plainify)
+    "isPartOf" (dict "@id" (printf "%s#website" $home))
+    "inLanguage" (or $p.Language.Locale $p.Language.Lang) -}}
+  {{- with $desc }}{{ $node = merge $node (dict "description" .) }}{{ end -}}
+  {{- if $hasCrumbs }}{{ $node = merge $node (dict "breadcrumb" (dict "@id" $breadcrumbID)) }}{{ end -}}
   {{- $graph = $graph | append $node -}}
 {{- end -}}
 
@@ -212,7 +257,7 @@
   {{- if gt (len $crumbs) 1 -}}
     {{- $graph = $graph | append (dict
       "@type" "BreadcrumbList"
-      "@id" (printf "%s#breadcrumb" $p.Permalink)
+      "@id" $breadcrumbID
       "itemListElement" $crumbs) -}}
   {{- end -}}
 {{- end -}}

@@ -109,7 +109,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   tree, not the URL string — so a crumb cannot point somewhere that is not a page.
   The 404 is the one page that emits none: it is not in the content tree, so a
   breadcrumb there describes a hierarchy that does not contain it, and a `WebSite` node
-  invites a crawler to treat an error as a document.
+  invites a crawler to treat an error as a document. A section index, a tag list
+  and a term page carry a `CollectionPage` — the narrower true statement about a page
+  whose content is the set of pages it links to, and the node their `BreadcrumbList`
+  needed: without it those pages published a trail leading to something the graph said
+  nothing about.
 
   Every string that reaches the graph is plain text, and getting there took two passes.
   `truncate` escapes a plain string and leaves a `template.HTML` alone, so `headline` —
@@ -135,6 +139,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `[params.ogImage]` and a post's `image`: it had spelled the trim out inline, which is
   how it came to differ from the other three and rewrite `//cdn.example/logo.png` — a
   URL naming another host — onto this site.
+
+- `allowIndexing` is read through `params-bool.html`, in one partial both `head.html`
+  and `robots.txt` call. Read raw it reached an `if`, and `if` accepts anything:
+  `allowIndexing = "false"` is a non-empty string, so the spelling that most plainly
+  means *do not index* was switching indexing on — silently, on exactly the preview
+  deploy the flag exists for. It now warns and holds, and the two files cannot answer
+  the question differently, which is the failure `robots.txt`'s own comment names.
+
+- `scripts/check_aeo.py --training-blocked`, for a site that means it. Three of the four
+  crawlers it checks are training crawlers, so a site using `[params.aeo] allowTraining
+  = false` failed the check three times for doing exactly what the switch is for. The
+  flag is an assertion rather than a mute: with it, a build that still allows them
+  fails.
 
 - `partials/params-bool.html`, the fourth of the `params-*.html` family and the one whose
   failure mode is quietest. The other three reach a `range`, a field lookup or a cast, so

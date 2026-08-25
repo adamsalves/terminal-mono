@@ -547,7 +547,10 @@ excluded only there would stay open to exactly the crawlers you named.
 A build that is not for indexing — not production, and no `allowIndexing` — publishes
 `Disallow: /` instead, matching the `noindex` meta the theme already puts on every page.
 A deploy preview that says one thing in the `<head>` and the opposite in `robots.txt` is
-worse than either alone.
+worse than either alone; both read the same condition from one partial so they cannot
+drift. `allowIndexing` has to be a real boolean: `allowIndexing = "false"` is a string,
+and the theme warns and keeps the build out of the index rather than reading it as the
+`true` a bare `if` would.
 
 Want something else entirely? Drop your own `layouts/robots.txt` in the project; Hugo
 prefers it over the theme's.

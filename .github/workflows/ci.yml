@@ -272,6 +272,54 @@ jobs:
       #              TrimSpace.
       #   the twin   `.RawContent` handed the reader unrendered shortcode syntax.
       - name: Assert hostile content survives every AEO output
+      # `allowIndexing` reaches an `if`, and `if` accepts anything — so the
+      # string "false" is a non-empty string, which is true, and the spelling
+      # that most plainly means "do not index" was switching indexing on. On a
+      # preview deploy, silently. head.html and robots.txt now read one partial,
+      # so the other half of this is that they cannot answer it differently.
+      - name: Assert allowIndexing only accepts a boolean
+        run: |
+          set -uo pipefail
+          build() {
+            d="/tmp/idx-$1"
+            rm -rf "$d"; mkdir -p "$d/themes" "$d/content/blogs"
+            ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+            printf 'baseURL = "https://example.com/t/"\ntitle = "Idx"\ntheme = "terminal-mono"\nenableRobotsTXT = true\n%b' "$2" > "$d/hugo.toml"
+            printf -- '---\ntitle: "P"\ndate: 2026-01-01\n---\nbody\n' > "$d/content/blogs/p.md"
+            hugo --source "$d" --gc --minify --environment development > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
+            echo "$d"
+          }
+          fail=0
+          say() { echo "indexable: $1"; fail=1; }
+          noindexed() { grep -qF 'name=robots' "$1/public/index.html"; }
+          closed() { grep -qE '^Disallow: /$' "$1/public/robots.txt"; }
+
+          # A real true opens a non-production build; nothing else does.
+          yes=$(build yes '[params]\n  allowIndexing = true\n') || exit 1
+          if noindexed "$yes"; then say 'allowIndexing = true still emitted noindex'; fi
+          if closed "$yes"; then say 'allowIndexing = true still disallowed everything'; fi
+
+          # The string is the defect: it has to warn and hold the build out.
+          str=$(build str '[params]\n  allowIndexing = "false"\n') || exit 1
+          if ! noindexed "$str"; then say 'allowIndexing = "false" switched indexing on'; fi
+          if ! closed "$str"; then say 'allowIndexing = "false" opened robots.txt'; fi
+          if ! grep -qF 'allowIndexing must be true or false' "$str.log"; then
+            say 'the string went through without a warning'
+          fi
+
+          # …and in every shape the two files answer the question the same way.
+          absent=$(build absent '') || exit 1
+          for d in "$yes" "$str" "$absent"; do
+            if noindexed "$d" && ! closed "$d"; then
+              say "$(basename "$d"): noindex in the head, open robots.txt"
+            fi
+            if ! noindexed "$d" && closed "$d"; then
+              say "$(basename "$d"): indexable head, closed robots.txt"
+            fi
+          done
+          [ "$fail" = 0 ] || exit 1
+          echo 'indexable: only a real boolean opens a preview, and the head and robots.txt agree'
+      - name: Assert a hostile title survives the graph
         run: |
           set -eo pipefail
           d=/tmp/aeo-title
