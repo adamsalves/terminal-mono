@@ -6,6 +6,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **`[params.aeo] flatSitemap`**, which publishes `/sitemap.xml` as one flat
+  `<urlset>` covering every language instead of Hugo's `<sitemapindex>`. On a
+  multilingual site the index is a shape a crawler has to know to follow, and a
+  good number do not: they read `/sitemap.xml`, take the `<loc>`s and audit *those*
+  as pages — two XML files with no title, no structured data and no prose — while
+  the site itself is never opened. `npx aeo.js check` v0.0.16 does exactly this,
+  and measured against a bilingual portfolio it cost 12 of 100 points (Meta "80%+
+  pages have titles", Schema "Article/WebPage", Citability "Structured lists") for
+  content already in the build: the one post it never reached carries a
+  `BlogPosting` node *and* a `<ul>`. The flat urlset keeps every `hreflang`
+  alternate, and the per-language sitemaps are still built and served at their own
+  URLs, so nothing that already indexed one starts 404ing.
+
+  **Off by default**, for the reason `allowTraining` is on: `/sitemap.xml` is a
+  published contract with every crawler that already knows the site. Inert on a
+  single-language site, where Hugo builds no index in the first place. Like the
+  other switches it must be a real boolean — a string warns and changes nothing.
+
+  It is a whole-site param, not a per-language one: `/sitemap.xml` is one file, so
+  it is read from the first language by weight and any other language that sets a
+  different value is named in a warning. The README teaches
+  `[languages.<lang>.params…]` for other params, and silence here would be exactly
+  the failure `params-bool.html` exists to prevent.
+
+### Fixed
+- **The README's price for `keepQuotes` was wrong.** It said "about 150 bytes",
+  uncompressed and unattributed; on the exampleSite home page it is 436 (11,762 →
+  12,198) and 29 gzipped. Both numbers are documented now, and the snippet gained
+  the `[minify]` parent table it needs to be pasted into a `hugo.toml` as written.
+
 ## [0.6.0] — 2026-08-25
 
 ### Added

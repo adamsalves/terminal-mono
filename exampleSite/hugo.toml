@@ -180,10 +180,23 @@ summaryLength = 30
   #  Nothing here applies to a non-production build without
   #  `allowIndexing`: robots.txt is `Disallow: /` then, matching the
   #  noindex meta the theme already puts on every page.
+  #
+  #  flatSitemap is the odd one out — it is about the sitemap, not
+  #  robots.txt. On a site with more than one language Hugo makes
+  #  /sitemap.xml a <sitemapindex> pointing at the per-language ones,
+  #  which is the standard shape and which a good number of crawlers
+  #  do not follow: they read the two <loc>s and audit *those* as
+  #  pages, so what they see is XML with no title and no prose and the
+  #  site is never opened. true publishes one flat <urlset> covering
+  #  every language instead, hreflang and all; the per-language
+  #  sitemaps stay where they are. Defaults to false because
+  #  /sitemap.xml is a contract with crawlers that already know the
+  #  site, and it does nothing on a single-language one.
   # ============================================================
   # [params.aeo]
   #   allowAI = true
   #   allowTraining = true
+  #   flatSitemap = false
   #   disallow = ["/drafts/"]
 
   # ============================================================

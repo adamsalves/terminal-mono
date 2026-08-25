@@ -559,6 +559,43 @@ and the theme warns and keeps the build out of the index rather than reading it 
 Want something else entirely? Drop your own `layouts/robots.txt` in the project; Hugo
 prefers it over the theme's.
 
+### Sitemap
+
+On a site with more than one language, Hugo makes `/sitemap.xml` a `<sitemapindex>`:
+a list pointing at `/en/sitemap.xml` and `/pt/sitemap.xml`, which hold the real URLs.
+That is the standard shape and Google follows it.
+
+Plenty of smaller crawlers do not. They read `/sitemap.xml`, take every `<loc>` in it
+and fetch each one *as a page* — so what they audit is two XML files with no `<title>`,
+no JSON-LD and no prose, and your actual pages are never opened. `npx aeo.js check` is
+one of these; on a bilingual site it reports three pages crawled, two of which are
+sitemaps.
+
+```toml
+[params.aeo]
+  flatSitemap = true
+```
+
+publishes one flat `<urlset>` at the root instead, listing every page of every language
+with its `hreflang` alternates intact. The per-language sitemaps are still built and
+still served at their own URLs — nothing that already has one in an index starts
+404ing. The 50,000-URL ceiling that makes an index necessary is not one a site built on
+this theme is going to reach.
+
+It is **off by default**, for the same reason `allowTraining` is on: `/sitemap.xml` is a
+published contract with every crawler that already knows your site, and a theme upgrade
+should not quietly change it. On a single-language site the param does nothing at all —
+Hugo never builds an index there, so `/sitemap.xml` is already a flat `<urlset>`.
+
+Like the other switches, it has to be a real boolean; `flatSitemap = "true"` is a string,
+and the theme warns and leaves the sitemap alone.
+
+**Write it at the root, in `[params.aeo]`.** Unlike the section and hero params, this one
+is not per language: `/sitemap.xml` is a single file for the whole site, so it can only be
+flat or not, and a `[languages.pt.params.aeo] flatSitemap` is a statement the file cannot
+honour. It is read from the first language by weight, and any other language that
+disagrees is named in a build warning rather than ignored quietly.
+
 ### Structured data (JSON-LD)
 
 Emitted on every page, with no configuration, as one `<script>` per node:
@@ -641,23 +678,33 @@ left after throwing that structure away, which is the opposite of the point.
 npx aeo.js check https://your-site.example/
 ```
 
-Three things about that checker are worth knowing before you read its score, all
+Four things about that checker are worth knowing before you read its score, all
 verified against v0.0.16:
 
 - **It scans the origin, not your URL's path.** It fetches `robots.txt`, `llms.txt` and
   `sitemap.xml` from `https://host/`, so a site published under a sub-path — a GitHub
   Pages project site, for one — is scored on files it cannot see.
 - **Its regexes require quoted attributes**, and `hugo --minify` emits valid unquoted
-  HTML5. It therefore reports no canonical and no JSON-LD on a minified Hugo site
-  regardless of what is on the page. If you want it scored correctly, keep the quotes:
+  HTML5. It therefore reports no meta description, no canonical and no JSON-LD on a
+  minified Hugo site regardless of what is on the page — 12 of its 100 points. If you
+  want it scored correctly, keep the quotes:
   ```toml
-  [minify.tdewolff.html]
-    keepQuotes = true
+  [minify]
+    [minify.tdewolff.html]
+      keepQuotes = true
   ```
-  It costs about 150 bytes on a page of this theme, before compression.
+  Measured on the exampleSite home page: 11,762 → 12,198 bytes raw, and 3,489 →
+  3,518 gzipped. The quotes are 436 bytes of the most compressible text there is,
+  so what actually goes over the wire is **29 bytes**.
+- **It does not follow a `<sitemapindex>`**, so on a multilingual site it audits your
+  sub-sitemaps as if they were pages. Another 12 points, and `flatSitemap = true`
+  above is the answer.
 - **`Organization name` and `Organization logo` are 8 of its 20 schema points**, and a
   personal site cannot earn them without claiming to be a company. That is a limit of
   the rubric, not of your site.
+
+With both switches set, a bilingual portfolio that blocks training crawlers scores
+around 77 — the 11 points under `AI Access` are `allowTraining = false`, priced.
 ## Fonts
 
 JetBrains Mono ships **with the theme**, in `static/fonts/`, and is declared by an
