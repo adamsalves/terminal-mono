@@ -159,11 +159,19 @@
     } catch (e) {
       w = 0;
     } finally {
+      /* The probe is built and destroyed inside this call rather than kept.
+         Keeping one was tried, for the forced reflow the create/remove pair
+         causes on every re-measure — and it moved nothing: `forced-reflow-insight`
+         fires on about half of Lighthouse's runs either way, because what is
+         being forced is the document's *first* layout, which the read below
+         genuinely needs and which no amount of probe reuse removes. What a kept
+         probe does do is leave "0123456789" inside the terminal's textContent
+         for the life of the page — invisible to a reader, and read by anything
+         that extracts text from the rendered DOM, which on this theme now
+         includes the answer engines llms.txt is for. Not a trade worth making
+         for a coin-flip audit. */
       pre.removeChild(box);
     }
-    /* A hidden hero, a zero-width column, a DOM that does not lay anything out:
-       nothing to measure, so the template's count stands rather than being
-       replaced by a guess. */
     if (!(w > 0) || !(advance > 0)) return null;
     /* The epsilon absorbs the float error in a ratio that ought to be whole —
        39.999999996 where the box fits exactly 40 columns. It has to stay far below
@@ -325,24 +333,93 @@
     return;
   }
 
-  var si = 0, ci = 0;
-  function tick() {
-    if (si >= segs.length) return;
+  /* The tail is one <span> holding one text node, both built once and kept for
+     the whole animation. What was here before assigned tailEl.innerHTML on every
+     character, and wrap() for an unfinished segment always produces the same
+     shape — a single span with a color — so every one of those 442 assignments
+     ran the HTML parser to rebuild a node identical to the one it had just
+     destroyed. Setting .data on a text node skips the parser entirely: the
+     browser marks the node dirty and nothing is constructed.
+
+     The span's color is the only thing that changes between segments, so it is
+     set once per segment rather than once per character. */
+  var tailSpan = document.createElement('span');
+  var tailText = document.createTextNode('');
+  tailSpan.appendChild(tailText);
+  tailEl.appendChild(tailSpan);
+
+  var START_MS = 400, CHAR_MS = 15, NEWLINE_MS = 80;
+  /* A frame boundary the reader was not there for — a background tab, a laptop
+     that slept, a long task — arrives as one enormous delta. Spending it would
+     dump the rest of the terminal in a single paint, which is not the animation
+     resuming, it is the animation being skipped. Capped, it resumes typing. */
+  var MAX_FRAME_MS = 100;
+
+  var raf = (typeof window.requestAnimationFrame === 'function')
+    ? function (fn) { window.requestAnimationFrame(fn); }
+    : function (fn) { setTimeout(function () { fn(Date.now()); }, 16); };
+
+  var si = 0, ci = 0, colored = false;
+  /* Milliseconds still owed before the next character appears. The animation
+     opens with the same 400ms pause it always had. */
+  var due = START_MS;
+  var last = 0;
+
+  /* Exactly one character, or one segment boundary. Writing the tail is the
+     caller's job — inside a frame this may run several times, and the text node
+     only needs the last of those values. */
+  function advance() {
     var seg = segs[si];
+    if (!colored) { tailSpan.setAttribute('style', 'color:' + seg.c); colored = true; }
     ci++;
     if (ci > seg.t.length) {
       /* Segment finished: hand it to the stable region and clear the cursor's
          scratch space. insertAdjacentHTML appends without touching what is
          already there, so earlier links survive untouched. */
       doneEl.insertAdjacentHTML('beforeend', wrap(seg, seg.t, true));
-      tailEl.textContent = '';
-      si++; ci = 0;
-      setTimeout(tick, 0);
+      tailText.data = '';
+      si++; ci = 0; colored = false;
+      due = 0;
       return;
     }
-    tailEl.innerHTML = wrap(seg, seg.t.slice(0, ci), false);
-    var ch = seg.t[ci - 1];
-    setTimeout(tick, ch === '\n' ? 80 : 15);
+    due = seg.t.charAt(ci - 1) === '\n' ? NEWLINE_MS : CHAR_MS;
   }
-  setTimeout(tick, 400);
+
+  /* One write per frame instead of one per character.
+     setTimeout(…, 15) does not align to anything: each callback wrote the DOM
+     and the browser did style and layout work per write, at whatever cadence the
+     timer happened to fire. On the throttled profile this was measured on — the
+     one the score comes from — a frame takes long enough that two to four
+     characters come due within it, and they now cost one write between them
+     rather than four. On a machine fast enough to render every 16ms it is about
+     the same number of writes as before, minus the timer churn.
+     It also stops entirely in a background tab, where rAF does not fire and the
+     old timer kept typing to nobody.
+
+     A frame in which no character came due writes nothing. Assigning the same
+     string to .data still marks the node dirty, and there are two stretches
+     where every frame is such a frame: the opening pause before the first
+     character, and any fast machine rendering faster than CHAR_MS. Skipping
+     them is what makes "one write per frame" mean the frames that changed
+     something. */
+  var wrote = '';
+  function frame(now) {
+    if (last === 0) last = now;
+    var budget = now - last;
+    last = now;
+    if (budget > MAX_FRAME_MS) budget = MAX_FRAME_MS;
+    while (si < segs.length && budget >= due) {
+      budget -= due;
+      advance();
+    }
+    /* Whatever is left of this frame is credited against the next character, so
+       the animation keeps the timing it was written with rather than rounding
+       every character up to a frame. */
+    due -= budget;
+    if (si >= segs.length) { tailText.data = ''; return; }
+    var next = segs[si].t.slice(0, ci);
+    if (next !== wrote) { tailText.data = next; wrote = next; }
+    raf(frame);
+  }
+  raf(frame);
 })();

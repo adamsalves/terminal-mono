@@ -168,6 +168,151 @@ jobs:
             fi
           done
           echo 'aeo: the 404 stays out of the graph'
+          # Per language, and not by accident: Hugo renders a home page's output
+          # formats once per language, so a bilingual site gets two of each and
+          # each one has to list its own posts. A pt index that linked the en
+          # posts would still be a valid file and still be wrong.
+          for f in llms.txt llms-full.txt pt/llms.txt pt/llms-full.txt; do
+            if [ ! -f "exampleSite/public/$f" ]; then
+              echo "aeo: /$f is not in the build"
+              exit 1
+            fi
+          done
+          if ! grep -q 'pt-BR' exampleSite/public/pt/llms.txt; then
+            echo 'aeo: /pt/llms.txt does not say it is Portuguese'
+            exit 1
+          fi
+          # `--` because the pattern is a whole list item and starts with "- ",
+          # which grep otherwise reads as an option: without it this exited 2
+          # with a usage error, the `if` saw non-zero, and the check passed
+          # without ever comparing anything.
+          first_en=$(grep -m1 '^- \[' exampleSite/public/llms.txt)
+          if [ -z "$first_en" ]; then
+            echo 'aeo: llms.txt has no post lines to compare'
+            exit 1
+          fi
+          if grep -qF -- "$first_en" exampleSite/public/pt/llms.txt; then
+            echo 'aeo: /pt/llms.txt lists the English posts'
+            exit 1
+          fi
+          # Keys, not prose. A reader parsing /pt/llms.txt should not have to
+          # know the site is Portuguese to find the post list, so every label
+          # and heading is English in both copies and only the values carry the
+          # language. Half of it used to be translated, which is the worst of
+          # the two: neither parseable by key nor readable as prose.
+          keys() { grep -oE '^(## .*|- [A-Za-z][A-Za-z ]*:)' "$1" | sort -u; }
+          if ! diff <(keys exampleSite/public/llms.txt) \
+                    <(keys exampleSite/public/pt/llms.txt) > /tmp/keys.diff; then
+            echo 'aeo: the two languages do not use the same keys'
+            cat /tmp/keys.diff
+            exit 1
+          fi
+          echo 'aeo: llms.txt and llms-full.txt are per language, each listing its own, keyed the same'
+      # [outputs] is the half a consuming site has to write — Hugo does not merge
+      # a theme's — so the theme has to keep working without it. A site that
+      # never adds the block gets no llms.txt and no markdown twins, and that is
+      # a quiet absence rather than a broken build or a dangling link.
+      - name: Assert the AEO outputs are opt-in, not required
+        run: |
+          set -eo pipefail
+          d=/tmp/aeo-nooutputs
+          rm -rf "$d"; mkdir -p "$d/themes" "$d/content/blogs"
+          ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          printf 'baseURL = "https://example.com/t/"\ntitle = "No outputs"\ntheme = "terminal-mono"\nenableRobotsTXT = true\n' > "$d/hugo.toml"
+          printf -- '---\ntitle: "P"\ndate: 2026-01-01\n---\nbody\n' > "$d/content/blogs/p.md"
+          HUGO_ENV=production hugo --source "$d" --gc --minify --panicOnWarning > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
+          for f in llms.txt llms-full.txt blogs/p/index.md; do
+            if [ -f "$d/public/$f" ]; then
+              echo "aeo: $f was published without the site asking for it in [outputs]"
+              exit 1
+            fi
+          done
+          # …and the RSS feed the default [outputs] would have given it is still
+          # there, which is what a site loses by restating the block wrong.
+          if [ ! -f "$d/public/index.xml" ]; then
+            echo 'aeo: the feed disappeared from a site that declared no [outputs]'
+            exit 1
+          fi
+          # The structural checks still run, minus the two formats it did not ask for.
+          python3 scripts/check_aeo.py "$d/public" --no-llms --no-markdown
+          echo 'aeo: without [outputs] the site builds, keeps its feed, and gets no half-written index'
+
+      # The one shape where the theme's [outputs] does reach a consuming site.
+      # The claim used to be that it never merged, which made the block in the
+      # theme's hugo.toml read as dead config and left a site that upgrades into
+      # publishing a markdown twin of every page it has without asking.
+      - name: Assert what a deep merge inherits
+        run: |
+          set -eo pipefail
+          build() {
+            d="/tmp/aeo-merge-$1"; shift
+            rm -rf "$d"; mkdir -p "$d/themes" "$d/content/blogs"
+            ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+            printf 'baseURL = "https://example.com/t/"\ntitle = "Merge"\ntheme = "terminal-mono"\n_merge = "deep"\n%b' "$1" > "$d/hugo.toml"
+            printf -- '---\ntitle: "P"\ndate: 2026-01-01\n---\nbody\n' > "$d/content/blogs/p.md"
+            HUGO_ENV=production hugo --source "$d" --gc --minify --panicOnWarning > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
+            echo "$d/public"
+          }
+          bare=$(build bare '')
+          own=$(build own '[outputs]\n  home = ["HTML"]\n')
+          fail=0
+          # A deep merge with no [outputs] of its own inherits the theme's whole block.
+          for f in llms.txt llms-full.txt blogs/p/index.md; do
+            [ -f "$bare/$f" ] || { echo "merge: a deep merge did not inherit $f"; fail=1; }
+          done
+          # One that names its own home kind keeps it, and still inherits page.
+          for f in llms.txt llms-full.txt; do
+            [ ! -f "$own/$f" ] || { echo "merge: home = [\"HTML\"] did not win over the theme's home"; fail=1; }
+          done
+          [ -f "$own/blogs/p/index.md" ] || { echo "merge: the theme's page kind did not merge in"; fail=1; }
+          [ "$fail" = 0 ] || exit 1
+          echo 'merge: a deep merge inherits the theme [outputs] it does not restate — which is what the README says'
+
+      # robots.txt reads [params.aeo] disallow and the build condition and acts
+      # on both; the three AEO files did not, which made the exclusion a switch
+      # that worked against crawlers and not against the files written for them.
+      # A path with `Disallow:` on it in robots.txt and its full body sitting in
+      # llms-full.txt is not excluded — and robots.txt's own comment says two
+      # files disagreeing is the failure to avoid.
+      - name: Assert the AEO output honours disallow and the build condition
+        run: |
+          set -eo pipefail
+          d=/tmp/aeo-gate
+          rm -rf "$d"; mkdir -p "$d/themes" "$d/content/blogs"
+          ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          cat > "$d/hugo.toml" <<'TOML'
+          baseURL = "https://example.com/t/"
+          title = "Gate"
+          theme = "terminal-mono"
+          enableRobotsTXT = true
+          [params.aeo]
+            disallow = ["/blogs/hidden/"]
+          [outputs]
+            home = ["HTML", "RSS", "LLMS", "LLMSFULL"]
+            page = ["HTML", "MARKDOWN"]
+          TOML
+          printf -- '---\ntitle: "Hidden"\ndate: 2026-01-01\ntags: ["x"]\n---\nEXCLUDEDBODY\n' > "$d/content/blogs/hidden.md"
+          printf -- '---\ntitle: "Shown"\ndate: 2026-01-02\ntags: ["x"]\n---\nPUBLICBODY\n' > "$d/content/blogs/shown.md"
+          HUGO_ENV=production hugo --source "$d" --gc --minify --panicOnWarning > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
+          hugo --source "$d" --gc --minify --environment development --destination "$d/preview" > "$d.prev.log" 2>&1 || { cat "$d.prev.log"; exit 1; }
+          fail=0
+          say() { echo "gate: $1"; fail=1; }
+          # The excluded post: named nowhere, body nowhere, and its twin says so.
+          grep -qF '/blogs/hidden/' "$d/public/robots.txt" || say 'robots.txt did not disallow it — the fixture is wrong'
+          grep -qF 'blogs/hidden' "$d/public/llms.txt" && say 'llms.txt lists a path robots.txt disallows'
+          grep -qF 'EXCLUDEDBODY' "$d/public/llms-full.txt" && say 'llms-full.txt carries the body of a disallowed post'
+          grep -qF 'EXCLUDEDBODY' "$d/public/blogs/hidden/index.md" && say 'the twin of a disallowed post carries its body'
+          # …while the post beside it is untouched.
+          grep -qF 'blogs/shown' "$d/public/llms.txt" || say 'llms.txt dropped a post nothing excluded'
+          grep -qF 'PUBLICBODY' "$d/public/llms-full.txt" || say 'llms-full.txt dropped a body nothing excluded'
+          # A build that is not for indexing publishes the files and no content.
+          grep -qF 'PUBLICBODY' "$d/preview/llms-full.txt" && say 'a non-indexable build published post bodies'
+          grep -qF 'blogs/shown' "$d/preview/llms.txt" && say 'a non-indexable build published an index of its posts'
+          grep -qF 'PUBLICBODY' "$d/preview/blogs/shown/index.md" && say 'a non-indexable build published a markdown twin'
+          grep -qF 'not for indexing' "$d/preview/llms.txt" || say 'the non-indexable llms.txt does not say why it is empty'
+          [ "$fail" = 0 ] || exit 1
+          echo 'gate: disallow and the build condition reach llms.txt, llms-full.txt and the twins'
+
       # `allowIndexing` reaches an `if`, and `if` accepts anything — so the
       # string "false" is a non-empty string, which is true, and the spelling
       # that most plainly means "do not index" was switching indexing on. On a
@@ -215,13 +360,35 @@ jobs:
           done
           [ "$fail" = 0 ] || exit 1
           echo 'indexable: only a real boolean opens a preview, and the head and robots.txt agree'
-      - name: Assert a hostile title survives the graph
+      # Every title in the exampleSite is plain ASCII and short, and none of its
+      # posts uses a shortcode — so the fields the theme transforms rather than
+      # copies were never built from content that could show the transform going
+      # wrong. Three of them were:
+      #
+      #   headline   `truncate` escapes a plain string, so an ampersand or an
+      #              apostrophe arrived as an HTML entity inside a JSON string,
+      #              contradicting the `name` built from the same title; and the
+      #              ellipsis lands *after* the limit, so a long title was 111
+      #              against a cap of 110.
+      #   llms.txt   a `]` in a title closes the markdown link early and a
+      #              newline splits the list item in two, and both survive
+      #              TrimSpace.
+      #   the twin   `.RawContent` handed the reader unrendered shortcode syntax.
+      - name: Assert hostile content survives every AEO output
         run: |
           set -eo pipefail
           d=/tmp/aeo-title
           rm -rf "$d"; mkdir -p "$d/themes" "$d/content/blogs"
           ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
-          printf 'baseURL = "https://example.com/t/"\ntitle = "Titles"\ntheme = "terminal-mono"\nenableRobotsTXT = true\n' > "$d/hugo.toml"
+          cat > "$d/hugo.toml" <<'TOML'
+          baseURL = "https://example.com/t/"
+          title = "Titles"
+          theme = "terminal-mono"
+          enableRobotsTXT = true
+          [outputs]
+            home = ["HTML", "RSS", "LLMS", "LLMSFULL"]
+            page = ["HTML", "MARKDOWN"]
+          TOML
           cat > "$d/content/blogs/entities.md" <<'MD'
           ---
           title: "Vue & Vitest: what's next? <b>bold</b> \"quoted\" 🚀"
@@ -229,6 +396,23 @@ jobs:
           tags: ["vue"]
           ---
           Body.
+          MD
+          cat > "$d/content/blogs/brackets.md" <<'MD'
+          ---
+          title: "TIL: array[0] and [a spec]"
+          date: 2026-01-03
+          tags: ["til"]
+          ---
+          A body with a shortcode in it:
+
+          {{< highlight go >}}
+          fmt.Println("hi")
+          {{< /highlight >}}
+
+          ---
+
+          And a thematic break above, which is ordinary markdown and used to be
+          indistinguishable from the line that separates two posts.
           MD
           python3 - "$d" <<'PY'
           import pathlib, sys
@@ -245,11 +429,12 @@ jobs:
 
           pub = pathlib.Path(sys.argv[1]) / 'public'
           bad = []
+
+          # The graph: headline is the same title as name, and inside the cap.
           seen = 0
           for path in sorted(pub.glob('blogs/*/index.html')):
-              html = path.read_text(encoding='utf-8')
-              for block in re.findall(
-                      r'<script[^>]*ld\+json[^>]*>(.*?)</script>', html, re.S):
+              for block in re.findall(r'<script[^>]*ld\+json[^>]*>(.*?)</script>',
+                                      path.read_text(encoding='utf-8'), re.S):
                   data = json.loads(block)
                   for node in (data.get('@graph') or [data]):
                       if node.get('@type') != 'BlogPosting':
@@ -265,14 +450,44 @@ jobs:
                       if re.search(r'&(amp|lt|gt|quot|#\d+|#x[0-9a-fA-F]+);', head):
                           bad.append('%s: headline carries HTML entities: %r'
                                      % (path.parent.name, head))
-          if seen != 2:
-              bad.append('expected 2 BlogPosting nodes, found %d' % seen)
+          if seen != 3:
+              bad.append('expected 3 BlogPosting nodes, found %d' % seen)
+
+          # llms.txt: every list item is still a link, brackets and all.
+          llms = (pub / 'llms.txt').read_text(encoding='utf-8')
+          link = re.compile(r'\[(?:[^\[\]\\]|\\.)*\]\((\S+?)\)')
+          for line in llms.splitlines():
+              if line.startswith('- [') and not link.search(line):
+                  bad.append('llms.txt: a list item stopped being a link: %s' % line[:90])
+          if 'array' not in llms:
+              bad.append('llms.txt: the bracketed post is not in the index at all')
+
+          # The post separator names the post, so a thematic break inside one
+          # cannot be read as a boundary. Three posts, three separators.
+          full = (pub / 'llms-full.txt').read_text(encoding='utf-8')
+          seps = [l for l in full.splitlines() if l.startswith('--- post: ')]
+          if len(seps) != 3:
+              bad.append('llms-full.txt: %d post separators for 3 posts' % len(seps))
+          if '\n---\n' not in full:
+              bad.append('llms-full.txt: the fixture thematic break did not survive')
+
+          # The twins and the full text: shortcodes are rendered, not shipped raw.
+          for path in [pub / 'llms-full.txt'] + sorted(pub.glob('blogs/*/index.md')):
+              text = path.read_text(encoding='utf-8')
+              if '{{' in text and ('%' in text or '<' in text):
+                  for line in text.splitlines():
+                      if line.lstrip().startswith('{{'):
+                          bad.append('%s: unrendered shortcode syntax: %s'
+                                     % (path.name, line.strip()[:60]))
+              if 'Println' not in text and path.name == 'llms-full.txt':
+                  bad.append('llms-full.txt: the shortcode body did not make it in')
+
           if bad:
-              sys.exit('\n'.join('title: ' + b for b in bad))
-          print('title: an ampersand, an apostrophe, markup, a quote, an emoji '
-                'and 118 characters all come through the graph intact')
+              sys.exit('\n'.join('hostile: ' + b for b in bad))
+          print('hostile: an ampersand, an apostrophe, markup, a quote, an emoji, '
+                'brackets, 118 characters and a shortcode all come through')
           PY
-      # The switches, one fixture each. A veto nobody exercises is a claim.
+
       - name: Assert the AEO switches
         run: |
           set -eo pipefail

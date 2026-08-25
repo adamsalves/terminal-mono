@@ -203,6 +203,132 @@ class PageChecks(unittest.TestCase):
         self.assertTrue(any("not valid JSON" in p for p in aeo.check_page("/", html)))
 
 
+LLMS = """# Site
+
+> What it is
+
+- Language: en
+- Home: https://x/t/
+- Full text of every post, in one file: https://x/t/llms-full.txt
+
+## Blog
+
+- [One](https://x/t/blogs/one/index.md): first
+- [Two](https://x/t/blogs/two/index.md): second
+"""
+
+
+def llms_site(d, llms=LLMS, lang_dir="", full=True, twins=("one", "two")):
+    """A published tree just complete enough for the llms checks to run."""
+    root = pathlib.Path(d)
+    here = root / lang_dir if lang_dir else root
+    here.mkdir(parents=True, exist_ok=True)
+    (here / "llms.txt").write_text(llms)
+    if full:
+        (here / "llms-full.txt").write_text("# Site\n")
+    for name in twins:
+        post = here / "blogs" / name
+        post.mkdir(parents=True, exist_ok=True)
+        (post / "index.html").write_text("<html></html>")
+        (post / "index.md").write_text(
+            "# %s\n\n- URL: https://x/t/%sblogs/%s/\n" %
+            (name, (lang_dir + "/") if lang_dir else "", name))
+    return root
+
+
+class LlmsChecks(unittest.TestCase):
+    def test_a_complete_index_passes(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(aeo.check_llms(llms_site(d)), [])
+
+    def test_a_link_the_build_did_not_publish(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = llms_site(d, twins=("one",))
+            self.assertTrue(any("did not publish" in p
+                                for p in aeo.check_llms(root)))
+
+    def test_a_missing_llms_full(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = llms_site(d, full=False)
+            self.assertTrue(any("no llms-full.txt" in p
+                                for p in aeo.check_llms(root)))
+
+    def test_no_h1(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = llms_site(d, llms=LLMS.replace("# Site", "Site", 1))
+            self.assertTrue(any("H1" in p for p in aeo.check_llms(root)))
+
+    def test_no_h2_section(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = llms_site(d, llms=LLMS.replace("## Blog\n", ""))
+            self.assertTrue(any("H2 section" in p for p in aeo.check_llms(root)))
+
+    def test_a_blank_line_splitting_the_list(self):
+        with tempfile.TemporaryDirectory() as d:
+            broken = LLMS.replace("- [One](https://x/t/blogs/one/index.md): first\n",
+                                  "- [One](https://x/t/blogs/one/index.md): first\n\n")
+            root = llms_site(d, llms=broken)
+            self.assertTrue(any("blank line splits" in p
+                                for p in aeo.check_llms(root)))
+
+    def test_a_second_language_resolves_against_the_site_root(self):
+        # /pt/llms.txt names /t/pt/ as its home while its links are rooted at
+        # /t/. Subtracting the file's own directory is what makes them resolve —
+        # without it every link in the second language reads as broken.
+        with tempfile.TemporaryDirectory() as d:
+            pt = LLMS.replace("- Home: https://x/t/", "- Home: https://x/t/pt/") \
+                     .replace("https://x/t/blogs/", "https://x/t/pt/blogs/") \
+                     .replace("https://x/t/llms-full.txt", "https://x/t/pt/llms-full.txt")
+            root = llms_site(d, llms=pt, lang_dir="pt")
+            self.assertEqual(aeo.check_llms(root), [])
+
+    def test_a_percent_encoded_link(self):
+        # Hugo publishes tags/migração/ and links tags/migra%C3%A7%C3%A3o/.
+        with tempfile.TemporaryDirectory() as d:
+            root = llms_site(d)
+            tag = root / "tags" / "migração"
+            tag.mkdir(parents=True)
+            (tag / "index.html").write_text("<html></html>")
+            extra = LLMS + "- [migração](https://x/t/tags/migra%C3%A7%C3%A3o/): 1 post\n"
+            (root / "llms.txt").write_text(extra)
+            self.assertEqual(aeo.check_llms(root), [])
+
+    def test_a_build_with_no_llms_at_all(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertTrue(aeo.check_llms(pathlib.Path(d)))
+
+
+class MarkdownChecks(unittest.TestCase):
+    def test_complete_twins_pass(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(aeo.check_markdown(llms_site(d)), [])
+
+    def test_a_twin_naming_a_different_page(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = llms_site(d)
+            (root / "blogs" / "one" / "index.md").write_text(
+                "# One\n\n- URL: https://x/t/blogs/elsewhere/\n")
+            self.assertTrue(any("different page" in p
+                                for p in aeo.check_markdown(root)))
+
+    def test_a_twin_with_no_url(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = llms_site(d)
+            (root / "blogs" / "one" / "index.md").write_text("# One\n\nbody\n")
+            self.assertTrue(any("no canonical URL" in p
+                                for p in aeo.check_markdown(root)))
+
+    def test_a_twin_with_no_html_beside_it(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = llms_site(d)
+            (root / "blogs" / "one" / "index.html").unlink()
+            self.assertTrue(any("no index.html" in p
+                                for p in aeo.check_markdown(root)))
+
+    def test_a_build_with_no_twins_at_all(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertTrue(aeo.check_markdown(pathlib.Path(d)))
+
 class HeadlineChecks(unittest.TestCase):
     def test_a_headline_that_is_not_the_name_it_came_from(self):
         # truncate escapes a plain string, so headline used to arrive with HTML
@@ -286,12 +412,26 @@ class Wiring(unittest.TestCase):
                 'url=https://x/en/"></head></html>')
             (pub / "en").mkdir()
             (pub / "en" / "index.html").write_text(page(PUBLISHER, WEBSITE, POST))
-            self.assertEqual(aeo.check(d, expect_robots=False), [])
+            self.assertEqual(aeo.check(d, expect_robots=False, expect_llms=False,
+                                       expect_markdown=False), [])
 
     def test_an_unknown_flag_is_rejected(self):
         # --not-indexible used to be accepted in silence, and the mode the
         # caller asked for simply did not happen.
         self.assertEqual(aeo.main(["check_aeo.py", "somewhere", "--not-indexible"]), 2)
+
+    def test_main_returns_zero_on_a_clean_tree(self):
+        # The green path through main() -- the one that builds the summary line
+        # -- had no test at all, and a merge renamed the dict under it. Every
+        # other test calls check() directly, which walks straight past it.
+        with tempfile.TemporaryDirectory() as d:
+            pub = pathlib.Path(d)
+            (pub / "index.html").write_text(page(PUBLISHER, WEBSITE))
+            (pub / "p").mkdir()
+            (pub / "p" / "index.html").write_text(page(PUBLISHER, WEBSITE, POST))
+            self.assertEqual(
+                aeo.main(["check_aeo.py", d, "--no-robots", "--no-llms",
+                          "--no-markdown"]), 0)
 
     def test_every_flag_the_usage_line_documents_is_accepted(self):
         # The guard above and the flags main() reads are one mapping for a

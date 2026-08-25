@@ -21,7 +21,22 @@ So the build is the fixture and the assertions are the review:
                with no gaps and no self-link on its last crumb, and the page it
                describes is a node on that page rather than nothing at all.
 
+  llms.txt     one per language, each starting with an H1 and naming its own
+               llms-full.txt; and — the one that matters — every link in it
+               resolves to a file the build actually published. A link that
+               404s is the failure mode of an index nobody renders and no
+               browser ever opens.
+
+  markdown     every post publishes the index.md twin llms.txt links to, and
+               that file names the post's own URL back. A twin that points at
+               a different page is worse than no twin: a citation follows it.
+
+The three [outputs]-dependent halves can be switched off for a site that never
+declared them: --no-robots, --no-llms, --no-markdown. Nothing else is optional —
+the JSON-LD needs no configuration and so has no flag.
+
 Run: python3 scripts/check_aeo.py <public-dir> [--no-robots] [--not-indexable]
+                                                [--no-llms] [--no-markdown]
                                                 [--training-blocked]
 """
 
@@ -29,6 +44,7 @@ import json
 import pathlib
 import re
 import sys
+import urllib.parse
 
 # The four aeo.js weighs in its "Major AI bots allowed" check. Being allowed is
 # the theme's default; a build where one of them is not is a defect unless the
@@ -239,12 +255,166 @@ def check_page(rel, html):
     return problems
 
 
-def check(public_dir, expect_robots=True, indexable=True,
-          training_blocked=False):
+# The link text may carry an escaped bracket, because aeo-text.html puts one
+# there: a title like "TIL: array[0]" would otherwise close the link early.
+# Reading the escape is what keeps this check and that partial agreeing --
+# a regex that stopped at the backslash would report the correct output as
+# the broken markdown it exists to catch.
+LINK_RE = re.compile(r"\[(?:[^\[\]\\]|\\.)*\]\((\S+?)\)")
+
+
+def local_path(public, base, url):
+    """Where a published URL lives on disk, or None if it is not this site's.
+
+    The base path comes out of llms.txt's own `- Home:` line rather than being
+    passed in, so this checks the file against the site it says it describes.
+    A URL ending in / is a directory, and Hugo publishes index.html into it.
+    """
+    if "://" in url:
+        rest = url.split("://", 1)[1]
+        url = "/" + rest.split("/", 1)[1] if "/" in rest else "/"
+    if not url.startswith(base):
+        return None
+    # A permalink is percent-encoded and the directory on disk is not: Hugo
+    # publishes pt/tags/migração/ and links pt/tags/migra%C3%A7%C3%A3o/. Compare
+    # the decoded form or every accented tag reads as a broken link.
+    rel = urllib.parse.unquote(url[len(base):]).lstrip("/")
+    if rel == "" or rel.endswith("/"):
+        rel += "index.html"
+    return public / rel
+
+
+def check_llms(public):
+    problems = []
+    files = sorted(public.rglob("llms.txt"))
+    if not files:
+        return ["llms.txt: not in the build -- the site needs LLMS in [outputs] home"]
+
+    for path in files:
+        rel = "/" + str(path.relative_to(public))
+        text = path.read_text(encoding="utf-8")
+        lines = text.splitlines()
+        if not lines or not lines[0].startswith("# "):
+            problems.append("%s: does not start with an H1" % rel)
+            continue
+        home = re.search(r"^- Home:\s*(\S+)\s*$", text, re.M)
+        if not home:
+            problems.append("%s: no `- Home:` line, so nothing states what site "
+                            "this describes" % rel)
+            continue
+        # The `- Home:` line is the *language* home, and /pt/llms.txt names
+        # /t/pt/ while its links are rooted at /t/. Subtracting the file's own
+        # directory gives the site root that every link in it is relative to —
+        # get this wrong and every link in the second language reads as broken,
+        # which is exactly what happened while this check was being written.
+        base = home.group(1)
+        if "://" in base:
+            rest = base.split("://", 1)[1]
+            base = "/" + rest.split("/", 1)[1] if "/" in rest else "/"
+        here = path.parent.relative_to(public).as_posix()
+        if here != "." and base.rstrip("/").endswith("/" + here):
+            base = base.rstrip("/")[:-len(here)]
+        if not base.endswith("/"):
+            base += "/"
+        if not any(l.startswith("## ") for l in lines):
+            problems.append("%s: no H2 section -- the index lists nothing" % rel)
+        full = path.parent / "llms-full.txt"
+        if not full.is_file():
+            problems.append("%s: no llms-full.txt beside it" % rel)
+        elif "llms-full.txt" not in text:
+            problems.append("%s: does not link the llms-full.txt next to it" % rel)
+
+        # Every `- ` item under an `## ` heading is supposed to be a link, so
+        # the count of items and the count of links have to agree. Matching the
+        # links alone was the fail-open: a title carrying a `]` breaks the link
+        # it sits in, LINK_RE stops matching it, and the item is simply not
+        # checked -- two of four posts were corrupt in the fixture that found
+        # this and the file came back clean, because the links in another
+        # section still matched. It is the same "quietly matched nothing" this
+        # script's own docstring is written against.
+        items = [l for l in lines if l.startswith("- [")]
+        links = LINK_RE.findall(text)
+        item_links = [l for l in items if LINK_RE.search(l)]
+        if len(item_links) != len(items):
+            for line in items:
+                if not LINK_RE.search(line):
+                    problems.append("%s: a list item is not a link -- something in "
+                                    "it broke the markdown: %s" % (rel, line[:90]))
+
+        seen = 0
+        for url in links:
+            target = local_path(public, base, url)
+            if target is None:
+                continue
+            seen += 1
+            if not target.is_file():
+                problems.append("%s: links %s, which the build did not publish"
+                                % (rel, url))
+        if seen == 0:
+            problems.append("%s: not one link in it points at this site" % rel)
+
+        # A blank line inside a list is a list that ends early for a reader that
+        # takes markdown literally, and it is the exact failure a line-joined
+        # template produces when one value arrives with a trailing newline.
+        for i, line in enumerate(lines[:-1]):
+            if not line.startswith("- ") or i + 2 >= len(lines):
+                continue
+            nxt, after = lines[i + 1], lines[i + 2]
+            if not after.startswith("- "):
+                continue
+            if nxt == "":
+                problems.append("%s: a blank line splits the list at line %d"
+                                % (rel, i + 2))
+            elif not nxt.startswith("- "):
+                # A newline inside a title does not leave a blank line, it
+                # leaves the rest of the title on a line of its own -- the same
+                # broken list, one the blank-line net did not catch.
+                problems.append("%s: line %d continues the item above instead of "
+                                "starting one: %s" % (rel, i + 2, nxt[:90]))
+    return problems
+
+
+def check_markdown(public):
+    problems = []
+    twins = sorted(public.rglob("index.md"))
+    if not twins:
+        return ["index.md: not one post published a markdown twin -- the site "
+                "needs MARKDOWN in [outputs] page"]
+    for path in twins:
+        rel = "/" + str(path.relative_to(public))
+        if not (path.parent / "index.html").is_file():
+            problems.append("%s: has no index.html beside it" % rel)
+        text = path.read_text(encoding="utf-8")
+        if not text.startswith("# "):
+            problems.append("%s: does not start with an H1" % rel)
+        url = re.search(r"^- URL:\s*(\S+)\s*$", text, re.M)
+        if not url:
+            problems.append("%s: names no canonical URL, so a citation that "
+                            "lands here has nothing to cite" % rel)
+        else:
+            # The whole path from the site root, not the last segment: ".../
+            # other/xxx-one" ends with "one" and is a different page entirely.
+            # A twin that names one is worse than no twin, because a citation
+            # follows it.
+            here = path.parent.relative_to(public).as_posix()
+            named = url.group(1).split("://", 1)[-1]
+            named = named.split("/", 1)[1] if "/" in named else ""
+            if not named.strip("/").endswith(here):
+                problems.append("%s: names %s, which is a different page"
+                                % (rel, url.group(1)))
+    return problems
+
+
+def check(public_dir, expect_robots=True, indexable=True, expect_llms=True,
+          expect_markdown=True, training_blocked=False):
     public = pathlib.Path(public_dir)
     problems = []
     if expect_robots:
         problems += check_robots(public, indexable, training_blocked)
+    if expect_llms:
+        problems += check_llms(public)
+    if expect_markdown:
+        problems += check_markdown(public)
 
     pages = sorted(public.rglob("*.html"))
     if not pages:
@@ -283,16 +453,22 @@ def check(public_dir, expect_robots=True, indexable=True,
 
 # Flag -> the check() keyword it sets, and whether passing the flag means True
 # or False. One mapping, because main() reads the flags and the guard below
-# rejects the rest: a second hand-written list is a real flag refused as unknown.
+# rejects the rest: a second hand-written list is a real flag refused as unknown,
+# which is what a hardcoded set did the moment --no-llms was added.
 FLAGS = {
     "--no-robots": ("expect_robots", False),
     "--not-indexable": ("indexable", False),
+    "--no-llms": ("expect_llms", False),
+    "--no-markdown": ("expect_markdown", False),
     "--training-blocked": ("training_blocked", True),
 }
 
 
 def usage():
-    return [l for l in __doc__.strip().splitlines() if l.strip()][-2:]
+    """The Run: line and its continuations, however many there come to be."""
+    lines = __doc__.strip().splitlines()
+    start = next(i for i, l in enumerate(lines) if l.startswith("Run:"))
+    return [l for l in lines[start:] if l.strip()]
 
 
 def main(argv):
@@ -313,7 +489,17 @@ def main(argv):
         print("\n".join(problems), file=sys.stderr)
         print("\n%d problem(s) in the AEO output." % len(problems), file=sys.stderr)
         return 1
-    print("%s: robots.txt and the JSON-LD graph check out" % args[0])
+    # Naming what actually ran, because the line is the whole output on a green
+    # run: saying "llms.txt checks out" after --no-llms turned it off is the
+    # check reporting work it did not do.
+    did = ["the JSON-LD graph"]
+    if opts["expect_robots"]:
+        did.insert(0, "robots.txt")
+    if opts["expect_llms"]:
+        did.append("llms.txt")
+    if opts["expect_markdown"]:
+        did.append("the markdown twins")
+    print("%s: %s check out" % (args[0], ", ".join(did)))
     return 0
 
 

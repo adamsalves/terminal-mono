@@ -7,6 +7,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **`llms.txt`, `llms-full.txt` and a markdown twin per post**, as Hugo output
+  formats. `/llms.txt` is the index an answer engine can read in one request instead
+  of crawling — title, summary, and every post as a linked list with a line of
+  context; `/llms-full.txt` is the content behind those links in one file, each post
+  preceded by its canonical URL; and each post publishes an `index.md` next to its
+  HTML. All three are per language: a bilingual site gets `/llms.txt` and
+  `/pt/llms.txt`, each listing its own posts. `llms.txt` links to the twins rather
+  than the HTML, which is what the spec asks for, and the canonical URL is the first
+  line inside each twin so a citation that follows the link still knows where to
+  point. Both use `.RenderShortcodes` — the markdown as written, headings and code
+  fences intact, with the shortcodes resolved — rather than `.Plain`, which is what is
+  left after throwing that structure away, or `.RawContent`, which hands the reader
+  unrendered Hugo template syntax where the figure was supposed to be. Part of #34.
+
+  **All three honour `[params.aeo] disallow` and the same build condition robots.txt
+  uses.** A path excluded from crawlers whose full body sits in `llms-full.txt` is not
+  excluded, and answer engines are the audience that key names — the exclusion has to
+  reach the files written for them or it is not one. An excluded post is named nowhere,
+  its body is nowhere, and its twin says why instead of carrying it. A build that is
+  not for indexing publishes the files with the same answer robots.txt gives, which
+  keeps the four from contradicting each other the way robots.txt's own comment warns
+  about.
+
+  Posts in `llms-full.txt` are separated by a `--- post: <url> ---` line rather than a
+  bare `---`. A thematic break is ordinary markdown that someone writes inside a post
+  without thinking about this file at all, and it was indistinguishable from the line
+  that separates two posts — so was the setext underline under a heading. The boundary
+  now carries the answer to the question the split is being made to answer.
+
+  Every label and heading is English in every language's copy. They are keys, not prose:
+  a reader parsing `/pt/llms.txt` should not have to know the site is Portuguese to find
+  the post list, and `## Blog` translated is a section a parser written against the
+  spec's example cannot find. The values carry the language and `- Language:` states
+  which one. Half of it used to be translated, which was the worst of the two — neither
+  parseable by key nor readable as prose — and CI now asserts the two copies use the
+  same keys.
+
+  Every value that reaches a line is normalised for it. These are lines in a plain-text
+  file with no forgiving renderer behind them: a newline inside a title ends the list
+  it is in, and a `]` — `TIL: array[0]`, `Reading [a spec]` — closes the markdown link
+  early and turns the rest of the item into something else. `TrimSpace` was covering
+  the ends of the first of those.
+
+  The theme defines the three formats; the site declares them, because Hugo's default
+  config merge does not bring a theme's `[outputs]` into the site's. One exception, now
+  documented and asserted: a site with `_merge = "deep"` *does* inherit them, and one
+  that also declares its own `[outputs]` inherits the kinds it did not restate — which
+  means a markdown twin of every page it has. The README says so and CI asserts every
+  half: that the files appear when a site declares the block, that a site that never
+  does still builds and keeps its RSS feed, and what a deep merge actually gets.
+
+- `scripts/check_aeo.py` counts what it was supposed to check rather than only what it
+  managed to match. A list item whose link the parser cannot read is a problem now, not
+  silence — a title carrying a `]` broke the link it sat in, the regex stopped matching
+  it, and the item was simply not verified: two of four posts were corrupt in the
+  fixture that found this and the file still came back clean, because links in another
+  section matched. A line that continues the item above is caught alongside the blank
+  line that was already, and a twin that names a different page is compared on the whole
+  path rather than its last segment.
+
+- `scripts/check_aeo.py` grew the other half of its job: every link in every
+  `llms.txt` resolves to a file the build published, each language's index is rooted
+  at the site rather than at its own language directory, and every markdown twin
+  names its own page back. The link check found two of its own bugs while it was
+  being written — a percent-encoded tag (`tags/migração/` is linked as
+  `tags/migra%C3%A7%C3%A3o/`) and the second language's index, whose `- Home:` is
+  `/pt/` while its links are rooted at `/`.
+
+- The AEO score is printed to the GitHub Pages job summary on every deploy, as
+  information and never as a gate — with its two limits printed next to it, because
+  the number is a floor rather than a measurement. `npx aeo.js check` scans
+  `new URL(target).origin`, so for a project site published under a path it reads the
+  host root, which belongs to no deploy of this theme; and its HTML checks require
+  quoted attributes while `hugo --minify` emits valid unquoted HTML5, so canonical
+  and JSON-LD read as absent whatever is on the page. The authoritative check is
+  `check_aeo.py`, which now also runs on the bytes about to be deployed.
+
 - `scripts/check_aeo.py` reads every page that carries a graph, not the home and the
   posts only. The gate had been `if "BlogPosting" in html`, which left the lists, the
   taxonomies, the term pages and the whole `WebPage` branch unverified — a
@@ -175,6 +252,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   build, which is the rule `sections.html` set and the `params-*.html` guards enforce.
 
 ### Fixed
+- The typewriter no longer runs the HTML parser once per character. `wrap()` for an
+  unfinished segment always produces the same shape — one span with a color — so all
+  442 `tailEl.innerHTML` assignments were rebuilding a node identical to the one they
+  had just destroyed. The tail is now one span holding one text node, both built once,
+  with `.data` reassigned. Measured over three Lighthouse runs on a production build,
+  mobile: **HTML parsing 62 ms → 12 ms**, consistently and well outside the run-to-run
+  spread. Part of #34.
+
+  The loop moved from `setTimeout(…, 15)` to `requestAnimationFrame`, writing once per
+  frame instead of once per character — and only the frames in which a character came
+  due, since assigning the same string still marks the node dirty and the opening pause
+  is some twenty-five frames of exactly that. On a machine fast enough to render every
+  16 ms that is about the same number of writes minus the timer churn; on the throttled
+  profile the original measurement came from, two to four characters come due within
+  one frame and now cost one write between them. It also stops entirely in a background tab, where
+  the old timer kept typing to nobody. A frame boundary the reader was away for is
+  capped at 100 ms so a backgrounded tab resumes typing rather than dumping the rest of
+  the terminal in one paint. The opening pause, the per-character and per-newline
+  timings, and `prefers-reduced-motion` are all unchanged.
+
+  `.term__body` gets `contain: layout style`. The `min-height` above it already
+  guarantees the box does not change size while it fills, and this is the browser being
+  told so: without it every write invalidated the layout of the whole document, measured
+  at 172 invalidations across one run. Not `paint` or `content` — paint containment
+  clips, and the links inside carry an `outline-offset` that would be clipped with them.
+
+  Two things the original report projected did not survive being measured, and are
+  recorded here rather than quietly dropped. The **1.4 s** it attributed to the
+  typewriter is the cost of the animation *existing* — it came from an A/B against
+  `--force-prefers-reduced-motion`, which does not run it at all — not the cost of how
+  it is written; the implementation change is worth the 50 ms of parsing above plus the
+  work it stops doing in a hidden tab. And **`forced-reflow-insight` cannot be cleared**:
+  it fires on about half of Lighthouse's runs both before and after, because what is
+  forced is the document's first layout, which the hero's height reservation genuinely
+  needs. Reusing one persistent probe instead of building one per call was tried and
+  reverted — it moved the audit not at all and left the ruler's `0123456789` inside the
+  terminal's `textContent` for the life of the page, read by anything that extracts text
+  from the rendered DOM, which on this theme now includes the answer engines `llms.txt`
+  is for. Deferring the first measurement into `requestAnimationFrame` would clear the
+  audit by giving up the reservation, which is the layout shift the reservation exists
+  to prevent.
+
 - **`[params.favicon]`, `[params.ogImage]` and a post's `image` now resolve inside the
   `baseURL`**, not at the host root. `relURL` and `absURL` read a path with a leading
   slash as rooted at the host, so on a site published under a sub-path — the demo is
