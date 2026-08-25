@@ -80,11 +80,19 @@ function typed(pre) {
 }
 
 function run(dataset, { reduceMotion = false, runTimers = true, width = 0, char = 0,
-                       resizeObserver = true, frameMs = FRAME_MS } = {}) {
+                       resizeObserver = true, frameMs = FRAME_MS,
+                       docHeight = 0, viewport = 0 } = {}) {
   const pre = makeNode('pre');
   pre.dataset = dataset;
   pre.clientWidth = width;
   metrics = { width, char };
+
+  /* The reading-progress bar, which getElementById used to answer null for —
+   * leaving the whole block dead code in here and the only script the theme
+   * ships half covered. docHeight and viewport are the two numbers its
+   * arithmetic runs on; both default to 0, which is the page that cannot
+   * scroll. */
+  const progress = makeNode('div');
 
   const queue = [];
   const listeners = {};
@@ -104,8 +112,8 @@ function run(dataset, { reduceMotion = false, runTimers = true, width = 0, char 
   // result instead of on a later microtask.
   const fontCbs = [];
   global.document = {
-    getElementById: (id) => (id === 'hero-term' ? pre : null),
-    documentElement: { scrollHeight: 0 },
+    getElementById: (id) => (id === 'hero-term' ? pre : id === 'progress' ? progress : null),
+    documentElement: { scrollHeight: docHeight },
     createElement: makeNode,
     createTextNode: makeText,
     addEventListener: () => {},
@@ -117,7 +125,7 @@ function run(dataset, { reduceMotion = false, runTimers = true, width = 0, char 
     addEventListener: (type, fn) => { (listeners[type] = listeners[type] || []).push(fn); },
     requestAnimationFrame: (fn) => frames.push(fn),
     scrollY: 0,
-    innerHeight: 0,
+    innerHeight: viewport,
   };
   global.setTimeout = (fn) => { queue.push(fn); return queue.length; };
 
@@ -184,6 +192,19 @@ function run(dataset, { reduceMotion = false, runTimers = true, width = 0, char 
       fontCbs.forEach((fn) => fn());
       return pre.style.props['--hero-lines'];
     },
+    // Scroll to y and read the bar back. Any frames the handler queued are
+    // drained afterwards, so this reads the same whether the bar writes inside
+    // the event or on the next frame — what is asserted is where the bar ends
+    // up, not which of the two ways it got there.
+    scroll(y) {
+      window.scrollY = y;
+      (listeners.scroll || []).forEach((fn) => fn());
+      const queued = frames.length;
+      for (let i = 0; i < queued; i++) frames.shift()(0);
+      return progress.style.width;
+    },
+    // Where the bar was left before anything scrolled.
+    get progressWidth() { return progress.style.width; },
   };
 }
 
@@ -540,6 +561,38 @@ check('without ResizeObserver, the window resize is still the fallback', () => {
   // working through the listener this shipped with.
   const r = run(SITE, { ...PHONE, resizeObserver: false });
   return r.lines === '20' && r.resize(498, 8.4) === '15';
+});
+
+/* The reading-progress bar. A page 4000px tall in an 800px viewport: 3200px of
+ * travel, so scrollY 800 is a quarter of the way down. Round numbers because the
+ * assertions are on the string the bar is handed, and the percentage is not
+ * rounded anywhere — 1601 would read back as "50.03125%".
+ *
+ * These describe what the bar shows, not how it is scheduled: a version that
+ * writes inside the scroll event and a version that writes on the next frame
+ * both have to satisfy them. That is deliberate. The scheduling was measured in
+ * a browser (Chrome coalesces scroll into the frame lifecycle, so the handler
+ * already ran about once a frame — 0.14 events per frame under 6x CPU) and there
+ * was nothing there to win; what there was, was a script the theme ships with a
+ * whole block no test ever entered. */
+const PAGE = { ...PHONE, docHeight: 4000, viewport: 800 };
+
+check('the progress bar is painted before anything scrolls', () => {
+  // Landing mid-document — a deep link, a scroll position the browser restored —
+  // has to show the bar where the reader already is, not at zero until they move.
+  return run(SITE, PAGE).progressWidth === '0%';
+});
+
+check('the bar reports how far down the document the reader is', () => {
+  return run(SITE, PAGE).scroll(800) === '25%';
+});
+
+check('a document with nowhere to scroll leaves the bar at zero', () => {
+  // A short page, or a viewport taller than it, makes the denominator zero or
+  // negative — the one input that turns the percentage into NaN or -0 and puts
+  // `width: NaN%` on the element.
+  const r = run(SITE, { ...PAGE, docHeight: 400 });
+  return r.progressWidth === '0%' && r.scroll(0) === '0%';
 });
 
 let failed = 0;
