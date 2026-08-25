@@ -6,6 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **`[params.aeo] flatSitemap`**, which publishes `/sitemap.xml` as one flat
+  `<urlset>` covering every language instead of Hugo's `<sitemapindex>`. On a
+  multilingual site the index is a shape a crawler has to know to follow, and a
+  good number do not: they read `/sitemap.xml`, take the `<loc>`s and audit *those*
+  as pages — two XML files with no title, no structured data and no prose — while
+  the site itself is never opened. `npx aeo.js check` v0.0.16 does exactly this,
+  and measured against a bilingual portfolio it cost 12 of 100 points (Meta "80%+
+  pages have titles", Schema "Article/WebPage", Citability "Structured lists") for
+  content already in the build: the one post it never reached carries a
+  `BlogPosting` node *and* a `<ul>`. The flat urlset keeps every `hreflang`
+  alternate, and the per-language sitemaps are still built and served at their own
+  URLs, so nothing that already indexed one starts 404ing.
+
+  **Off by default**, for the reason `allowTraining` is on: `/sitemap.xml` is a
+  published contract with every crawler that already knows the site. Inert on a
+  single-language site, where Hugo builds no index in the first place. Like the
+  other switches it must be a real boolean — a string warns and changes nothing.
+
 ## [0.6.0] — 2026-08-25
 
 ### Added

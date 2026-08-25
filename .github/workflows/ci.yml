@@ -597,6 +597,96 @@ jobs:
             exit 1
           fi
           echo 'aeo: both switches veto their own group and nobody else'"'"'s'
+      # A crawler that does not follow a <sitemapindex> reads /sitemap.xml, takes
+      # the <loc>s it finds and audits *those* as pages — XML files with no
+      # title, no structured data and no prose — and never reaches the site at
+      # all. aeo.js v0.0.16 is one of those, and it cost adamsalves.dev 12 of 100
+      # points for content already in the build. flatSitemap publishes one
+      # <urlset> instead. The default has to stay Hugo's own byte for byte:
+      # overriding sitemapindex.xml replaces the built-in, it does not extend it,
+      # so a drift here is a silently different sitemap for every site that never
+      # set the param.
+      - name: Assert the sitemap shape follows flatSitemap
+        run: |
+          set -eo pipefail
+          d=/tmp/aeo-sitemap
+          rm -rf "$d"; mkdir -p "$d/themes" "$d/content/blogs"
+          ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          # $1 is spliced in where [params.aeo] goes, so a case that wants no
+          # param passes an empty string rather than a differently shaped config.
+          conf() {
+            printf 'baseURL = "https://example.com/"\ntitle = "S"\ntheme = "terminal-mono"\ndefaultContentLanguage = "en"\ndefaultContentLanguageInSubdir = false\n%b[languages.en]\n  locale = "en-US"\n  weight = 1\n[languages.pt]\n  locale = "pt-BR"\n  weight = 2\n' "$1" > "$d/hugo.toml"
+          }
+          printf -- '---\ntitle: "P"\ndate: 2026-01-01\n---\nbody\n' > "$d/content/blogs/p.md"
+          printf -- '---\ntitle: "Pt"\ndate: 2026-01-01\n---\ncorpo\n' > "$d/content/blogs/p.pt.md"
+          # The XML is minified onto one line, so counting matches beats counting
+          # lines: `grep -c` here would answer 1 for any sitemap that has any URL.
+          locs() { grep -o '<loc>' "$1" | wc -l; }
+
+          # 1. Nothing set: Hugo's index, unchanged. This is the contract every
+          #    crawler that already knows the site was handed.
+          conf ''
+          hugo --source "$d" --gc --minify --panicOnWarning > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
+          if ! grep -q '<sitemapindex' "$d/public/sitemap.xml"; then
+            echo 'sitemap: the default stopped being an index'
+            cat "$d/public/sitemap.xml"
+            exit 1
+          fi
+
+          # 2. flatSitemap: one urlset holding every page of both languages, with
+          #    the alternates intact — a flat sitemap that dropped hreflang would
+          #    trade one crawler's problem for every other crawler's.
+          conf '[params.aeo]\n  flatSitemap = true\n'
+          hugo --source "$d" --gc --minify --panicOnWarning > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
+          if ! grep -q '<urlset' "$d/public/sitemap.xml"; then
+            echo 'sitemap: flatSitemap left the index in place'
+            exit 1
+          fi
+          root=$(locs "$d/public/sitemap.xml")
+          en=$(locs "$d/public/en/sitemap.xml")
+          pt=$(locs "$d/public/pt/sitemap.xml")
+          if [ "$root" -eq 0 ] || [ "$root" -ne "$((en + pt))" ]; then
+            echo "sitemap: the flat root lists $root URLs, the languages list $en + $pt"
+            exit 1
+          fi
+          if ! grep -q 'hreflang="pt-BR"' "$d/public/sitemap.xml"; then
+            echo 'sitemap: the flat urlset dropped its hreflang alternates'
+            exit 1
+          fi
+          # The per-language sitemaps are still published. Nothing links them any
+          # more once the root is flat, but a crawler that already has one in its
+          # index must not start getting a 404 for it.
+          for f in en/sitemap.xml pt/sitemap.xml; do
+            if [ ! -f "$d/public/$f" ]; then
+              echo "sitemap: /$f stopped being published"
+              exit 1
+            fi
+          done
+
+          # 3. Not a boolean: warns, and stays on the shape the site had. Without
+          #    --panicOnWarning, because the warning is the thing being asserted.
+          conf '[params.aeo]\n  flatSitemap = "true"\n'
+          hugo --source "$d" --gc --minify > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
+          if ! grep -qF '[params.aeo] flatSitemap must be true or false' "$d.log"; then
+            echo 'sitemap: flatSitemap = "true" did not warn'
+            cat "$d.log"
+            exit 1
+          fi
+          if ! grep -q '<sitemapindex' "$d/public/sitemap.xml"; then
+            echo 'sitemap: a string flatSitemap flattened the sitemap anyway'
+            exit 1
+          fi
+
+          # 4. One language: Hugo never renders sitemapindex.xml at all, so the
+          #    param has nothing to act on and the site still gets its urlset.
+          #    The README says the param is inert here; this is what says so too.
+          printf 'baseURL = "https://example.com/"\ntitle = "S"\ntheme = "terminal-mono"\n[params.aeo]\n  flatSitemap = true\n' > "$d/hugo.toml"
+          hugo --source "$d" --gc --minify --panicOnWarning > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
+          if ! grep -q '<urlset' "$d/public/sitemap.xml"; then
+            echo 'sitemap: a single-language site lost its urlset'
+            exit 1
+          fi
+          echo 'sitemap: an index by default, one urlset on request, and a string changes nothing'
       # Person is what a portfolio has; Organization is a claim a site makes
       # about itself, and Google will not use one without a logo. The two carry
       # different fields, so this asserts what each drops as well as what it adds.
