@@ -7,6 +7,95 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `scripts/check_aeo.py` reads every page that carries a graph, not the home and the
+  posts only. The gate had been `if "BlogPosting" in html`, which left the lists, the
+  taxonomies, the term pages and the whole `WebPage` branch unverified — a
+  `/blogs/index.html` with every one of its blocks corrupted came back clean. Redirect
+  stubs are skipped rather than read as pages that lost their JSON-LD, which is what a
+  site with `defaultContentLanguageInSubdir` publishes at its root. `--not-indexable`
+  works against a preview build now: it was checking for a `Sitemap:` line that the
+  template correctly does not emit there, so the script's only preview mode rejected the
+  theme's own output. An unknown flag exits 2 instead of being accepted in silence, and
+  the usage line names the flags the code actually reads.
+
+- **`layouts/robots.txt`.** Hugo's built-in one is `User-agent: *` and nothing else — no
+  `Sitemap:` line, and nothing said either way about the crawlers that feed answer
+  engines. This one names them, in two groups that are not the same request: answer
+  engines fetch a page to answer a question now and cite the source back to the reader,
+  and dataset crawlers collect it into a corpus with no citation and no referral.
+  `[params.aeo] allowAI` and `allowTraining` switch them independently, both defaulting
+  to `true` — which is what the bare `User-agent: *` already meant, so an upgrade does
+  not quietly change what a site publishes. `[params.aeo] disallow` keeps paths out of
+  every group, the AI ones included: robots.txt groups do not inherit, so a path excluded
+  only from `*` would have stayed open to exactly the crawlers a site had just named.
+  A build that is not for indexing publishes `Disallow: /` instead, matching the `noindex`
+  meta head.html already emits — the two files disagreeing is how a deploy preview gets
+  crawled. Requires `enableRobotsTXT = true` in the *site's* config: it is a root key and
+  a theme's config is not merged for it. Part of #34.
+
+- **JSON-LD for what the theme actually renders.** `Person` (or `Organization`) and
+  `WebSite` on every page, `BlogPosting` on a post, `WebPage` on any other single page,
+  and `BreadcrumbList` on everything but the home page. Before this the site emitted a
+  `Person` on the home page and nothing anywhere else — a blog whose posts never said
+  they were posts, which is where the 0/20 on Schema Presence came from. The nodes are
+  linked rather than repeated: the publisher carries an `@id` and the post's `author` and
+  `publisher` point at it. `BlogPosting` carries `headline` (capped at the 110 characters
+  Google's documentation caps it at, since a longer one drops the field entirely),
+  `datePublished`, `dateModified`, `author`, `image`, `keywords` from the page's tags,
+  `wordCount` and `inLanguage`. Breadcrumbs are built from `.Ancestors` — the real content
+  tree, not the URL string — so a crumb cannot point somewhere that is not a page.
+  The 404 is the one page that emits none: it is not in the content tree, so a
+  breadcrumb there describes a hierarchy that does not contain it, and a `WebSite` node
+  invites a crawler to treat an error as a document. A section index, a tag list
+  and a term page carry a `CollectionPage` — the narrower true statement about a page
+  whose content is the set of pages it links to, and the node their `BreadcrumbList`
+  needed: without it those pages published a trail leading to something the graph said
+  nothing about.
+
+  Every string that reaches the graph is plain text, and getting there took two passes.
+  `truncate` escapes a plain string and leaves a `template.HTML` alone, so `headline` —
+  the one field the theme transforms rather than copies — came out as
+  `Vue &amp;amp; Vitest` for a title as ordinary as `Vue & Vitest`: HTML entities inside a
+  JSON string, where the consumer reads them literally, contradicting the `name` built
+  from the same title in the same node. `name` had the opposite problem, carrying
+  whatever markup the front matter wrote. Both are plainified now, in the breadcrumb
+  trail too, and `check_aeo.py` asserts the invariant that catches either drifting again:
+  `headline` and `name` come from one title, so one has to be the start of the other.
+  The 110-character cap was also 111 in practice — `truncate` appends its ellipsis
+  *after* the limit — which the theme's own checker rejected. CI now builds a post whose
+  title carries an ampersand, an apostrophe, markup, a quote, an emoji and 118
+  characters, because every title in the exampleSite is short, plain ASCII.
+
+- `[params.schema] type = "Organization"` with a `logo`, for the sites that genuinely are
+  one. `Person` stays the default because this is a portfolio theme, and the type is a
+  statement about the site rather than a lever: an Organization on a personal site is
+  schema that lies. The two carry different fields — `jobTitle` belongs to a person,
+  `logo` to an organization, and each is dropped for the other type. An unknown value
+  warns and falls back to `Person`, the way an unknown palette falls back to lime. The
+  `logo` resolves through `asset-path.html`, the same partial as `[params.favicon]`,
+  `[params.ogImage]` and a post's `image`: it had spelled the trim out inline, which is
+  how it came to differ from the other three and rewrite `//cdn.example/logo.png` — a
+  URL naming another host — onto this site.
+
+- `allowIndexing` is read through `params-bool.html`, in one partial both `head.html`
+  and `robots.txt` call. Read raw it reached an `if`, and `if` accepts anything:
+  `allowIndexing = "false"` is a non-empty string, so the spelling that most plainly
+  means *do not index* was switching indexing on — silently, on exactly the preview
+  deploy the flag exists for. It now warns and holds, and the two files cannot answer
+  the question differently, which is the failure `robots.txt`'s own comment names.
+
+- `scripts/check_aeo.py --training-blocked`, for a site that means it. Three of the four
+  crawlers it checks are training crawlers, so a site using `[params.aeo] allowTraining
+  = false` failed the check three times for doing exactly what the switch is for. The
+  flag is an assertion rather than a mute: with it, a build that still allows them
+  fails.
+
+- `partials/params-bool.html`, the fourth of the `params-*.html` family and the one whose
+  failure mode is quietest. The other three reach a `range`, a field lookup or a cast, so
+  a wrong type either stops the build or renders something a consumer can see. A boolean
+  reaches an `if`, and `if` accepts anything: `allowAI = "false"` is a non-empty string,
+  which is *true*, so the switch a site wrote to turn something off turns it on instead,
+  and nothing warns. Only a real boolean counts and only an explicit `false` vetoes.
 - **JetBrains Mono is self-hosted.** The font ships with the theme in `static/fonts/`,
   declared by an `@font-face` at the top of `terminal.css`, and the two `preconnect`
   hints and the `fonts.googleapis.com` stylesheet are gone — the theme now makes no

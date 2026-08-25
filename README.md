@@ -14,6 +14,8 @@ the bundled `exampleSite/`, which is exactly what the demo serves.
 - ⚡ Hugo asset pipeline (minify + fingerprint + SRI in production).
 - 🔤 **JetBrains Mono is self-hosted** — no Google Fonts, no `preconnect`, nothing render-blocking from another origin.
 - 🔎 SEO ready: Open Graph, Twitter Card, JSON-LD, RSS and `canonical`.
+- 🤖 **AEO ready**: `robots.txt` with a `Sitemap:` line and named groups for the AI crawlers,
+  plus `Person`/`Organization`, `WebSite`, `BlogPosting` and `BreadcrumbList` structured data.
 - ♿ Accessible: "skip to content" link, visible focus and `prefers-reduced-motion`.
 - 🌍 Multilingual via Hugo i18n — **English + Portuguese** included, with a language switcher and localized dates. Any other language falls back to English rather than rendering blank labels.
 
@@ -73,11 +75,12 @@ terminal-mono/
   layouts/
     index.html               # home (portfolio)
     404.html
+    robots.txt               # AI-crawler groups + Sitemap (needs enableRobotsTXT)
     _default/
       baseof.html  list.html  single.html  term.html  terms.html
       _markup/                # render hooks (heading, image, link)
     partials/
-      head.html  nav.html  footer.html  lang-switch.html
+      head.html  schema.html  nav.html  footer.html  lang-switch.html
       hero.html  projects.html  about.html  experience.html  contact.html
       post-card.html  pager.html
   i18n/                      # en.toml (default + fallback for every language), pt.toml
@@ -490,6 +493,122 @@ Put it back without giving up the rest of the palette:
     codeNum = "#d19a66"
 ```
 
+## AEO (Answer Engine Optimization)
+
+Answer engines — ChatGPT search, Claude, Perplexity, Gemini, DuckAssist — read a site
+the way a crawler does and then *cite* it back to a reader. Two things decide whether
+they can: whether `robots.txt` lets them in, and whether the page says what it is in
+structured data. The theme now ships both, in Hugo templates, with no build dependency:
+`hugo` is still the only requirement.
+
+### `robots.txt`
+
+**Your site must set `enableRobotsTXT = true`.** It is a root config key, and Hugo does
+not merge a theme's config for it — so the theme can ship the template and cannot switch
+it on. Without the flag, Hugo publishes no `robots.txt` at all and none of this applies.
+
+```toml
+# hugo.toml
+enableRobotsTXT = true
+```
+
+What comes out: a `Sitemap:` line pointing at the real sitemap (Hugo's built-in
+`robots.txt` has none), a `User-agent: *` group, and two named groups of AI crawlers.
+
+```toml
+[params.aeo]
+  allowAI = true        # answer engines — fetch, answer, cite. Default true.
+  allowTraining = true  # dataset crawlers — no citation, no referral. Default true.
+  disallow = ["/drafts/"]
+```
+
+The split matters, and one switch would have hidden it:
+
+| | what it covers | what you get from it |
+|---|---|---|
+| `allowAI` | `OAI-SearchBot`, `ChatGPT-User`, `Claude-SearchBot`, `Claude-User`, `PerplexityBot`, `Perplexity-User`, `DuckAssistBot`, `MistralAI-User`, `Amazonbot`, `Applebot` | citations and referral traffic |
+| `allowTraining` | `GPTBot`, `ClaudeBot`, `Google-Extended`, `Applebot-Extended`, `meta-externalagent`, `CCBot`, `Bytespider`, `cohere-ai` | nothing back |
+
+These two lists are the ones in `layouts/robots.txt`, and CI asserts they stay that way:
+a name that is here and not there is a crawler you believe you blocked and did not.
+
+Both default to `true`, which is what the bare `User-agent: *` already meant — a theme
+upgrade should not quietly change what your site publishes. `allowTraining = false` is
+the common choice for people who want to be cited but not harvested.
+
+`Applebot` and `Applebot-Extended` sit on opposite sides on purpose: the first crawls
+for Siri and Spotlight, the second is Apple's opt-out token for training.
+`Google-Extended` is a token too — no crawler fetches under that name.
+
+`disallow` paths are repeated into **every** allowed group. robots.txt groups do not
+inherit: a bot matched by its own `User-agent` line never reads the `*` group, so a path
+excluded only there would stay open to exactly the crawlers you named.
+
+A build that is not for indexing — not production, and no `allowIndexing` — publishes
+`Disallow: /` instead, matching the `noindex` meta the theme already puts on every page.
+A deploy preview that says one thing in the `<head>` and the opposite in `robots.txt` is
+worse than either alone; both read the same condition from one partial so they cannot
+drift. `allowIndexing` has to be a real boolean: `allowIndexing = "false"` is a string,
+and the theme warns and keeps the build out of the index rather than reading it as the
+`true` a bare `if` would.
+
+Want something else entirely? Drop your own `layouts/robots.txt` in the project; Hugo
+prefers it over the theme's.
+
+### Structured data (JSON-LD)
+
+Emitted on every page, with no configuration, as one `<script>` per node:
+
+| type | where | notable fields |
+|---|---|---|
+| `Person` or `Organization` | every page | `name`, `url`, `sameAs`, `jobTitle` / `logo` |
+| `WebSite` | every page | `name`, `url`, `inLanguage`, `publisher` |
+| `BlogPosting` | posts | `headline`, `datePublished`, `dateModified`, `author`, `image`, `keywords`, `wordCount`, `inLanguage` |
+| `WebPage` | other single pages | `name`, `url`, `description` |
+| `BreadcrumbList` | everything but the home page | built from the real content tree |
+
+They are linked rather than repeated: the publisher gets an `@id`, and the post's
+`author` and `publisher` point at it. A consumer merges every `ld+json` block on a page
+into one graph before resolving anything, so separate `<script>` tags and a single
+`@graph` are equivalent to one — and separate tags are additionally readable by the
+simpler tools, several of which look at `["@type"]` without descending into `@graph`.
+
+One thing is configurable, because it is a statement about the site rather than a lever:
+
+```toml
+[params.schema]
+  type = "Organization"   # default "Person"
+  logo = "img/logo.png"   # required by Google before it will use an Organization
+```
+
+Leave it alone for a portfolio. Set `Organization` only if the site genuinely is one —
+an agency, a studio, a company blog. The two carry different fields: `jobTitle` (from
+`[params.hero] subtitle`) belongs to a person and `logo` to an organization, and each is
+dropped for the other type.
+
+### Checking it
+
+```bash
+npx aeo.js check https://your-site.example/
+```
+
+Three things about that checker are worth knowing before you read its score, all
+verified against v0.0.16:
+
+- **It scans the origin, not your URL's path.** It fetches `robots.txt`, `llms.txt` and
+  `sitemap.xml` from `https://host/`, so a site published under a sub-path — a GitHub
+  Pages project site, for one — is scored on files it cannot see.
+- **Its regexes require quoted attributes**, and `hugo --minify` emits valid unquoted
+  HTML5. It therefore reports no canonical and no JSON-LD on a minified Hugo site
+  regardless of what is on the page. If you want it scored correctly, keep the quotes:
+  ```toml
+  [minify.tdewolff.html]
+    keepQuotes = true
+  ```
+  It costs about 150 bytes on a page of this theme, before compression.
+- **`Organization name` and `Organization logo` are 8 of its 20 schema points**, and a
+  personal site cannot earn them without claiming to be a company. That is a limit of
+  the rubric, not of your site.
 ## Fonts
 
 JetBrains Mono ships **with the theme**, in `static/fonts/`, and is declared by an

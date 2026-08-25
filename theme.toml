@@ -11,7 +11,7 @@ homepage = "https://github.com/adamsalves/terminal-mono"
 demosite = "https://adamsalves.github.io/terminal-mono/"
 
 tags = ["portfolio", "blog", "dark", "minimal", "monospace", "personal", "developer", "terminal", "themeable", "color-schemes"]
-features = ["portfolio", "blog", "tags", "responsive", "dark-mode", "color-palettes", "configurable-colors", "seo", "rss", "i18n", "multilingual", "no-js-dependencies", "accessibility"]
+features = ["portfolio", "blog", "tags", "responsive", "dark-mode", "color-palettes", "configurable-colors", "seo", "structured-data", "aeo", "rss", "i18n", "multilingual", "no-js-dependencies", "accessibility"]
 
 min_version = "0.158.0"
 

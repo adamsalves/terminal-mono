@@ -38,6 +38,45 @@ jobs:
       # with the listing completely broken — so the JS gets its own suite.
       - name: Test the terminal script
         run: node scripts/test_terminal_js.js
+      # The README table is what a consumer reads before deciding whether to
+      # switch a group off. It listed seven crawlers the template never names,
+      # which is worse than listing none: turning allowTraining off while
+      # believing AI2Bot was in it is a block that did not happen.
+      - name: Assert the README names the crawlers the template does
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, sys
+
+          tpl = pathlib.Path('layouts/robots.txt').read_text(encoding='utf-8')
+          readme = pathlib.Path('README.md').read_text(encoding='utf-8')
+          bad = []
+
+          def slice_names(var):
+              m = re.search(r'\$%s := slice(.*?)-\}\}' % var, tpl, re.S)
+              if not m:
+                  sys.exit('robots.txt no longer declares $%s' % var)
+              return set(re.findall(r'"([^"]+)"', m.group(1)))
+
+          def row_names(switch):
+              m = re.search(r'^\|\s*`%s`\s*\|(.*?)\|' % switch, readme, re.M)
+              if not m:
+                  sys.exit('README has no table row for `%s`' % switch)
+              return set(re.findall(r'`([^`]+)`', m.group(1)))
+
+          for var, switch in (('answerEngines', 'allowAI'),
+                              ('trainingCrawlers', 'allowTraining')):
+              in_tpl, in_doc = slice_names(var), row_names(switch)
+              for name in sorted(in_doc - in_tpl):
+                  bad.append('%s: README lists %s, which the template does not send'
+                             % (switch, name))
+              for name in sorted(in_tpl - in_doc):
+                  bad.append('%s: the template sends %s, which the README does not list'
+                             % (switch, name))
+
+          if bad:
+              sys.exit('\n'.join('crawlers: ' + b for b in bad))
+          print('crawlers: the README table and layouts/robots.txt name the same bots')
+          PY
       # The palettes are the one feature whose correctness a build cannot show:
       # five sets of hex values all render, and all five shipped a --dim
       # that failed WCAG AA on every ground. The suite above already covers the
@@ -107,6 +146,295 @@ jobs:
           hugo --source exampleSite --gc --minify \
             --printI18nWarnings --panicOnWarning \
             --baseURL "https://example.com/terminal-mono/"
+      # Everything AEO fails silently. A Sitemap line pointing at a file that is
+      # not in the build still serves 200; a JSON-LD block with a typo still
+      # renders and a crawler just skips it; an author that references an @id no
+      # node defines is a graph with a hole in it, and no browser will ever say
+      # so. The build is the fixture and check_aeo.py is the review.
+      - name: Assert the AEO output
+        run: |
+          set -eo pipefail
+          python3 scripts/check_aeo.py exampleSite/public
+          # …and the one page that has to stay silent. The 404 is not in the
+          # content tree, so a BreadcrumbList there describes a hierarchy that
+          # does not contain it and a WebSite node invites a crawler to treat an
+          # error as a document. Both languages, because the check is on .Kind
+          # and a per-language 404 is still a 404.
+          for f in exampleSite/public/404.html exampleSite/public/pt/404.html; do
+            [ -f "$f" ] || continue
+            if grep -qF 'application/ld+json' "$f"; then
+              echo "aeo: $f carries structured data"
+              exit 1
+            fi
+          done
+          echo 'aeo: the 404 stays out of the graph'
+      # `allowIndexing` reaches an `if`, and `if` accepts anything — so the
+      # string "false" is a non-empty string, which is true, and the spelling
+      # that most plainly means "do not index" was switching indexing on. On a
+      # preview deploy, silently. head.html and robots.txt now read one partial,
+      # so the other half of this is that they cannot answer it differently.
+      - name: Assert allowIndexing only accepts a boolean
+        run: |
+          set -uo pipefail
+          build() {
+            d="/tmp/idx-$1"
+            rm -rf "$d"; mkdir -p "$d/themes" "$d/content/blogs"
+            ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+            printf 'baseURL = "https://example.com/t/"\ntitle = "Idx"\ntheme = "terminal-mono"\nenableRobotsTXT = true\n%b' "$2" > "$d/hugo.toml"
+            printf -- '---\ntitle: "P"\ndate: 2026-01-01\n---\nbody\n' > "$d/content/blogs/p.md"
+            hugo --source "$d" --gc --minify --environment development > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
+            echo "$d"
+          }
+          fail=0
+          say() { echo "indexable: $1"; fail=1; }
+          noindexed() { grep -qF 'name=robots' "$1/public/index.html"; }
+          closed() { grep -qE '^Disallow: /$' "$1/public/robots.txt"; }
+
+          # A real true opens a non-production build; nothing else does.
+          yes=$(build yes '[params]\n  allowIndexing = true\n') || exit 1
+          if noindexed "$yes"; then say 'allowIndexing = true still emitted noindex'; fi
+          if closed "$yes"; then say 'allowIndexing = true still disallowed everything'; fi
+
+          # The string is the defect: it has to warn and hold the build out.
+          str=$(build str '[params]\n  allowIndexing = "false"\n') || exit 1
+          if ! noindexed "$str"; then say 'allowIndexing = "false" switched indexing on'; fi
+          if ! closed "$str"; then say 'allowIndexing = "false" opened robots.txt'; fi
+          if ! grep -qF 'allowIndexing must be true or false' "$str.log"; then
+            say 'the string went through without a warning'
+          fi
+
+          # …and in every shape the two files answer the question the same way.
+          absent=$(build absent '') || exit 1
+          for d in "$yes" "$str" "$absent"; do
+            if noindexed "$d" && ! closed "$d"; then
+              say "$(basename "$d"): noindex in the head, open robots.txt"
+            fi
+            if ! noindexed "$d" && closed "$d"; then
+              say "$(basename "$d"): indexable head, closed robots.txt"
+            fi
+          done
+          [ "$fail" = 0 ] || exit 1
+          echo 'indexable: only a real boolean opens a preview, and the head and robots.txt agree'
+      - name: Assert a hostile title survives the graph
+        run: |
+          set -eo pipefail
+          d=/tmp/aeo-title
+          rm -rf "$d"; mkdir -p "$d/themes" "$d/content/blogs"
+          ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          printf 'baseURL = "https://example.com/t/"\ntitle = "Titles"\ntheme = "terminal-mono"\nenableRobotsTXT = true\n' > "$d/hugo.toml"
+          cat > "$d/content/blogs/entities.md" <<'MD'
+          ---
+          title: "Vue & Vitest: what's next? <b>bold</b> \"quoted\" 🚀"
+          date: 2026-01-01
+          tags: ["vue"]
+          ---
+          Body.
+          MD
+          python3 - "$d" <<'PY'
+          import pathlib, sys
+          # 118 characters, so the cap has to do something, and the word boundary
+          # lands where truncate's ellipsis used to push the result to 111.
+          title = ("word " * 40)[:118].strip().ljust(118, "x")
+          (pathlib.Path(sys.argv[1]) / "content/blogs/long.md").write_text(
+              '---\ntitle: "%s"\ndate: 2026-01-02\ntags: ["vue"]\n---\nBody.\n' % title)
+          PY
+          hugo --source "$d" --gc --minify --panicOnWarning > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
+          python3 scripts/check_aeo.py "$d/public"
+          python3 - "$d" <<'PY'
+          import json, pathlib, re, sys
+
+          pub = pathlib.Path(sys.argv[1]) / 'public'
+          bad = []
+          seen = 0
+          for path in sorted(pub.glob('blogs/*/index.html')):
+              html = path.read_text(encoding='utf-8')
+              for block in re.findall(
+                      r'<script[^>]*ld\+json[^>]*>(.*?)</script>', html, re.S):
+                  data = json.loads(block)
+                  for node in (data.get('@graph') or [data]):
+                      if node.get('@type') != 'BlogPosting':
+                          continue
+                      seen += 1
+                      head, name = node['headline'], node['name']
+                      if len(head) > 110:
+                          bad.append('%s: headline is %d characters'
+                                     % (path.parent.name, len(head)))
+                      if not name.startswith(head.rstrip('…')):
+                          bad.append('%s: headline %r is not the start of name %r'
+                                     % (path.parent.name, head, name))
+                      if re.search(r'&(amp|lt|gt|quot|#\d+|#x[0-9a-fA-F]+);', head):
+                          bad.append('%s: headline carries HTML entities: %r'
+                                     % (path.parent.name, head))
+          if seen != 2:
+              bad.append('expected 2 BlogPosting nodes, found %d' % seen)
+          if bad:
+              sys.exit('\n'.join('title: ' + b for b in bad))
+          print('title: an ampersand, an apostrophe, markup, a quote, an emoji '
+                'and 118 characters all come through the graph intact')
+          PY
+      # The switches, one fixture each. A veto nobody exercises is a claim.
+      - name: Assert the AEO switches
+        run: |
+          set -eo pipefail
+          build() {
+            d="/tmp/aeo-$1"; shift
+            rm -rf "$d"; mkdir -p "$d/themes"
+            ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+            printf 'baseURL = "https://example.com/t/"\ntitle = "AEO"\ntheme = "terminal-mono"\nenableRobotsTXT = true\n%b' "$1" > "$d/hugo.toml"
+            shift
+            HUGO_ENV="${1:-production}" hugo --source "$d" --gc --minify --panicOnWarning > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
+            echo "$d/public"
+          }
+          # Read one bot's verdict out of the file the same way a crawler would,
+          # so the assertion is about robots.txt semantics and not about which
+          # line the template happened to emit.
+          verdict() {
+            python3 -c "
+          import sys
+          sys.path.insert(0, 'scripts')
+          import check_aeo
+          groups = check_aeo.parse_robots(open(sys.argv[1]).read())
+          print('allowed' if check_aeo.allowed(groups, sys.argv[2]) else 'blocked')
+          " "$1/robots.txt" "$2"
+          }
+          expect() {
+            got=$(verdict "$1" "$2")
+            if [ "$got" != "$3" ]; then
+              echo "aeo: $4 — $2 came out $got, expected $3"
+              cat "$1/robots.txt"
+              exit 1
+            fi
+          }
+
+          d=$(build default '' production)
+          expect "$d" GPTBot allowed 'the default'
+          expect "$d" PerplexityBot allowed 'the default'
+
+          # allowTraining vetoes one group and leaves the other alone. Getting
+          # this backwards is the whole reason they are two switches.
+          d=$(build notraining '[params.aeo]\n  allowTraining = false\n' production)
+          expect "$d" GPTBot blocked 'allowTraining = false'
+          expect "$d" ClaudeBot blocked 'allowTraining = false'
+          expect "$d" PerplexityBot allowed 'allowTraining = false'
+          expect "$d" OAI-SearchBot allowed 'allowTraining = false'
+
+          d=$(build noai '[params.aeo]\n  allowAI = false\n' production)
+          expect "$d" PerplexityBot blocked 'allowAI = false'
+          expect "$d" GPTBot allowed 'allowAI = false'
+
+          # A path excluded from `*` has to be excluded from every group that
+          # names a bot, because a bot that matched its own name never reads the
+          # `*` group. This is the assertion that catches the inheritance error.
+          d=$(build disallow '[params.aeo]\n  disallow = ["/drafts/"]\n' production)
+          n=$(grep -c '^Disallow: /drafts/$' "$d/robots.txt")
+          g=$(grep -c '^Allow: /$' "$d/robots.txt")
+          if [ "$n" != "$g" ]; then
+            echo "aeo: /drafts/ is excluded from $n of $g allowed groups"
+            cat "$d/robots.txt"
+            exit 1
+          fi
+
+          # A preview that says noindex in the <head> and invites crawlers in
+          # robots.txt is worse than either alone.
+          d=$(build preview '' development)
+          expect "$d" GPTBot blocked 'a non-production build'
+          if ! grep -q 'noindex' "$d/index.html"; then
+            echo 'aeo: the non-production build did not emit the noindex meta either'
+            exit 1
+          fi
+
+          # enableRobotsTXT is the site's to set. Without it Hugo publishes
+          # nothing, and that has to stay a quiet no-op rather than an error.
+          d=/tmp/aeo-noflag
+          rm -rf "$d"; mkdir -p "$d/themes"
+          ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          printf 'baseURL = "https://example.com/t/"\ntitle = "AEO"\ntheme = "terminal-mono"\n' > "$d/hugo.toml"
+          HUGO_ENV=production hugo --source "$d" --gc --minify --panicOnWarning > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
+          if [ -f "$d/public/robots.txt" ]; then
+            echo 'aeo: robots.txt was published without enableRobotsTXT'
+            exit 1
+          fi
+          # A scalar where the table belongs. robots.txt is the only reader, so
+          # this is the one fixture that can reach the guard at all.
+          d=/tmp/aeo-scalar
+          rm -rf "$d"; mkdir -p "$d/themes"
+          ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          printf 'baseURL = "https://example.com/t/"\ntitle = "AEO"\ntheme = "terminal-mono"\nenableRobotsTXT = true\n[params]\n  aeo = "x"\n' > "$d/hugo.toml"
+          HUGO_ENV=production hugo --source "$d" --gc --minify > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
+          if ! grep -qF '[params.aeo] must be a table' "$d.log"; then
+            echo 'aeo: a scalar [params.aeo] did not warn'
+            cat "$d.log"
+            exit 1
+          fi
+          if ! grep -q '^Allow: /$' "$d/public/robots.txt"; then
+            echo 'aeo: it warned and then did not fall back to the defaults'
+            cat "$d/public/robots.txt"
+            exit 1
+          fi
+          # And a boolean written as a string, which is the failure params-bool
+          # exists for: "false" is a non-empty string, so an `if` reads it true
+          # and the switch turns the thing on.
+          printf 'baseURL = "https://example.com/t/"\ntitle = "AEO"\ntheme = "terminal-mono"\nenableRobotsTXT = true\n[params.aeo]\n  allowTraining = "false"\n' > "$d/hugo.toml"
+          HUGO_ENV=production hugo --source "$d" --gc --minify > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
+          if ! grep -qF '[params.aeo] allowTraining must be true or false' "$d.log"; then
+            echo 'aeo: allowTraining = "false" did not warn'
+            cat "$d.log"
+            exit 1
+          fi
+          echo 'aeo: both switches veto their own group and nobody else'"'"'s'
+      # Person is what a portfolio has; Organization is a claim a site makes
+      # about itself, and Google will not use one without a logo. The two carry
+      # different fields, so this asserts what each drops as well as what it adds.
+      - name: Assert the publisher type
+        run: |
+          set -eo pipefail
+          d=/tmp/aeo-org
+          rm -rf "$d"; mkdir -p "$d/themes" "$d/static/img"
+          ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          printf 'logo' > "$d/static/img/logo.png"
+          printf 'baseURL = "https://example.com/t/"\ntitle = "ACME"\ntheme = "terminal-mono"\n[params]\n  [params.hero]\n    subtitle = "Studio"\n  [params.schema]\n    type = "Organization"\n    logo = "/img/logo.png"\n' > "$d/hugo.toml"
+          HUGO_ENV=production hugo --source "$d" --gc --minify --panicOnWarning > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
+          python3 - <<'PY'
+          import json, pathlib, re, sys
+
+          html = pathlib.Path('/tmp/aeo-org/public/index.html').read_text()
+          nodes = [json.loads(b) for b in re.findall(
+              r"""<script[^>]*type=["']?application/ld\+json["']?[^>]*>(.*?)</script>""",
+              html, re.S)]
+          by_type = {n.get('@type'): n for n in nodes}
+          bad = []
+          org = by_type.get('Organization')
+          if org is None:
+              bad.append('[params.schema] type = "Organization" did not change the type: %s'
+                         % list(by_type))
+          else:
+              # The leading slash is the part that used to break. absURL reads a
+              # rooted path as rooted at the host, which drops the baseURL
+              # sub-path — so "/img/logo.png" resolved off the site entirely.
+              url = (org.get('logo') or {}).get('url')
+              if url != 'https://example.com/t/img/logo.png':
+                  bad.append('the logo resolved to %r, losing the baseURL sub-path' % url)
+              if 'jobTitle' in org:
+                  bad.append('an Organization carries jobTitle, which belongs to a Person')
+          if 'Person' in by_type:
+              bad.append('both a Person and an Organization were emitted')
+          if bad:
+              sys.exit('\n'.join('schema: ' + b for b in bad))
+          print('schema: Organization carries its logo under the sub-path, and no jobTitle')
+          PY
+          # And an unknown type warns rather than emitting it.
+          sed -i 's/type = "Organization"/type = "Sasquatch"/' "$d/hugo.toml"
+          HUGO_ENV=production hugo --source "$d" --gc --minify > "$d.log" 2>&1
+          if ! grep -qF 'is not Person or Organization' "$d.log"; then
+            echo 'schema: an unknown publisher type did not warn'
+            cat "$d.log"
+            exit 1
+          fi
+          if ! grep -qF '"@type":"Person"' "$d/public/index.html"; then
+            echo 'schema: it warned and then did not fall back to Person'
+            exit 1
+          fi
+          echo 'schema: an unknown type warns and falls back'
       # The font is the theme's only binary asset and the only thing on the page
       # that used to come from another origin, and both halves of self-hosting it
       # fail silently. A @font-face whose url() does not resolve falls back to
@@ -1168,6 +1496,12 @@ jobs:
           # disagreed about [params.navbar] until both read through the helper.
           run_case navbar      bare  '  navbar = "x"' \
                    '[params.navbar] must be a table'
+          # schema.html runs on every page, so a scalar here is the whole site
+          # rather than one template. [params.aeo] gets the same assertion in
+          # "Assert the AEO switches", where the fixture can set enableRobotsTXT
+          # — without it robots.txt never renders and the param is never read.
+          run_case schema      bare  '  schema = "x"' \
+                   '[params.schema] must be a table'
           # Same story as navbar: head.html reads it on every page, so a scalar
           # here is the whole site rather than one template.
           run_case fonts       bare  '  fonts = "x"' \
