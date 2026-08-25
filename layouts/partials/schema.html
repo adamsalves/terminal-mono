@@ -86,15 +86,14 @@
 {{- with $siteDesc }}{{ $publisher = merge $publisher (dict "description" .) }}{{ end -}}
 {{- if eq $pubType "Organization" -}}
   {{- with partialCached "params-scalar.html" (dict "value" $schemaCfg.logo "path" "[params.schema] logo") "schema.logo" site.Language.Lang -}}
-    {{- /* The leading slash is trimmed first, and it is not cosmetic. absURL
-           reads a rooted path as rooted at the *host*, so under a baseURL with
-           a sub-path — which the demo has — "/img/logo.png" resolves to
-           example.com/img/logo.png and drops the sub-path on the floor, while
-           "img/logo.png" resolves under it. Both spellings are what a person
-           writes, and only one of them worked, so this accepts either.
-           An absolute URL passes through untouched: it has no leading slash to
-           trim and absURL leaves a scheme alone. */ -}}
-    {{- $publisher = merge $publisher (dict "logo" (dict "@type" "ImageObject" "url" (strings.TrimPrefix "/" . | absURL))) -}}
+    {{- /* Through asset-path.html, the same as [params.favicon], [params.ogImage]
+           and a post's image in head.html — a rooted "/img/logo.png" is rooted
+           at the *host*, so under a baseURL with a sub-path it drops the
+           sub-path on the floor. This used to spell the trim out inline, which
+           is how it came to differ from the other four: it rewrote
+           "//cdn.example/logo.png" — a network-path reference, naming another
+           host — onto this site. One partial is the point. */ -}}
+    {{- $publisher = merge $publisher (dict "logo" (dict "@type" "ImageObject" "url" (partial "asset-path.html" . | absURL))) -}}
   {{- end -}}
 {{- else -}}
   {{- with $hero.subtitle }}{{ $publisher = merge $publisher (dict "jobTitle" .) }}{{ end -}}
@@ -131,18 +130,35 @@
        title should lose its tail rather than lose the whole property. */ -}}
 {{- if $p.IsPage -}}
   {{- $isPost := eq $p.Section "blogs" -}}
+  {{- /* Plain text, because that is what a schema.org name is: Title carries
+         whatever the front matter wrote, markup and all, and "<b>bold</b>"
+         reaching a JSON string is a name no consumer can render. It is also
+         what keeps this in step with the headline below, which has to be
+         plainified for truncate's sake — two fields, one title, one form. */ -}}
+  {{- $title := $p.Title | plainify -}}
   {{- $node := dict
     "@type" (cond $isPost "BlogPosting" "WebPage")
     "@id" (printf "%s#page" $p.Permalink)
     "url" $p.Permalink
-    "name" $p.Title
+    "name" $title
     "isPartOf" (dict "@id" (printf "%s#website" $home))
     "inLanguage" (or $p.Language.Locale $p.Language.Lang) -}}
   {{- with $desc }}{{ $node = merge $node (dict "description" .) }}{{ end -}}
   {{- with $image }}{{ $node = merge $node (dict "image" .) }}{{ end -}}
   {{- if $isPost -}}
+    {{- /* plainify before truncate, and not for the sake of the HTML: truncate
+           escapes a plain string and leaves a template.HTML alone, so
+           "Vue & Vitest: what's next?" came out "Vue &amp;amp; Vitest:
+           what&amp;#39;s next?" — HTML entities inside a JSON string, in a node
+           whose "name" carries the same title unescaped six lines up. JSON-LD
+           is not HTML: the consumer reads the entity literally.
+
+           The ellipsis is budgeted rather than left to default because truncate
+           appends it *after* the limit, which put every long title at 111 and
+           failed the 110 that check_aeo.py — and Google — enforce. */ -}}
+    {{- $headline := truncate 109 "…" $title -}}
     {{- $node = merge $node (dict
-      "headline" (truncate 110 $p.Title)
+      "headline" $headline
       "mainEntityOfPage" (dict "@type" "WebPage" "@id" $p.Permalink)
       "publisher" (dict "@id" $personID)
       "wordCount" $p.WordCount) -}}
@@ -184,7 +200,7 @@
   {{- $i := 0 -}}
   {{- range $p.Ancestors.Reverse -}}
     {{- $i = add $i 1 -}}
-    {{- $name := .Title -}}
+    {{- $name := .Title | plainify -}}
     {{- if .IsHome }}{{ $name = or site.Params.title site.Title }}{{ end -}}
     {{- $crumbs = $crumbs | append (dict "@type" "ListItem" "position" $i "name" $name "item" .Permalink) -}}
   {{- end -}}
@@ -192,7 +208,7 @@
   {{- /* The page itself closes the list and carries no `item`: schema.org's own
          guidance is that the last crumb is the current page, and a self link
          there is what makes some validators call the trail circular. */ -}}
-  {{- $crumbs = $crumbs | append (dict "@type" "ListItem" "position" $i "name" $p.Title) -}}
+  {{- $crumbs = $crumbs | append (dict "@type" "ListItem" "position" $i "name" ($p.Title | plainify)) -}}
   {{- if gt (len $crumbs) 1 -}}
     {{- $graph = $graph | append (dict
       "@type" "BreadcrumbList"

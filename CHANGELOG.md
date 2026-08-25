@@ -42,6 +42,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   and JSON-LD read as absent whatever is on the page. The authoritative check is
   `check_aeo.py`, which now also runs on the bytes about to be deployed.
 
+- `scripts/check_aeo.py` reads every page that carries a graph, not the home and the
+  posts only. The gate had been `if "BlogPosting" in html`, which left the lists, the
+  taxonomies, the term pages and the whole `WebPage` branch unverified — a
+  `/blogs/index.html` with every one of its blocks corrupted came back clean. Redirect
+  stubs are skipped rather than read as pages that lost their JSON-LD, which is what a
+  site with `defaultContentLanguageInSubdir` publishes at its root. `--not-indexable`
+  works against a preview build now: it was checking for a `Sitemap:` line that the
+  template correctly does not emit there, so the script's only preview mode rejected the
+  theme's own output. An unknown flag exits 2 instead of being accepted in silence, and
+  the usage line names the flags the code actually reads.
+
 - **`layouts/robots.txt`.** Hugo's built-in one is `User-agent: *` and nothing else — no
   `Sitemap:` line, and nothing said either way about the crawlers that feed answer
   engines. This one names them, in two groups that are not the same request: answer
@@ -72,12 +83,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   breadcrumb there describes a hierarchy that does not contain it, and a `WebSite` node
   invites a crawler to treat an error as a document.
 
+  Every string that reaches the graph is plain text, and getting there took two passes.
+  `truncate` escapes a plain string and leaves a `template.HTML` alone, so `headline` —
+  the one field the theme transforms rather than copies — came out as
+  `Vue &amp;amp; Vitest` for a title as ordinary as `Vue & Vitest`: HTML entities inside a
+  JSON string, where the consumer reads them literally, contradicting the `name` built
+  from the same title in the same node. `name` had the opposite problem, carrying
+  whatever markup the front matter wrote. Both are plainified now, in the breadcrumb
+  trail too, and `check_aeo.py` asserts the invariant that catches either drifting again:
+  `headline` and `name` come from one title, so one has to be the start of the other.
+  The 110-character cap was also 111 in practice — `truncate` appends its ellipsis
+  *after* the limit — which the theme's own checker rejected. CI now builds a post whose
+  title carries an ampersand, an apostrophe, markup, a quote, an emoji and 118
+  characters, because every title in the exampleSite is short, plain ASCII.
+
 - `[params.schema] type = "Organization"` with a `logo`, for the sites that genuinely are
   one. `Person` stays the default because this is a portfolio theme, and the type is a
   statement about the site rather than a lever: an Organization on a personal site is
   schema that lies. The two carry different fields — `jobTitle` belongs to a person,
   `logo` to an organization, and each is dropped for the other type. An unknown value
-  warns and falls back to `Person`, the way an unknown palette falls back to lime.
+  warns and falls back to `Person`, the way an unknown palette falls back to lime. The
+  `logo` resolves through `asset-path.html`, the same partial as `[params.favicon]`,
+  `[params.ogImage]` and a post's `image`: it had spelled the trim out inline, which is
+  how it came to differ from the other three and rewrite `//cdn.example/logo.png` — a
+  URL naming another host — onto this site.
 
 - `partials/params-bool.html`, the fourth of the `params-*.html` family and the one whose
   failure mode is quietest. The other three reach a `range`, a field lookup or a cast, so
@@ -147,6 +176,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   is for. Deferring the first measurement into `requestAnimationFrame` would clear the
   audit by giving up the reservation, which is the layout shift the reservation exists
   to prevent.
+
+- **`[params.favicon]`, `[params.ogImage]` and a post's `image` now resolve inside the
+  `baseURL`**, not at the host root. `relURL` and `absURL` read a path with a leading
+  slash as rooted at the host, so on a site published under a sub-path — the demo is
+  one — `"/img/og.png"` dropped the sub-path and resolved to a URL that 404s, while
+  `"img/og.png"` resolved correctly. The theme's own `exampleSite` documented the first
+  spelling. All three call sites now go through one partial, `asset-path.html`, that
+  trims the leading slash before the conversion, so both spellings work — and a path
+  that names another host still passes through untouched, whether it carries a scheme
+  or is written `//cdn.example/og.png`. Fixes #37.
+
+  Nothing about it was visible: a favicon that 404s is a blank tab, an `og:image` that
+  404s only fails in someone else's link card, and a post banner that 404s renders as a
+  reserved empty block that looks deliberate. The build was green because the templates
+  did exactly what they were told. A site that really did mean the host root — an image
+  served from outside Hugo — writes the absolute URL, which is the spelling that always
+  meant that unambiguously.
+
+  The other half was the gap that let it through: the `exampleSite` leaves all three
+  params empty, so the documented path was never built by CI. A new step builds under a
+  sub-path `baseURL` with the three filled in, in both spellings, and asserts that every
+  URL the build emits names a file the build actually published, that the two spellings
+  agree, and that both spellings of an off-site URL arrive untouched.
 
 - Colors that did not follow the accent because they never went through it. Eight
   `rgba(182,255,60,…)` washes were spelled out in `terminal.css` — the solid button's

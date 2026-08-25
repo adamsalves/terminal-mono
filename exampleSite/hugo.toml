@@ -142,8 +142,13 @@ summaryLength = 30
   #     accent = "#00ffd5"
   terminalUser = "robin@portfolio"
   allowIndexing = true       # allow indexing even outside production
-  # favicon = "/favicon.svg" # the theme ships a favicon; set to override
-  # ogImage = "/img/og.png"  # default image for Open Graph/Twitter
+  # Both paths are relative to the baseURL, and written without a leading
+  # slash on purpose: a rooted "/img/og.png" is rooted at the *host*, so on a
+  # site published under a sub-path — this demo is one — it resolves outside
+  # the site and 404s in silence. The theme trims the slash for you either
+  # way; write the absolute URL when you really do mean the host root.
+  # favicon = "favicon.svg" # the theme ships a favicon; set to override
+  # ogImage = "img/og.png"  # default image for Open Graph/Twitter
   # twitter = "robinvale"    # handle (without @) for twitter:site
 
   # ============================================================
