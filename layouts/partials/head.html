@@ -101,10 +101,36 @@
 <link rel="{{ .Rel }}" type="{{ .MediaType.Type }}" href="{{ .Permalink }}" title="{{ $siteName }}">
 {{ end -}}
 
-{{/* Fonts */}}
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+{{/* Fonts — self-hosted from static/fonts/, declared by the @font-face block
+     at the top of terminal.css, which is where the reasoning lives.
+
+     The preload is the half that cannot go in the stylesheet. A browser only
+     discovers a @font-face after it has downloaded and parsed the CSS that
+     declares it, and only requests the file after it has matched an element
+     to it, so the font still starts late — later than it did behind Google
+     Fonts, where the preconnects at least warmed the socket. This <link>
+     puts the request in the first round trip instead, which is possible now
+     precisely because the file is on this origin: preloading it while it
+     lived on fonts.gstatic.com would have meant guessing the hashed URL
+     that Google's CSS was going to name.
+
+     `crossorigin` is not optional and not about the origin. A font is always
+     fetched in CORS mode, so a preload without it is a *second*, separate
+     request in the browser's cache — the console says the resource was
+     preloaded but not used, and the page pays for the file twice.
+
+     Only latin is preloaded. latin-ext is declared with a unicode-range, so
+     a site that never writes those codepoints never asks for it; a site that
+     writes mostly Polish, Czech or Turkish is the case [params.fonts]
+     latinExt is for, and it moves that file into the first round trip too.
+     Guarded through params-table.html for the reason its header gives: the
+     read below would abort every page in the site if the param were a
+     scalar, and head.html is every page in the site. */}}
+{{- $fonts := partialCached "params-table.html" (dict "value" site.Params.fonts "path" "[params.fonts]") "fonts" site.Language.Lang -}}
+<link rel="preload" as="font" type="font/woff2" href="{{ "fonts/jetbrains-mono-v24-latin.woff2" | relURL }}" crossorigin>
+{{- if $fonts.latinExt }}
+<link rel="preload" as="font" type="font/woff2" href="{{ "fonts/jetbrains-mono-v24-latin-ext.woff2" | relURL }}" crossorigin>
+{{- end }}
 
 {{/* CSS — asset pipeline: minify + fingerprint in production */}}
 {{ with resources.Get "css/terminal.css" }}
