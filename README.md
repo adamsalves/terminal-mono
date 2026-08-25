@@ -683,10 +683,13 @@ verified against v0.0.16:
   minified Hugo site regardless of what is on the page — 12 of its 100 points. If you
   want it scored correctly, keep the quotes:
   ```toml
-  [minify.tdewolff.html]
-    keepQuotes = true
+  [minify]
+    [minify.tdewolff.html]
+      keepQuotes = true
   ```
-  It costs about 150 bytes on a page of this theme, before compression.
+  Measured on the exampleSite home page: 11,762 → 12,198 bytes raw, and 3,489 →
+  3,518 gzipped. The quotes are 436 bytes of the most compressible text there is,
+  so what actually goes over the wire is **29 bytes**.
 - **It does not follow a `<sitemapindex>`**, so on a multilingual site it audits your
   sub-sitemaps as if they were pages. Another 12 points, and `flatSitemap = true`
   above is the answer.
