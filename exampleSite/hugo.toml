@@ -206,6 +206,22 @@ summaryLength = 30
   # [params.schema]
   #   type = "Organization"
   #   logo = "img/logo.png"
+  #  Fonts — JetBrains Mono ships with the theme, in static/fonts/,
+  #  so nothing is fetched from fonts.googleapis.com. Two subsets are
+  #  declared: latin, which is preloaded, and latin-ext, which is not.
+  #
+  #  Both are always published, and latin-ext costs a site nothing:
+  #  it carries a unicode-range, so a browser requests it only for a
+  #  page that actually contains one of those codepoints. This demo
+  #  is English and Portuguese, and never does.
+  #
+  #  Turn it on if the site writes mostly in Polish, Czech, Turkish,
+  #  Romanian or Hungarian — it adds the second <link rel=preload>,
+  #  which moves that file into the first round trip instead of
+  #  waiting for the stylesheet to be parsed and matched.
+  # ============================================================
+  # [params.fonts]
+  #   latinExt = true
 
   [params.navbar]
     brandName = "robin.dev"
