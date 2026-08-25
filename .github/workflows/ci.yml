@@ -77,6 +77,41 @@ jobs:
               sys.exit('\n'.join('crawlers: ' + b for b in bad))
           print('crawlers: the README table and layouts/robots.txt name the same bots')
           PY
+      # The palettes are the one feature whose correctness a build cannot show:
+      # five sets of hex values all render, and all five shipped a --dim
+      # that failed WCAG AA on every ground. The suite above already covers the
+      # checker; this runs it against the stylesheet on its own so the failure
+      # arrives named, with the ratio and the ground that produced it, rather
+      # than as one assertion inside a unittest summary.
+      - name: Assert every palette clears WCAG AA
+        run: python3 scripts/check_contrast.py
+      # The other half of the same PR, and the half a build cannot show: the
+      # entrance animation used to fade opacity from 0, which keeps the largest
+      # element on the page invisible for 500ms and takes FCP/LCP with it. It
+      # renders identically either way — the only difference is a number in a
+      # Lighthouse run nobody is looking at when the regression lands.
+      - name: Assert the entrance animation does not hide the LCP element
+        run: |
+          set -eo pipefail
+          frames=$(grep -o '@keyframes fadeup{[^}]*}[^}]*}' assets/css/terminal.css)
+          if [ -z "$frames" ]; then
+            echo 'fadeup: @keyframes fadeup is gone — this check has nothing to look at'
+            exit 1
+          fi
+          if printf '%s' "$frames" | grep -q 'opacity'; then
+            echo 'fadeup: animating opacity again — Chrome does not count an element'
+            echo 'at opacity:0 towards FCP or LCP, so this holds the main content'
+            echo 'out of the metric for the whole animation. Animate transform alone.'
+            printf '%s\n' "$frames"
+            exit 1
+          fi
+          echo 'fadeup: transform only, the LCP element stays visible'
+      # The stylesheet says the two .woff2 are what fonts.gstatic.com serves for
+      # JetBrains Mono v24, committed unmodified. Without this the claim is a
+      # comment, and `immutable` in netlify.toml rests on it: a font swapped in
+      # place under the same filename would be served from cache for a year.
+      - name: Assert the font binaries are the ones that were reviewed
+        run: cd static/fonts && sha256sum -c SHA256SUMS
 
   build:
     runs-on: ubuntu-latest
@@ -400,6 +435,103 @@ jobs:
             exit 1
           fi
           echo 'schema: an unknown type warns and falls back'
+      # The font is the theme's only binary asset and the only thing on the page
+      # that used to come from another origin, and both halves of self-hosting it
+      # fail silently. A @font-face whose url() does not resolve falls back to
+      # ui-monospace and renders a perfectly reasonable page in the wrong
+      # typeface; a preload the browser cannot match to a request is a console
+      # warning nobody reads and a file downloaded twice. Neither stops a build,
+      # so both are asserted here — against the sub-path build above, because
+      # a rooted /fonts/ href is exactly what would work under a root baseURL
+      # and 404 on the demo.
+      - name: Assert the font is self-hosted and reachable
+        run: |
+          set -eo pipefail
+          h=exampleSite/public/index.html
+          if grep -qF 'fonts.googleapis.com' "$h" || grep -qF 'fonts.gstatic.com' "$h"; then
+            echo 'font: the page still reaches fonts.googleapis.com / fonts.gstatic.com'
+            grep -o 'https://fonts\.[a-z]*\.com[^"'"'"' >]*' "$h"
+            exit 1
+          fi
+          python3 - <<'PY'
+          import pathlib, re, sys
+
+          pub = pathlib.Path('exampleSite/public')
+          html = (pub / 'index.html').read_text()
+          bad = []
+
+          # The preload: present, on this origin under the sub-path, pointing at a
+          # file that was published, and carrying crossorigin — a font is fetched
+          # in CORS mode whether or not it is same-origin, so a preload without it
+          # sits in a different cache slot than the request it was meant to serve.
+          # Same attr() as "Assert the asset params resolve under a sub-path"
+          # below, deliberately spelled the same way: minified HTML drops the
+          # quotes around a value, and two steps in one job disagreeing about
+          # how to read an attribute is how one of them starts passing on
+          # output the other rejects.
+          def attr(tag, name):
+              m = re.search(r'\b%s=(?:"([^"]*)"|\'([^\']*)\'|([^"\'>\s]+))' % name, tag)
+              if not m:
+                  return None
+              return next(g for g in m.groups() if g is not None)
+
+          links = [m.group(0) for m in re.finditer(r'<link\b[^>]*\brel=["\']?preload\b[^>]*>', html)
+                   if 'font' in m.group(0)]
+          if not links:
+              bad.append('no <link rel=preload as=font> in the head')
+          for link in links:
+              url = attr(link, 'href')
+              if url is None:
+                  bad.append('a font preload with no href: %s' % link)
+                  continue
+              if not url.startswith('/terminal-mono/fonts/'):
+                  bad.append('preload href %s is not under the baseURL sub-path' % url)
+              if 'crossorigin' not in link:
+                  bad.append('preload %s has no crossorigin — it will be fetched twice' % url)
+              if not (pub / url.lstrip('/').split('/', 1)[1]).is_file():
+                  bad.append('preload %s was not published' % url)
+
+          # Every url() the stylesheet asks for has to resolve. They are relative
+          # to the stylesheet, which is the whole reason they survive a sub-path.
+          css = next(iter((pub / 'css').glob('*.css')), None)
+          if css is None:
+              bad.append('no stylesheet was published')
+          else:
+              faces = re.findall(r'src:url\(([^)]+)\)', css.read_text())
+              if not faces:
+                  bad.append('the stylesheet declares no @font-face src')
+              for src in faces:
+                  target = (css.parent / src.strip('\'"')).resolve()
+                  if not target.is_file():
+                      bad.append('@font-face url(%s) resolves to %s, which is not there'
+                                 % (src, target))
+
+          if bad:
+              sys.exit('\n'.join('font: ' + b for b in bad))
+          print('font: self-hosted, preloaded with crossorigin, every url() resolves')
+          PY
+          # latin-ext is declared but not preloaded, because a preload the page
+          # never uses costs a round trip and earns a console warning. The param
+          # is the opt-out for sites that do write in it, and an unexercised opt-out
+          # is a claim rather than a feature.
+          d=/tmp/fonts-ext
+          rm -rf "$d"; mkdir -p "$d/themes"
+          ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          printf 'baseURL = "https://example.com/t/"\ntitle = "Ext"\ntheme = "terminal-mono"\n[params.fonts]\n  latinExt = true\n' > "$d/hugo.toml"
+          hugo --source "$d" --gc --minify --panicOnWarning > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
+          n=$(grep -o '<link[^>]*rel=preload[^>]*as=font[^>]*>' "$d/public/index.html" | wc -l)
+          if [ "$n" != 2 ]; then
+            echo "font: latinExt = true should preload both subsets, found $n"
+            grep -o '<link rel=preload[^>]*>' "$d/public/index.html"
+            exit 1
+          fi
+          # …and the default does not, which is the half that would rot silently.
+          if [ "$(grep -o '<link[^>]*rel=preload[^>]*as=font[^>]*>' exampleSite/public/index.html | wc -l)" != 1 ]; then
+            echo 'font: the default build preloads more than latin'
+            grep -o '<link rel=preload[^>]*>' exampleSite/public/index.html
+            exit 1
+          fi
+          echo 'font: latinExt adds the second preload, and only when asked'
       # The exampleSite fills in every param; a fresh consumer fills in none.
       # That path broke once already (see 41451a3), and the exampleSite build
       # stays green through it.
@@ -1370,6 +1502,10 @@ jobs:
           # — without it robots.txt never renders and the param is never read.
           run_case schema      bare  '  schema = "x"' \
                    '[params.schema] must be a table'
+          # Same story as navbar: head.html reads it on every page, so a scalar
+          # here is the whole site rather than one template.
+          run_case fonts       bare  '  fonts = "x"' \
+                   '[params.fonts] must be a table'
           # The mirror direction: a scalar-shaped param written as a table. These
           # never reach a `range` or a field lookup — they reach plainify, relURL
           # and absURL, which cast to string and abort when the cast fails. All
