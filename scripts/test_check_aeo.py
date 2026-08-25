@@ -115,6 +115,18 @@ class RobotsChecks(unittest.TestCase):
         self.assertTrue(any("still invites crawlers" in p
                             for p in self.run_on(self.GOOD, indexable=False)))
 
+    def test_a_preview_is_allowed_to_have_no_sitemap(self):
+        # The template drops the Sitemap line on a build that is not for
+        # indexing, which is correct -- and this check used to run regardless,
+        # so the script's only preview mode rejected the theme's own output.
+        preview = "User-agent: *\nDisallow: /\n"
+        self.assertEqual(self.run_on(preview, indexable=False), [])
+
+    def test_a_preview_that_still_points_at_a_sitemap_is_a_problem(self):
+        preview = "User-agent: *\nDisallow: /\n\nSitemap: https://x/sitemap.xml\n"
+        self.assertTrue(any("still points a Sitemap" in p
+                            for p in self.run_on(preview, indexable=False)))
+
 
 class PageChecks(unittest.TestCase):
     def test_a_complete_post_page_passes(self):
@@ -160,6 +172,24 @@ class PageChecks(unittest.TestCase):
         self.assertTrue(any("not valid JSON" in p for p in aeo.check_page("/", html)))
 
 
+class HeadlineChecks(unittest.TestCase):
+    def test_a_headline_that_is_not_the_name_it_came_from(self):
+        # truncate escapes a plain string, so headline used to arrive with HTML
+        # entities in it while name -- the same title, same node -- did not.
+        bad = POST.replace('"headline":"H"',
+                           '"headline":"Vue &amp; Vitest"') \
+                  .replace('"wordCount":10', '"wordCount":10,"name":"Vue & Vitest"')
+        problems = aeo.check_page("/p/", page(PUBLISHER, WEBSITE, bad))
+        self.assertTrue(any("is not the start of name" in p for p in problems),
+                        problems)
+
+    def test_a_truncated_headline_still_matches_its_name(self):
+        ok = POST.replace('"headline":"H"', '"headline":"A long title th…"') \
+                 .replace('"wordCount":10',
+                          '"wordCount":10,"name":"A long title that kept going"')
+        self.assertEqual(aeo.check_page("/p/", page(PUBLISHER, WEBSITE, ok)), [])
+
+
 class Wiring(unittest.TestCase):
     def test_an_empty_directory_is_a_failure_not_a_pass(self):
         with tempfile.TemporaryDirectory() as d:
@@ -171,6 +201,41 @@ class Wiring(unittest.TestCase):
             (pathlib.Path(d) / "index.html").write_text(page(PUBLISHER, WEBSITE))
             self.assertTrue(any("not one page carried a BlogPosting" in p
                                 for p in aeo.check(d, expect_robots=False)))
+
+    def test_a_page_that_is_not_a_post_is_checked_too(self):
+        # The gate used to be `if "BlogPosting" in html`, so the lists, the
+        # taxonomies and the whole WebPage branch were never looked at: a
+        # /blogs/index.html with a corrupted graph came back clean.
+        with tempfile.TemporaryDirectory() as d:
+            pub = pathlib.Path(d)
+            (pub / "index.html").write_text(page(PUBLISHER, WEBSITE))
+            (pub / "p").mkdir()
+            (pub / "p" / "index.html").write_text(page(PUBLISHER, WEBSITE, POST))
+            (pub / "blogs").mkdir()
+            (pub / "blogs" / "index.html").write_text(
+                '<html><head><script type="application/ld+json">{BROKEN'
+                "</script></head></html>")
+            problems = aeo.check(d, expect_robots=False)
+            self.assertTrue(any("/blogs/index.html" in p for p in problems),
+                            problems)
+
+    def test_a_redirect_stub_is_not_a_page_that_lost_its_graph(self):
+        # Hugo writes one per alias, and for the root index.html of a site with
+        # defaultContentLanguageInSubdir. Reading one as a page missing its
+        # JSON-LD failed a build that was correct.
+        with tempfile.TemporaryDirectory() as d:
+            pub = pathlib.Path(d)
+            (pub / "index.html").write_text(
+                '<html><head><meta http-equiv="refresh" content="0; '
+                'url=https://x/en/"></head></html>')
+            (pub / "en").mkdir()
+            (pub / "en" / "index.html").write_text(page(PUBLISHER, WEBSITE, POST))
+            self.assertEqual(aeo.check(d, expect_robots=False), [])
+
+    def test_an_unknown_flag_is_rejected(self):
+        # --not-indexible used to be accepted in silence, and the mode the
+        # caller asked for simply did not happen.
+        self.assertEqual(aeo.main(["check_aeo.py", "somewhere", "--not-indexible"]), 2)
 
 
 if __name__ == "__main__":

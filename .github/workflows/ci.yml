@@ -38,6 +38,45 @@ jobs:
       # with the listing completely broken — so the JS gets its own suite.
       - name: Test the terminal script
         run: node scripts/test_terminal_js.js
+      # The README table is what a consumer reads before deciding whether to
+      # switch a group off. It listed seven crawlers the template never names,
+      # which is worse than listing none: turning allowTraining off while
+      # believing AI2Bot was in it is a block that did not happen.
+      - name: Assert the README names the crawlers the template does
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, sys
+
+          tpl = pathlib.Path('layouts/robots.txt').read_text(encoding='utf-8')
+          readme = pathlib.Path('README.md').read_text(encoding='utf-8')
+          bad = []
+
+          def slice_names(var):
+              m = re.search(r'\$%s := slice(.*?)-\}\}' % var, tpl, re.S)
+              if not m:
+                  sys.exit('robots.txt no longer declares $%s' % var)
+              return set(re.findall(r'"([^"]+)"', m.group(1)))
+
+          def row_names(switch):
+              m = re.search(r'^\|\s*`%s`\s*\|(.*?)\|' % switch, readme, re.M)
+              if not m:
+                  sys.exit('README has no table row for `%s`' % switch)
+              return set(re.findall(r'`([^`]+)`', m.group(1)))
+
+          for var, switch in (('answerEngines', 'allowAI'),
+                              ('trainingCrawlers', 'allowTraining')):
+              in_tpl, in_doc = slice_names(var), row_names(switch)
+              for name in sorted(in_doc - in_tpl):
+                  bad.append('%s: README lists %s, which the template does not send'
+                             % (switch, name))
+              for name in sorted(in_tpl - in_doc):
+                  bad.append('%s: the template sends %s, which the README does not list'
+                             % (switch, name))
+
+          if bad:
+              sys.exit('\n'.join('crawlers: ' + b for b in bad))
+          print('crawlers: the README table and layouts/robots.txt name the same bots')
+          PY
 
   build:
     runs-on: ubuntu-latest
@@ -94,6 +133,70 @@ jobs:
             fi
           done
           echo 'aeo: the 404 stays out of the graph'
+      # Every title in the exampleSite is plain ASCII and short, so the one
+      # field the theme transforms rather than copies was never built from a
+      # title that could show the transform going wrong. `truncate` escapes a
+      # plain string, so a title with an ampersand or an apostrophe came out as
+      # HTML entities inside a JSON string, contradicting the `name` built from
+      # the same title in the same node; and the ellipsis lands *after* the
+      # limit, so every long title was 111 against a cap of 110.
+      - name: Assert a hostile title survives the graph
+        run: |
+          set -eo pipefail
+          d=/tmp/aeo-title
+          rm -rf "$d"; mkdir -p "$d/themes" "$d/content/blogs"
+          ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          printf 'baseURL = "https://example.com/t/"\ntitle = "Titles"\ntheme = "terminal-mono"\nenableRobotsTXT = true\n' > "$d/hugo.toml"
+          cat > "$d/content/blogs/entities.md" <<'MD'
+          ---
+          title: "Vue & Vitest: what's next? <b>bold</b> \"quoted\" 🚀"
+          date: 2026-01-01
+          tags: ["vue"]
+          ---
+          Body.
+          MD
+          python3 - "$d" <<'PY'
+          import pathlib, sys
+          # 118 characters, so the cap has to do something, and the word boundary
+          # lands where truncate's ellipsis used to push the result to 111.
+          title = ("word " * 40)[:118].strip().ljust(118, "x")
+          (pathlib.Path(sys.argv[1]) / "content/blogs/long.md").write_text(
+              '---\ntitle: "%s"\ndate: 2026-01-02\ntags: ["vue"]\n---\nBody.\n' % title)
+          PY
+          hugo --source "$d" --gc --minify --panicOnWarning > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
+          python3 scripts/check_aeo.py "$d/public"
+          python3 - "$d" <<'PY'
+          import json, pathlib, re, sys
+
+          pub = pathlib.Path(sys.argv[1]) / 'public'
+          bad = []
+          seen = 0
+          for path in sorted(pub.glob('blogs/*/index.html')):
+              html = path.read_text(encoding='utf-8')
+              for block in re.findall(
+                      r'<script[^>]*ld\+json[^>]*>(.*?)</script>', html, re.S):
+                  data = json.loads(block)
+                  for node in (data.get('@graph') or [data]):
+                      if node.get('@type') != 'BlogPosting':
+                          continue
+                      seen += 1
+                      head, name = node['headline'], node['name']
+                      if len(head) > 110:
+                          bad.append('%s: headline is %d characters'
+                                     % (path.parent.name, len(head)))
+                      if not name.startswith(head.rstrip('…')):
+                          bad.append('%s: headline %r is not the start of name %r'
+                                     % (path.parent.name, head, name))
+                      if re.search(r'&(amp|lt|gt|quot|#\d+|#x[0-9a-fA-F]+);', head):
+                          bad.append('%s: headline carries HTML entities: %r'
+                                     % (path.parent.name, head))
+          if seen != 2:
+              bad.append('expected 2 BlogPosting nodes, found %d' % seen)
+          if bad:
+              sys.exit('\n'.join('title: ' + b for b in bad))
+          print('title: an ampersand, an apostrophe, markup, a quote, an emoji '
+                'and 118 characters all come through the graph intact')
+          PY
       # The switches, one fixture each. A veto nobody exercises is a claim.
       - name: Assert the AEO switches
         run: |

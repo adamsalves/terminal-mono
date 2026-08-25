@@ -20,7 +20,7 @@ So the build is the fixture and the assertions are the review:
                a BreadcrumbList counts 1..n with no gaps and no self-link on its
                last crumb.
 
-Run: python3 scripts/check_aeo.py <public-dir> [--expect-robots] [--indexable]
+Run: python3 scripts/check_aeo.py <public-dir> [--no-robots] [--not-indexable]
 """
 
 import json
@@ -36,6 +36,11 @@ MAJOR_BOTS = ["gptbot", "claudebot", "google-extended", "perplexitybot"]
 LD_RE = re.compile(
     r"""<script[^>]*type=["']?application/ld\+json["']?[^>]*>(.*?)</script>""",
     re.S | re.I)
+
+# Hugo writes one of these per alias, and for the root index.html of a site with
+# defaultContentLanguageInSubdir. They carry no content of their own, so reading
+# one as a page that lost its JSON-LD is a false failure on a correct build.
+REDIRECT_RE = re.compile(r"""<meta[^>]*http-equiv=["']?refresh""", re.I)
 
 
 def parse_robots(text):
@@ -88,12 +93,18 @@ def check_robots(public, indexable):
     path = public / "robots.txt"
     if not path.is_file():
         return ["robots.txt: not in the build -- the site needs enableRobotsTXT = true"]
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
 
+    # A build that is not for indexing drops the Sitemap line, which is the
+    # correct output and used to fail here: this check ran unconditionally, so
+    # the script's only preview mode rejected the theme's own preview build.
     sitemaps = re.findall(r"^\s*sitemap:\s*(\S+)\s*$", text, re.I | re.M)
-    if len(sitemaps) != 1:
+    if indexable and len(sitemaps) != 1:
         problems.append("robots.txt: expected exactly 1 Sitemap line, found %d"
                         % len(sitemaps))
+    if not indexable and sitemaps:
+        problems.append("robots.txt: a build that is not for indexing still "
+                        "points a Sitemap line at %s" % sitemaps[0])
     for url in sitemaps:
         name = url.rstrip("/").rsplit("/", 1)[-1]
         if not (public / name).is_file():
@@ -175,6 +186,19 @@ def check_page(rel, html):
             if len(node.get("headline", "")) > 110:
                 problems.append("%s: headline is %d characters; Google drops it over "
                                 "110" % (rel, len(node["headline"])))
+            # headline and name are the same title, so one has to be a prefix of
+            # the other. They stopped agreeing once: truncate escapes a plain
+            # string, so headline came out with HTML entities in it -- inside a
+            # JSON string, where the consumer reads them literally -- while name,
+            # built from the same title, did not. Comparing them catches that
+            # without this having to guess at what an entity looks like.
+            name, headline = node.get("name"), node.get("headline")
+            if isinstance(name, str) and isinstance(headline, str):
+                if not name.startswith(headline.rstrip("…")):
+                    problems.append(
+                        "%s: headline %r is not the start of name %r -- they are "
+                        "the same title, so one of them was transformed on the "
+                        "way in" % (rel, headline, name))
         if node.get("@type") == "BreadcrumbList":
             crumbs = node.get("itemListElement", [])
             positions = [c.get("position") for c in crumbs]
@@ -200,17 +224,31 @@ def check(public_dir, expect_robots=True, indexable=True):
     if not pages:
         return ["%s: no HTML in it -- nothing was checked" % public_dir]
 
+    # Every page that carries a graph is checked, not just the home and the
+    # posts. The gate used to be `if "BlogPosting" in html`, which left the
+    # lists, the taxonomies, the term pages and the whole WebPage branch
+    # unverified: a /blogs/index.html with all three of its blocks corrupted
+    # came back clean.
     home = public / "index.html"
-    if home.is_file():
-        problems += check_page("/", home.read_text())
-
     posts = 0
+    checked = 0
     for path in pages:
         rel = "/" + str(path.relative_to(public))
-        html = path.read_text()
+        html = path.read_text(encoding="utf-8")
+        if REDIRECT_RE.search(html):
+            continue
+        is_home = path == home
+        if not is_home and "application/ld+json" not in html:
+            # A page the theme deliberately leaves silent -- the 404 is one.
+            continue
+        checked += 1
         if "BlogPosting" in html:
             posts += 1
-            problems += check_page(rel, html)
+        problems += check_page("/" if is_home else rel, html)
+
+    if not checked:
+        problems.append("%s: not one page carried a JSON-LD block, so this "
+                        "check verified nothing" % public_dir)
     if posts == 0:
         problems.append("%s: not one page carried a BlogPosting, so the post half "
                         "of this check verified nothing" % public_dir)
@@ -221,6 +259,11 @@ def main(argv):
     args = [a for a in argv[1:] if not a.startswith("--")]
     flags = {a for a in argv[1:] if a.startswith("--")}
     if not args:
+        print(__doc__.strip().splitlines()[-1], file=sys.stderr)
+        return 2
+    unknown = sorted(flags - {"--no-robots", "--not-indexable"})
+    if unknown:
+        print("unknown flag(s): %s" % " ".join(unknown), file=sys.stderr)
         print(__doc__.strip().splitlines()[-1], file=sys.stderr)
         return 2
     problems = check(args[0],

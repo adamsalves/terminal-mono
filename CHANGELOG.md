@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- `scripts/check_aeo.py` reads every page that carries a graph, not the home and the
+  posts only. The gate had been `if "BlogPosting" in html`, which left the lists, the
+  taxonomies, the term pages and the whole `WebPage` branch unverified — a
+  `/blogs/index.html` with every one of its blocks corrupted came back clean. Redirect
+  stubs are skipped rather than read as pages that lost their JSON-LD, which is what a
+  site with `defaultContentLanguageInSubdir` publishes at its root. `--not-indexable`
+  works against a preview build now: it was checking for a `Sitemap:` line that the
+  template correctly does not emit there, so the script's only preview mode rejected the
+  theme's own output. An unknown flag exits 2 instead of being accepted in silence, and
+  the usage line names the flags the code actually reads.
+
 - **`layouts/robots.txt`.** Hugo's built-in one is `User-agent: *` and nothing else — no
   `Sitemap:` line, and nothing said either way about the crawlers that feed answer
   engines. This one names them, in two groups that are not the same request: answer
@@ -37,12 +48,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   breadcrumb there describes a hierarchy that does not contain it, and a `WebSite` node
   invites a crawler to treat an error as a document.
 
+  Every string that reaches the graph is plain text, and getting there took two passes.
+  `truncate` escapes a plain string and leaves a `template.HTML` alone, so `headline` —
+  the one field the theme transforms rather than copies — came out as
+  `Vue &amp;amp; Vitest` for a title as ordinary as `Vue & Vitest`: HTML entities inside a
+  JSON string, where the consumer reads them literally, contradicting the `name` built
+  from the same title in the same node. `name` had the opposite problem, carrying
+  whatever markup the front matter wrote. Both are plainified now, in the breadcrumb
+  trail too, and `check_aeo.py` asserts the invariant that catches either drifting again:
+  `headline` and `name` come from one title, so one has to be the start of the other.
+  The 110-character cap was also 111 in practice — `truncate` appends its ellipsis
+  *after* the limit — which the theme's own checker rejected. CI now builds a post whose
+  title carries an ampersand, an apostrophe, markup, a quote, an emoji and 118
+  characters, because every title in the exampleSite is short, plain ASCII.
+
 - `[params.schema] type = "Organization"` with a `logo`, for the sites that genuinely are
   one. `Person` stays the default because this is a portfolio theme, and the type is a
   statement about the site rather than a lever: an Organization on a personal site is
   schema that lies. The two carry different fields — `jobTitle` belongs to a person,
   `logo` to an organization, and each is dropped for the other type. An unknown value
-  warns and falls back to `Person`, the way an unknown palette falls back to lime.
+  warns and falls back to `Person`, the way an unknown palette falls back to lime. The
+  `logo` resolves through `asset-path.html`, the same partial as `[params.favicon]`,
+  `[params.ogImage]` and a post's `image`: it had spelled the trim out inline, which is
+  how it came to differ from the other three and rewrite `//cdn.example/logo.png` — a
+  URL naming another host — onto this site.
 
 - `partials/params-bool.html`, the fourth of the `params-*.html` family and the one whose
   failure mode is quietest. The other three reach a `range`, a field lookup or a cast, so

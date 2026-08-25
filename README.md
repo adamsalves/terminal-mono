@@ -522,8 +522,11 @@ The split matters, and one switch would have hidden it:
 
 | | what it covers | what you get from it |
 |---|---|---|
-| `allowAI` | `OAI-SearchBot`, `ChatGPT-User`, `Claude-SearchBot`, `Claude-User`, `PerplexityBot`, `Perplexity-User`, `Gemini-Deep-Research`, `DuckAssistBot`, `MistralAI-User`, `Amazonbot`, `Applebot`, `YouBot` | citations and referral traffic |
-| `allowTraining` | `GPTBot`, `ClaudeBot`, `anthropic-ai`, `Google-Extended`, `Applebot-Extended`, `meta-externalagent`, `FacebookBot`, `CCBot`, `Bytespider`, `cohere-ai`, `GrokBot`, `AI2Bot`, `DeepSeekBot` | nothing back |
+| `allowAI` | `OAI-SearchBot`, `ChatGPT-User`, `Claude-SearchBot`, `Claude-User`, `PerplexityBot`, `Perplexity-User`, `DuckAssistBot`, `MistralAI-User`, `Amazonbot`, `Applebot` | citations and referral traffic |
+| `allowTraining` | `GPTBot`, `ClaudeBot`, `Google-Extended`, `Applebot-Extended`, `meta-externalagent`, `CCBot`, `Bytespider`, `cohere-ai` | nothing back |
+
+These two lists are the ones in `layouts/robots.txt`, and CI asserts they stay that way:
+a name that is here and not there is a crawler you believe you blocked and did not.
 
 Both default to `true`, which is what the bare `User-agent: *` already meant — a theme
 upgrade should not quietly change what your site publishes. `allowTraining = false` is
