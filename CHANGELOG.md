@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-08-25
+
 ### Added
 - **`llms.txt`, `llms-full.txt` and a markdown twin per post**, as Hugo output
   formats. `/llms.txt` is the index an answer engine can read in one request instead
@@ -827,7 +829,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   switcher, `hreflang` alternates and locale-aware dates.
 - Complete bilingual `exampleSite/` and Hugo Modules support.
 
-[Unreleased]: https://github.com/adamsalves/terminal-mono/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/adamsalves/terminal-mono/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/adamsalves/terminal-mono/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/adamsalves/terminal-mono/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/adamsalves/terminal-mono/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/adamsalves/terminal-mono/compare/v0.2.3...v0.3.0
