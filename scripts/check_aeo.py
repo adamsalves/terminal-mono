@@ -426,28 +426,50 @@ def check(public_dir, expect_robots=True, indexable=True, expect_llms=True,
     return problems
 
 
+# Flag -> the check() keyword it turns off. One place, because main() reads the
+# flags and the guard below rejects the rest: a second hand-written list is a
+# flag that works and is refused, which is what a hardcoded set did the moment
+# --no-llms and --no-markdown were added.
+FLAGS = {
+    "--no-robots": "expect_robots",
+    "--not-indexable": "indexable",
+    "--no-llms": "expect_llms",
+    "--no-markdown": "expect_markdown",
+}
+
+
+def usage():
+    return [l for l in __doc__.strip().splitlines() if l.strip()][-2:]
+
+
 def main(argv):
     args = [a for a in argv[1:] if not a.startswith("--")]
     flags = {a for a in argv[1:] if a.startswith("--")}
     if not args:
-        print(__doc__.strip().splitlines()[-1], file=sys.stderr)
+        print("\n".join(usage()), file=sys.stderr)
         return 2
-    unknown = sorted(flags - {"--no-robots", "--not-indexable"})
+    unknown = sorted(flags - set(FLAGS))
     if unknown:
         print("unknown flag(s): %s" % " ".join(unknown), file=sys.stderr)
-        print(__doc__.strip().splitlines()[-1], file=sys.stderr)
+        print("\n".join(usage()), file=sys.stderr)
         return 2
-    problems = check(args[0],
-                     expect_robots="--no-robots" not in flags,
-                     indexable="--not-indexable" not in flags,
-                     expect_llms="--no-llms" not in flags,
-                     expect_markdown="--no-markdown" not in flags)
+    off = {name: flag not in flags for flag, name in FLAGS.items()}
+    problems = check(args[0], **off)
     if problems:
         print("\n".join(problems), file=sys.stderr)
         print("\n%d problem(s) in the AEO output." % len(problems), file=sys.stderr)
         return 1
-    print("%s: robots.txt, the JSON-LD graph, llms.txt and the markdown twins "
-          "check out" % args[0])
+    # Naming what actually ran, because the line is the whole output on a green
+    # run: saying "llms.txt checks out" after --no-llms turned it off is the
+    # check reporting work it did not do.
+    did = ["the JSON-LD graph"]
+    if off["expect_robots"]:
+        did.insert(0, "robots.txt")
+    if off["expect_llms"]:
+        did.append("llms.txt")
+    if off["expect_markdown"]:
+        did.append("the markdown twins")
+    print("%s: %s check out" % (args[0], ", ".join(did)))
     return 0
 
 

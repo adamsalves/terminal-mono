@@ -11,6 +11,7 @@ failure here is a defect in the checker and never in Hugo.
 """
 
 import pathlib
+import re
 import sys
 import tempfile
 import unittest
@@ -363,6 +364,19 @@ class Wiring(unittest.TestCase):
         # --not-indexible used to be accepted in silence, and the mode the
         # caller asked for simply did not happen.
         self.assertEqual(aeo.main(["check_aeo.py", "somewhere", "--not-indexible"]), 2)
+
+    def test_every_flag_the_usage_line_documents_is_accepted(self):
+        # The guard above and the flags main() reads were two hand-written lists,
+        # and they disagreed the moment a flag was added: --no-llms was a real
+        # flag the guard rejected, which broke CI rather than a caller's typo.
+        documented = set(re.findall(r"--[a-z-]+", " ".join(aeo.usage())))
+        self.assertEqual(documented, set(aeo.FLAGS), "usage line and FLAGS differ")
+        with tempfile.TemporaryDirectory() as d:
+            for flag in sorted(aeo.FLAGS):
+                with self.subTest(flag=flag):
+                    self.assertNotEqual(
+                        aeo.main(["check_aeo.py", d, flag]), 2,
+                        "%s is documented but rejected as unknown" % flag)
 
 
 if __name__ == "__main__":
