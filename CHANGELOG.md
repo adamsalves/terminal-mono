@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-08-26
+
 ### Fixed
 - **The terminal traffic lights rendered as slivers on a phone.** `.dot` declared
   a width, a height and `border-radius:50%`, but no `flex-shrink:0` — and every
@@ -878,7 +880,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   switcher, `hreflang` alternates and locale-aware dates.
 - Complete bilingual `exampleSite/` and Hugo Modules support.
 
-[Unreleased]: https://github.com/adamsalves/terminal-mono/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/adamsalves/terminal-mono/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/adamsalves/terminal-mono/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/adamsalves/terminal-mono/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/adamsalves/terminal-mono/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/adamsalves/terminal-mono/compare/v0.4.0...v0.5.0
