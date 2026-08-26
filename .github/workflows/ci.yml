@@ -106,6 +106,38 @@ jobs:
             exit 1
           fi
           echo 'fadeup: transform only, the LCP element stays visible'
+      # A phone-only bug that no desktop build shows and no stylesheet reads
+      # wrong: the traffic lights are fixed-size items in a flex bar whose text
+      # sibling (.card__path, .term__title) overflows on a narrow screen, and
+      # flex hands the deficit out in proportion to each item's base size. The
+      # dots surrender their share of the width, keep their height, and the
+      # circles render as slivers. flex-shrink:0 is what makes the path the one
+      # item that absorbs it — which is what its own ellipsis is there for.
+      - name: Assert the round fixed-size dots cannot be squashed by flex
+        run: |
+          set -eo pipefail
+          for sel in dot lang-dot; do
+            body=$(grep -o "^\.$sel{[^}]*}" assets/css/terminal.css || true)
+            if [ -z "$body" ]; then
+              echo ".$sel: the rule is gone — this check has nothing to look at"
+              exit 1
+            fi
+            case "$body" in
+              *border-radius:50%*) ;;
+              *) echo ".$sel is no longer a circle, so this check no longer means"
+                 echo "anything. Re-aim it at whatever draws the dots now."
+                 echo "$body"; exit 1 ;;
+            esac
+            case "$body" in
+              *flex-shrink:0*) ;;
+              *) echo ".$sel has no flex-shrink:0, so on a narrow viewport flex"
+                 echo "will take width off it and leave the height — the dot"
+                 echo "renders as a sliver. Let the text sibling absorb the"
+                 echo "shrink instead; it has the ellipsis for it."
+                 echo "$body"; exit 1 ;;
+            esac
+          done
+          echo 'dots: .dot and .lang-dot keep their width on a narrow flex bar'
       # The stylesheet says the two .woff2 are what fonts.gstatic.com serves for
       # JetBrains Mono v24, committed unmodified. Without this the claim is a
       # comment, and `immutable` in netlify.toml rests on it: a font swapped in

@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **The terminal traffic lights rendered as slivers on a phone.** `.dot` declared
+  a width, a height and `border-radius:50%`, but no `flex-shrink:0` — and every
+  bar that holds the dots is a flex row with a text sibling that runs long:
+  `.card__bar` on the post and project cards, `.term__bar` in the hero, the 404.
+  A path like `~/blog/testes-em-vue-na-prática-vitest-testing-library.md`
+  overflows the bar on a narrow screen, and flex hands the deficit out in
+  proportion to each item's base size, so the dots surrendered their share of the
+  *width* while keeping their height. On the exampleSite at 500px they measured
+  6.03×11 instead of 11×11, and the longer the post title the flatter they got.
+  `.card__path` already carries the `overflow:hidden` and the ellipsis that make
+  it the item meant to absorb the shrink; now it is the only one that can.
+  `.lang-dot` on the project cards was the same rule with the same omission and
+  got the same fix before a long enough language label found it. CI asserts both
+  now — a desktop build never shows this, and the stylesheet reads correct.
+
 ## [0.7.0] — 2026-08-25
 
 ### Added
