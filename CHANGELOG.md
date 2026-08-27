@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **The bundled `exampleSite` now demonstrates the fused headline** rather than
+  only documenting it. v0.8.0 shipped `fuseSubtitle`, `tagline` and the removable
+  `intro` commented out, so the demo and `images/screenshot.png` kept showing the
+  two-line default and the feature was invisible to anyone deciding whether to
+  use the theme. The switch is on in `[params.hero]`; `tagline` and `intro = ""`
+  sit under each language, which is the only place they can be translated.
+  `images/screenshot.png` and `images/tn.png` are recaptured from it — they were
+  also missing the hero terminal's `ls ~/blog --latest` block, which predates this.
+
+  The demo's subtitle is "Front-End Developer", so its fused `<h1>` wraps to three
+  lines at 46px in a 428px column and breaks after the em dash. That is what
+  fusing a long subtitle looks like and it is shown on purpose rather than hidden
+  behind a shorter stand-in — a heading sized for a name alone is inherited by one
+  that now carries a job title too, and that is worth a look of its own.
+
 ## [0.8.0] — 2026-08-27
 
 ### Added
