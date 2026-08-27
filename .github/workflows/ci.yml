@@ -2380,6 +2380,125 @@ jobs:
               sys.exit('orphan: one post reserves 2 + 1 lines for the listing, not 2 + 3')
           print('orphan hero listing OK: one post, both other commands gone with their sections')
           PY
+      # fuseSubtitle rewrites the headline, and the failure it can produce is a
+      # dangling em dash: a site that fuses without a subtitle to fuse. The switch
+      # is checked in both directions, and the two shapes are checked for holding
+      # exactly one copy of the subtitle between them — the h1 and the role line
+      # render the same value, so a fused headline that kept its role line would
+      # print the subtitle twice with nothing failing.
+      - name: Assert the headline shape follows fuseSubtitle
+        run: |
+          set -e
+          mkfix() {
+            d="/tmp/hl-$1"; rm -rf "$d"; mkdir -p "$d/content"
+            printf 'baseURL = "https://example.com/"\ntitle = "ACME"\ntheme = "terminal-mono"\n[params]\n  title = "ACME"\n  [params.hero]\n%b\n' "$2" > "$d/hugo.toml"
+            # No --quiet: it suppresses the warnings two of these fixtures exist
+            # to assert, which is the same reason the section fixtures build loud.
+            hugo -s "$d" --themesDir "$PWD/.." > "/tmp/hl-$1.log" 2>&1 || true
+          }
+          mkfix split    '    subtitle = "Studio"'
+          mkfix fused    '    subtitle = "Studio"\n    fuseSubtitle = true'
+          mkfix nosub    '    fuseSubtitle = true'
+          mkfix off      '    subtitle = "Studio"\n    fuseSubtitle = false'
+          mkfix badbool  '    subtitle = "Studio"\n    fuseSubtitle = "yes"'
+          mkfix tagline  '    subtitle = "Studio"\n    fuseSubtitle = true\n    tagline = "Lisbon. Open to contract work."'
+          mkfix badtag   '    subtitle = "Studio"\n    tagline = { a = 1 }'
+          mkfix nointro  '    subtitle = "Studio"\n    fuseSubtitle = true\n    intro = ""'
+          mkfix ownintro '    subtitle = "Studio"\n    intro = "portfolio"'
+          mkfix bare     '    location = "Lisbon"'
+          mkfix tagsplit '    subtitle = "Studio"\n    tagline = "Lisbon."'
+          mkfix subtable '    subtitle = { a = 1 }\n    fuseSubtitle = true'
+          python3 - <<'PY'
+          import re, sys
+
+          def page(name):
+              return open(f'/tmp/hl-{name}/public/index.html').read()
+
+          def h1(name):
+              m = re.search(r'<h1[^>]*>(.*?)</h1>', page(name), re.S)
+              if not m:
+                  sys.exit(f'{name}: no <h1> in the output')
+              return m.group(1).strip()
+
+          def has_role(name):
+              return 'hero__role' in page(name)
+
+          def tagline(name):
+              m = re.search(r'<div class="hero__tagline">(.*?)</div>', page(name), re.S)
+              return m.group(1).strip() if m else None
+
+          # The default is unchanged: the name alone, the subtitle on its own line.
+          if h1('split') != 'ACME' or not has_role('split'):
+              sys.exit('split: the default headline must be the name with a role line under it')
+
+          # Fused: one h1 carrying both, and the role line gone rather than repeating it.
+          if h1('fused') != 'ACME &mdash; Studio':
+              sys.exit(f'fused: h1 is {h1("fused")!r}, expected the name and subtitle joined')
+          if has_role('fused'):
+              sys.exit('fused: the role line still renders, so the subtitle prints twice')
+
+          # The one output this switch exists to prevent.
+          if 'mdash' in h1('nosub') or h1('nosub').endswith('—'):
+              sys.exit(f'nosub: fusing with no subtitle left a dangling dash in {h1("nosub")!r}')
+          if h1('nosub') != 'ACME':
+              sys.exit(f'nosub: expected the name alone, got {h1("nosub")!r}')
+
+          # "The name alone" has to mean alone. Falling back to the split shape
+          # used to leave `<div class="hero__role">&gt; </div>` under it — an
+          # orphan chevron, which is no better than the dash above. `bare` pins
+          # the same rule for the shape that never fused at all.
+          for name in ('nosub', 'bare'):
+              if has_role(name):
+                  sys.exit(f'{name}: no subtitle must mean no role line, not an empty one')
+
+          # The subtitle reaches the h1 now, so it is guarded like every other
+          # value that reaches the page as text: a table is dropped and warned
+          # about rather than printed into the heading as map[a:1].
+          if h1('subtable') != 'ACME' or has_role('subtable'):
+              sys.exit(f'subtable: a table subtitle must be dropped, got {h1("subtable")!r}')
+          if 'subtitle must be a single value' not in open('/tmp/hl-subtable.log').read():
+              sys.exit('subtable: a table subtitle must warn')
+
+          # An explicit false and a non-boolean both mean "not fused", and the
+          # non-boolean says so in the log rather than guessing which way it meant.
+          for name in ('off', 'badbool'):
+              if h1(name) != 'ACME' or not has_role(name):
+                  sys.exit(f'{name}: expected the unfused default')
+          log = open('/tmp/hl-badbool.log').read()
+          if 'fuseSubtitle must be true or false' not in log:
+              sys.exit('badbool: a non-boolean fuseSubtitle must warn')
+
+          # tagline renders when set, and is absent rather than empty when not.
+          if tagline('tagline') != 'Lisbon. Open to contract work.':
+              sys.exit(f'tagline: got {tagline("tagline")!r}')
+          if tagline('split') is not None:
+              sys.exit('split: an unset tagline must emit no element at all')
+          # Documented as working with either headline shape, so both are pinned:
+          # in the split shape it stacks under the role line rather than replacing it.
+          if tagline('tagsplit') != 'Lisbon.' or not has_role('tagsplit'):
+              sys.exit('tagsplit: a tagline must render under the role line, not instead of it')
+          if tagline('badtag') is not None:
+              sys.exit('badtag: a table tagline must be dropped, not rendered')
+          if 'tagline must be a single value' not in open('/tmp/hl-badtag.log').read():
+              sys.exit('badtag: a table tagline must warn')
+
+          # intro has three states, and `default` could only tell two of them apart.
+          def intro(name):
+              m = re.search(r'<div class="hero__intro">(.*?)</div>', page(name), re.S)
+              return m.group(1).strip() if m else None
+
+          if intro('split') is None:
+              sys.exit('split: an unset intro must still render the theme string')
+          if intro('nointro') is not None:
+              sys.exit('nointro: intro = "" must emit no element, not an empty one')
+          if intro('ownintro') != '// portfolio':
+              sys.exit(f'ownintro: got {intro("ownintro")!r}')
+
+          print('headline OK: fused, split, no-subtitle (h1 and role line), '
+                'false, non-boolean, mistyped subtitle, '
+                'tagline set/unset/mistyped/split-shape, intro absent/empty/custom')
+          PY
+
       # The hero and the blog cards share partials/post-filename.html precisely so
       # they cannot name the same post differently. Both sides get checked, and
       # both must differ between languages — a name taken from the file on disk

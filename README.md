@@ -100,7 +100,7 @@ terminal-mono/
 | Section | Params |
 |---|---|
 | Brand/nav | `params.title`, `params.navbar.brandName`, `params.navbar.showBlog` (optional), `params.terminalUser`; the nav links **and** the section order come from [`[[menu.main]]`](#the-menu-and-the-sections) (optional) |
-| Hero | `params.hero.intro/subtitle/location/content`, `params.hero.socialLinks.fontAwesomeIcons[]` |
+| Hero | `params.hero.intro/subtitle/location/content`, `params.hero.socialLinks.fontAwesomeIcons[]`, [`fuseSubtitle`/`tagline`](#the-shape-of-the-headline) |
 | Hero — terminal | builds "whoami / cat stack.txt / ls projects/" from `title`, `subtitle`, skills and projects; adds [`ls ~/blog --latest`](#latest-posts-in-the-hero-terminal) when the language has posts — `params.hero.latestPosts` (optional, default 3). Each command follows the section that owns its data, so a command with nothing to print is not typed at all — `whoami` excepted, which always runs: `cat stack.txt` needs `about` to render **and** `skills.enable = true`, `ls projects/` needs `projects` to render (see [the menu and the sections](#the-menu-and-the-sections)) |
 | Projects | `params.projects.items[]` → `title`, `repo`, `language`, `tagline`, `content`, `badges[]`, `featured{name,link}`, `links[]{icon,url,name}`; `params.projects.enable` (optional) |
 | About + skills | `params.about.content` (markdown), `params.about.skills.items[]` gated by `params.about.skills.enable` (required — an absent key counts as off, and silences the hero's `cat stack.txt` with the block); `params.about.enable` (optional — the section, not the skills block) |
@@ -141,6 +141,46 @@ command entirely. Set it under `[params.hero]` for the whole site, or under
 
 Links become clickable as each name finishes typing. Readers with
 `prefers-reduced-motion` get the whole terminal, links included, immediately.
+
+### The shape of the headline
+
+By default the hero prints the name and the subtitle on two lines: an `<h1>`
+holding `params.title`, and a `.hero__role` line under it holding
+`params.hero.subtitle`.
+
+`fuseSubtitle` joins them into one heading instead, and drops the role line:
+
+```toml
+[params.hero]
+  subtitle = "Studio"
+  fuseSubtitle = true      # <h1>Robin Vale — Studio</h1>
+```
+
+That is the pair the `<title>` tag has always carried, with the same em dash, so
+the headline on the page and the one in the browser tab read alike. The role
+line is not kept alongside it — it renders the same subtitle, and two copies of
+one string is not a layout.
+
+Only an explicit `true` turns it on. Anything that is not a boolean warns and is
+ignored, and a site that sets it without a subtitle gets its name on its own
+rather than a heading ending in a dash.
+
+`tagline` adds one short line under the headline, for what a visitor should know
+before scrolling:
+
+```toml
+[params.hero]
+  tagline = "Lisbon, Portugal. Available for contract work."
+```
+
+It works with either headline shape, and is left out of the markup entirely when
+unset. Both keys can be set per language under `[languages.<lang>.params.hero]`.
+
+The `// hi, my name is` line above the headline has three states. Leave `intro`
+out and it renders the theme's translated string; write your own and it renders
+that; write `intro = ""` and the line is not emitted at all — which is usually
+what a fused headline wants, since "hi, my name is" introduces a name and a
+fused headline is a name with a job title after it.
 
 ### The menu and the sections
 

@@ -36,6 +36,55 @@
        section that does not render is the same dead anchor the nav used to
        ship. */ -}}
 {{- $plan := partialCached "sections.html" . site.Language.Lang -}}
+{{- /* The headline's shape, and the line under it.
+
+       fuseSubtitle folds the subtitle into the <h1> — "Name — Subtitle", the
+       same pair head.html has always built for the <title> tag, and with the
+       same em dash so the two spellings of one headline cannot diverge. The
+       separate .hero__role line is what the subtitle would otherwise render as,
+       so it is dropped rather than left to repeat the h1 word for word.
+
+       The subtitle is read once, through the scalar guard, and the three places
+       that want it read that one value: the fused heading, the role line and the
+       terminal's data-role. It only became worth guarding when it reached the
+       <h1> — a table written there printed `map[a:1]` into the element a search
+       result quotes, and typed it into the terminal, without a word anywhere.
+
+       The switch goes through params-bool.html rather than spelling the rule out
+       again: an absent key is off, and anything that is not a boolean warns
+       instead of being guessed at. That is the reading `enable` gets in
+       sections.html, which keeps its own copy only because it predates the
+       partial.
+
+       A site that fuses without a subtitle to fuse gets its name alone — a
+       dangling em dash is the one output this must not produce — so the
+       subtitle is tested before the switch is allowed to stand.
+
+       tagline goes through the scalar guard because it reaches the page as
+       text; a table written here would otherwise abort the build on a param
+       whose whole job is to be one short line. Absent means the div is never
+       emitted, not that an empty one is. */ -}}
+{{- $subtitle := partialCached "params-scalar.html" (dict "value" $hero.subtitle "path" "[params.hero] subtitle") "hero.subtitle" $lang -}}
+{{- $fused := partialCached "params-bool.html" (dict "value" $hero.fuseSubtitle "path" "[params.hero] fuseSubtitle" "default" false) "hero.fuseSubtitle" $lang -}}
+{{- if not $subtitle -}}{{- $fused = false -}}{{- end -}}
+{{- $tagline := partialCached "params-scalar.html" (dict "value" $hero.tagline "path" "[params.hero] tagline") "hero.tagline" $lang -}}
+{{- /* The intro line, and the one way to be rid of it.
+
+       `default` fires on an empty string, so `intro = ""` used to render the
+       theme's "hi, my name is" rather than nothing, and a site had no way to
+       drop the line at all. That became a real mismatch once the headline could
+       fuse: "hi, my name is" reads as an introduction to a name, and the fused
+       h1 is a name *and* a job title, which is not what anyone is called.
+
+       isset separates the two states `default` cannot — absent, which still
+       gets the theme's string, from written-and-empty, which now means no line.
+       Same shape params.hero.latestPosts uses to keep a configured 0 from being
+       read as "unset". */ -}}
+{{- $intro := partial "t.html" "hero_intro" -}}
+{{- if isset $hero "intro" -}}
+  {{- $intro = partialCached "params-scalar.html" (dict "value" $hero.intro "path" "[params.hero] intro") "hero.intro" $lang -}}
+{{- end -}}
+
 {{- $hasProjects := in $plan.order "projects" -}}
 {{- /* The terminal's two remaining commands follow the plan the same way the
        button does. Each one is built into a variable rather than inline, because
@@ -132,7 +181,7 @@
         style="--hero-lines:{{ $lines }}"
         data-user="{{ site.Params.terminalUser | default "adams@portfolio" }}"
         data-name="{{ site.Params.title }}"
-        data-role="{{ $hero.subtitle }}"
+        data-role="{{ $subtitle }}"
         data-loc="{{ $loc }}"
         data-stack="{{ $stackOut }}"
         data-projects="{{ $projectsOut }}"
@@ -141,9 +190,18 @@
 
     {{/* identity */}}
     <div class="hero__id fadeup">
-      <div class="hero__intro">// {{ $hero.intro | default (partial "t.html" "hero_intro") }}</div>
-      <h1>{{ site.Params.title }}</h1>
-      <div class="hero__role">&gt; {{ $hero.subtitle }}</div>
+      {{ with $intro }}<div class="hero__intro">// {{ . }}</div>
+      {{ end -}}
+      {{ if $fused }}<h1>{{ site.Params.title }} &mdash; {{ $subtitle }}</h1>
+      {{ else }}<h1>{{ site.Params.title }}</h1>
+      {{- /* `with`, not an unconditional line: a site with no subtitle at all used
+           to ship `<div class="hero__role">&gt; </div>`, an orphan chevron under
+           the name. Harmless-looking until fuseSubtitle gave that state a second
+           way in — a site that fuses without a subtitle falls back to this
+           shape, and "the name alone" has to mean the name alone. */}}
+      {{ with $subtitle }}<div class="hero__role">&gt; {{ . }}</div>
+      {{ end }}{{ end -}}
+      {{ with $tagline }}<div class="hero__tagline">{{ . }}</div>{{ end }}
       <p class="hero__bio">{{ $hero.content }}</p>
 
       <div class="btn-row">
