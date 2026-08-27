@@ -375,6 +375,9 @@ a{color:inherit}
 .hero__intro{font-size:14px; color:var(--accent-dim); margin-bottom:10px}
 .hero h1{font-size:46px; line-height:1.04; margin:0 0 8px; font-weight:800; letter-spacing:-.035em}
 .hero__role{font-size:18px; color:var(--accent); margin-bottom:18px}
+/* Sits where .hero__role would, and carries the same bottom margin, so the
+   block below it lands in the same place whichever shape the headline took. */
+.hero__tagline{font-size:15px; line-height:1.6; color:var(--muted); margin-bottom:18px}
 .hero__bio{font-size:14.5px; line-height:1.75; color:var(--muted); margin:0 0 26px}
 .btn-row{display:flex; gap:12px; margin:0 0 22px; flex-wrap:wrap}
 .btn{font-size:13.5px; padding:11px 18px; border-radius:8px; text-decoration:none; transition:all .18s; display:inline-block}
@@ -581,6 +584,7 @@ a{color:inherit}
   .hero{grid-template-columns:1fr; gap:30px; padding:44px 0 52px}
   .hero__id{order:-1}
   .hero h1{font-size:36px}
+  .hero__tagline{font-size:14px}
   /* Same formula, this breakpoint's smaller padding (18px top and bottom). */
   .term__body{font-size:12px; padding:18px 16px; min-height:calc(var(--hero-lines,12) * 1.85em + 36px)}
   .grid-2{grid-template-columns:1fr; gap:30px}

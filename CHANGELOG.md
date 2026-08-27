@@ -6,6 +6,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **`[params.hero] fuseSubtitle`**, which joins the name and the subtitle into a
+  single `<h1>` — "Robin Vale — Studio" — and drops the `.hero__role` line under
+  it. That pair is not new: `head.html` has always built it for the `<title>`
+  tag, with the same em dash. What was new was that the page never showed it, so
+  a theme whose browser tab read "Robin Vale — Studio" had a heading that read
+  only "Robin Vale", and the h1 an answer engine or a search result quotes was
+  the half without the role in it. The role line is dropped rather than kept
+  beside the fused heading, because it renders that same subtitle and two copies
+  of one string is not a layout.
+
+  Only an explicit `true` turns it on, the reading `enable` gets in
+  `sections.html`: an absent key is off and a non-boolean warns rather than being
+  guessed at. The switch also tests the subtitle before it fires, because the
+  failure it can otherwise produce is a heading ending in a dash with nothing
+  after it — and an absent subtitle is `nil`, which `printf "%v"` renders as the
+  string `<nil>`, so the obvious guard is the one that lets it through. CI
+  asserts both directions of the switch, the missing-subtitle case, the explicit
+  `false`, and that a fused headline holds exactly one copy of the subtitle.
+
+- **`[params.hero] tagline`**, one short line under the headline for what a
+  visitor should know before scrolling — where you are, what you are open to. It
+  works with either headline shape and emits no element at all when unset, so a
+  site that does not set it gets no empty `<div>` where the line would be. It
+  goes through `params-scalar.html` like every other value that reaches the page
+  as text: a table written here warns and is dropped instead of aborting a build
+  over one short line.
+
+### Changed
+- **`[params.hero] intro` can now be removed**, by writing it as `""`. It was
+  read through `default`, which fires on an empty string, so an empty intro
+  rendered the theme's "hi, my name is" and there was no way to drop the line at
+  all. That was survivable while the h1 held a name; it stopped being survivable
+  next to a fused headline, where "hi, my name is" introduces a name *and* a job
+  title, which is not what anyone is called. `isset` separates the two states
+  `default` cannot — absent still gets the theme's string, written-and-empty now
+  emits no element rather than an empty one. Same shape `latestPosts` uses to
+  keep a configured `0` from reading as unset. An intro written as a table warns
+  and falls back, like every other scalar.
+
 ## [0.7.1] — 2026-08-26
 
 ### Fixed

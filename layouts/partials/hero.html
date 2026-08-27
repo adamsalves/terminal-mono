@@ -36,6 +36,54 @@
        section that does not render is the same dead anchor the nav used to
        ship. */ -}}
 {{- $plan := partialCached "sections.html" . site.Language.Lang -}}
+{{- /* The headline's shape, and the line under it.
+
+       fuseSubtitle folds the subtitle into the <h1> — "Name — Subtitle", the
+       same pair head.html has always built for the <title> tag, and with the
+       same em dash so the two spellings of one headline cannot diverge. The
+       separate .hero__role line is what the subtitle would otherwise render as,
+       so it is dropped rather than left to repeat the h1 word for word.
+
+       An explicit `true` and nothing else, the reading `enable` gets in
+       sections.html: an absent key is off, and anything that is not a boolean
+       is a typo rather than a value to guess at. A site that fuses without a
+       subtitle to fuse gets its name alone — a dangling em dash is the one
+       output this must not produce, so the switch tests both.
+
+       tagline goes through the scalar guard because it reaches the page as
+       text; a table written here would otherwise abort the build on a param
+       whose whole job is to be one short line. Absent means the div is never
+       emitted, not that an empty one is. */ -}}
+{{- $fused := false -}}
+{{- if isset $hero "fusesubtitle" -}}
+  {{- $v := index $hero "fusesubtitle" -}}
+  {{- if eq (printf "%T" $v) "bool" -}}
+    {{- /* `with`, not a comparison: an absent subtitle is nil, and printf casts
+           nil to the string "<nil>", which is not "" and would have let the
+           dangling dash through — the one output this switch exists to prevent. */ -}}
+    {{- if $v -}}{{- with $hero.subtitle -}}{{- $fused = true -}}{{- end -}}{{- end -}}
+  {{- else -}}
+    {{- warnf "terminal-mono: [params.hero] fuseSubtitle must be true or false, got %#v — ignoring it" $v -}}
+  {{- end -}}
+{{- end -}}
+{{- $tagline := partialCached "params-scalar.html" (dict "value" $hero.tagline "path" "[params.hero] tagline") "hero.tagline" $lang -}}
+{{- /* The intro line, and the one way to be rid of it.
+
+       `default` fires on an empty string, so `intro = ""` used to render the
+       theme's "hi, my name is" rather than nothing, and a site had no way to
+       drop the line at all. That became a real mismatch once the headline could
+       fuse: "hi, my name is" reads as an introduction to a name, and the fused
+       h1 is a name *and* a job title, which is not what anyone is called.
+
+       isset separates the two states `default` cannot — absent, which still
+       gets the theme's string, from written-and-empty, which now means no line.
+       Same shape params.hero.latestPosts uses to keep a configured 0 from being
+       read as "unset". */ -}}
+{{- $intro := partial "t.html" "hero_intro" -}}
+{{- if isset $hero "intro" -}}
+  {{- $intro = partialCached "params-scalar.html" (dict "value" $hero.intro "path" "[params.hero] intro") "hero.intro" $lang -}}
+{{- end -}}
+
 {{- $hasProjects := in $plan.order "projects" -}}
 {{- /* The terminal's two remaining commands follow the plan the same way the
        button does. Each one is built into a variable rather than inline, because
@@ -141,9 +189,13 @@
 
     {{/* identity */}}
     <div class="hero__id fadeup">
-      <div class="hero__intro">// {{ $hero.intro | default (partial "t.html" "hero_intro") }}</div>
-      <h1>{{ site.Params.title }}</h1>
+      {{ with $intro }}<div class="hero__intro">// {{ . }}</div>
+      {{ end -}}
+      {{ if $fused }}<h1>{{ site.Params.title }} &mdash; {{ $hero.subtitle }}</h1>
+      {{ else }}<h1>{{ site.Params.title }}</h1>
       <div class="hero__role">&gt; {{ $hero.subtitle }}</div>
+      {{ end -}}
+      {{ with $tagline }}<div class="hero__tagline">{{ . }}</div>{{ end }}
       <p class="hero__bio">{{ $hero.content }}</p>
 
       <div class="btn-row">
