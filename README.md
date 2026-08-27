@@ -170,7 +170,7 @@ before scrolling:
 
 ```toml
 [params.hero]
-  tagline = "Lisbon, Portugal. Available for contract work."
+  tagline = "Berlin, Germany. Available for contract work."
 ```
 
 It works with either headline shape, and is left out of the markup entirely when

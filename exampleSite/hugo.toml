@@ -241,24 +241,23 @@ summaryLength = 30
     # showBlog = true   # force the nav blog link on/off; default is auto (shown when the language has posts)
 
   [params.hero]
-    # The headline's shape. With fuseSubtitle = true the subtitle joins the name
-    # in the <h1> — "Robin Vale — Studio" — which is the pair head.html already
-    # builds for the <title> tag, and the separate role line under it is dropped
-    # rather than left repeating the h1. Leave it out for the two-line default:
-    # the name on its own, the subtitle beneath it. A site that turns this on
-    # without a subtitle gets its name alone, never a trailing dash.
-    # fuseSubtitle = true
+    # The headline's shape. The subtitle joins the name in the <h1> — "Robin Vale
+    # — Front-End Developer" — which is the pair head.html already builds for the
+    # <title> tag, and the separate role line under it is dropped rather than left
+    # repeating the h1. Comment this out for the two-line default: the name on its
+    # own, the subtitle beneath it. A site that turns this on without a subtitle
+    # gets its name alone, never a trailing dash.
+    fuseSubtitle = true
 
-    # One short line under the headline, for whatever a visitor should know
-    # before scrolling — where you are, how to reach you, what you are open to.
-    # Omitted entirely when unset.
-    # tagline = "Lisbon, Portugal. Available for contract work."
-
-    # The "// hi, my name is" line. Leave it out for the theme's translated
-    # string, write your own to replace it, or write "" to drop the line —
-    # which is usually what fuseSubtitle wants, since that heading is a name
-    # with a job title after it rather than just a name.
-    # intro = ""
+    # The two params this pairs with are per-language, so they live down in
+    # [languages.en.params.hero] and [languages.pt.params.hero] rather than here:
+    #
+    #   tagline  one short line under the headline, for whatever a visitor should
+    #            know before scrolling. Omitted entirely when unset.
+    #   intro    the "// hi, my name is" line. Left out it renders the theme's
+    #            translated string; written as "" the line is dropped, which is
+    #            what a fused headline wants — it introduces a name, and this
+    #            heading is a name with a job title after it.
 
     # How many of the newest posts the hero terminal lists, as a fourth command
     # (`ls ~/blog --latest`). Set 0 to drop the command entirely. Nothing to turn
@@ -298,8 +297,12 @@ summaryLength = 30
     description = "Front-End developer based in Berlin — JavaScript, Vue.js and React. I build interfaces that work well and are pleasant to use."
 
     [languages.en.params.hero]
-      intro = "hi, my name is"
+      # Dropped on purpose: the headline below fuses, and "hi, my name is" does
+      # not introduce a name with a job title after it. Remove the line to get
+      # the theme's translated string back.
+      intro = ""
       subtitle = "Front-End Developer"
+      tagline = "Berlin, Germany. Available for contract work."
       location = "Berlin, Germany"
       content = "I build interfaces that work well and are pleasant to use, with JavaScript (ES6+), Vue.js and React. Based in Berlin, Germany."
 
@@ -379,8 +382,9 @@ Right now I'm sharpening my skills in React, GraphQL and testing (TDD) in JavaSc
     description = "Desenvolvedor Front-End de Berlim — JavaScript, Vue.js e React. Construo interfaces que funcionam bem e são agradáveis de usar."
 
     [languages.pt.params.hero]
-      intro = "olá, meu nome é"
+      intro = ""
       subtitle = "Desenvolvedor Front-End"
+      tagline = "Berlim, Alemanha. Disponível para trabalhos por contrato."
       location = "Berlim, Alemanha"
       content = "Construo interfaces que funcionam bem e são agradáveis de usar, com JavaScript (ES6+), Vue.js e React. De Berlim, Alemanha."
 
