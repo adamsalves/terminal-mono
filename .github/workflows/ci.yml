@@ -2405,6 +2405,9 @@ jobs:
           mkfix badtag   '    subtitle = "Studio"\n    tagline = { a = 1 }'
           mkfix nointro  '    subtitle = "Studio"\n    fuseSubtitle = true\n    intro = ""'
           mkfix ownintro '    subtitle = "Studio"\n    intro = "portfolio"'
+          mkfix bare     '    location = "Lisbon"'
+          mkfix tagsplit '    subtitle = "Studio"\n    tagline = "Lisbon."'
+          mkfix subtable '    subtitle = { a = 1 }\n    fuseSubtitle = true'
           python3 - <<'PY'
           import re, sys
 
@@ -2435,11 +2438,26 @@ jobs:
               sys.exit('fused: the role line still renders, so the subtitle prints twice')
 
           # The one output this switch exists to prevent.
-          for name in ('nosub',):
-              if 'mdash' in h1(name) or h1(name).endswith('—'):
-                  sys.exit(f'{name}: fusing with no subtitle left a dangling dash in {h1(name)!r}')
-              if h1(name) != 'ACME':
-                  sys.exit(f'{name}: expected the name alone, got {h1(name)!r}')
+          if 'mdash' in h1('nosub') or h1('nosub').endswith('—'):
+              sys.exit(f'nosub: fusing with no subtitle left a dangling dash in {h1("nosub")!r}')
+          if h1('nosub') != 'ACME':
+              sys.exit(f'nosub: expected the name alone, got {h1("nosub")!r}')
+
+          # "The name alone" has to mean alone. Falling back to the split shape
+          # used to leave `<div class="hero__role">&gt; </div>` under it — an
+          # orphan chevron, which is no better than the dash above. `bare` pins
+          # the same rule for the shape that never fused at all.
+          for name in ('nosub', 'bare'):
+              if has_role(name):
+                  sys.exit(f'{name}: no subtitle must mean no role line, not an empty one')
+
+          # The subtitle reaches the h1 now, so it is guarded like every other
+          # value that reaches the page as text: a table is dropped and warned
+          # about rather than printed into the heading as map[a:1].
+          if h1('subtable') != 'ACME' or has_role('subtable'):
+              sys.exit(f'subtable: a table subtitle must be dropped, got {h1("subtable")!r}')
+          if 'subtitle must be a single value' not in open('/tmp/hl-subtable.log').read():
+              sys.exit('subtable: a table subtitle must warn')
 
           # An explicit false and a non-boolean both mean "not fused", and the
           # non-boolean says so in the log rather than guessing which way it meant.
@@ -2455,6 +2473,10 @@ jobs:
               sys.exit(f'tagline: got {tagline("tagline")!r}')
           if tagline('split') is not None:
               sys.exit('split: an unset tagline must emit no element at all')
+          # Documented as working with either headline shape, so both are pinned:
+          # in the split shape it stacks under the role line rather than replacing it.
+          if tagline('tagsplit') != 'Lisbon.' or not has_role('tagsplit'):
+              sys.exit('tagsplit: a tagline must render under the role line, not instead of it')
           if tagline('badtag') is not None:
               sys.exit('badtag: a table tagline must be dropped, not rendered')
           if 'tagline must be a single value' not in open('/tmp/hl-badtag.log').read():
@@ -2472,8 +2494,9 @@ jobs:
           if intro('ownintro') != '// portfolio':
               sys.exit(f'ownintro: got {intro("ownintro")!r}')
 
-          print('headline OK: fused, split, no-subtitle, false, non-boolean, '
-                'tagline set/unset/mistyped, intro absent/empty/custom')
+          print('headline OK: fused, split, no-subtitle (h1 and role line), '
+                'false, non-boolean, mistyped subtitle, '
+                'tagline set/unset/mistyped/split-shape, intro absent/empty/custom')
           PY
 
       # The hero and the blog cards share partials/post-filename.html precisely so

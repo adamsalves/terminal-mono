@@ -17,14 +17,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   beside the fused heading, because it renders that same subtitle and two copies
   of one string is not a layout.
 
-  Only an explicit `true` turns it on, the reading `enable` gets in
-  `sections.html`: an absent key is off and a non-boolean warns rather than being
-  guessed at. The switch also tests the subtitle before it fires, because the
+  Only an explicit `true` turns it on. It reads through `params-bool.html`, so
+  that is the same rule `enable` follows in `sections.html` rather than a second
+  spelling of it: an absent key is off and a non-boolean warns instead of being
+  guessed at. The switch also tests the subtitle before it stands, because the
   failure it can otherwise produce is a heading ending in a dash with nothing
   after it — and an absent subtitle is `nil`, which `printf "%v"` renders as the
   string `<nil>`, so the obvious guard is the one that lets it through. CI
   asserts both directions of the switch, the missing-subtitle case, the explicit
   `false`, and that a fused headline holds exactly one copy of the subtitle.
+
+  The subtitle itself is guarded now that it reaches the `<h1>`. It is read in
+  three places — the fused heading, the role line and the terminal's `data-role`
+  — from one `params-scalar.html` call, so a table written there is warned about
+  and dropped rather than printing `map[a:1]` into the element a search result
+  quotes and typing it into the terminal besides.
 
 - **`[params.hero] tagline`**, one short line under the headline for what a
   visitor should know before scrolling — where you are, what you are open to. It
@@ -44,7 +51,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `default` cannot — absent still gets the theme's string, written-and-empty now
   emits no element rather than an empty one. Same shape `latestPosts` uses to
   keep a configured `0` from reading as unset. An intro written as a table warns
-  and falls back, like every other scalar.
+  and drops the line, the same way `params-scalar.html` treats every other value
+  that reaches the page as text — it does not fall back to the theme's string,
+  which is what an *absent* key means.
+
+### Fixed
+- **A site with no `[params.hero] subtitle` no longer renders an empty role
+  line.** `.hero__role` was emitted unconditionally, so a site that never set a
+  subtitle shipped `<div class="hero__role">&gt; </div>` — an orphan chevron
+  under the name, with 18px of margin below it holding space for a line that had
+  nothing in it. It was easy to miss while it was one configuration nobody was
+  steered toward; `fuseSubtitle` gave that state a second way in, since a site
+  that fuses without a subtitle falls back to exactly this shape, and "the name
+  alone" has to mean the name alone. CI pins both routes into it.
+
+- **The hero's bio no longer sits flush against a fused headline.** `.hero h1`
+  carries 8px of bottom margin, which was only ever half of a gap the `.hero__role`
+  line finished with 18 more. Fused with no `tagline` under it — the shortest
+  configuration the README documents — nothing was left to finish it, and the bio
+  landed 8px under a 46px display heading. `.hero h1 + .hero__bio` restores the
+  26px of whitespace both other shapes leave there; the adjacent sibling matches
+  only when nothing rendered in between, which is precisely that case.
 
 ## [0.7.1] — 2026-08-26
 

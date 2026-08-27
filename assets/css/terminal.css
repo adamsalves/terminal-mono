@@ -375,10 +375,21 @@ a{color:inherit}
 .hero__intro{font-size:14px; color:var(--accent-dim); margin-bottom:10px}
 .hero h1{font-size:46px; line-height:1.04; margin:0 0 8px; font-weight:800; letter-spacing:-.035em}
 .hero__role{font-size:18px; color:var(--accent); margin-bottom:18px}
-/* Sits where .hero__role would, and carries the same bottom margin, so the
-   block below it lands in the same place whichever shape the headline took. */
+/* Carries the same bottom margin .hero__role does, so a fused headline with a
+   tagline under it puts the block below in the same place the split shape does.
+   In the split shape it stacks under the role line instead — a second line, not
+   a replacement for the first, which is what "one short line under the headline"
+   asks for. */
 .hero__tagline{font-size:15px; line-height:1.6; color:var(--muted); margin-bottom:18px}
 .hero__bio{font-size:14.5px; line-height:1.75; color:var(--muted); margin:0 0 26px}
+/* The shape with no line under the heading at all: fused, and no tagline after
+   it. The h1's 8px was only ever half a gap — the role line finished it with 18
+   more — so on its own it drops the bio straight under a 46px display heading.
+   Both other shapes leave 26px of whitespace there (8 from the h1, 18 from
+   whichever line sits below it), and this restores the same 26. The adjacent
+   sibling is the whole test: it matches only when nothing rendered in between,
+   which is exactly the case that lost the margin. */
+.hero h1 + .hero__bio{margin-top:18px}
 .btn-row{display:flex; gap:12px; margin:0 0 22px; flex-wrap:wrap}
 .btn{font-size:13.5px; padding:11px 18px; border-radius:8px; text-decoration:none; transition:all .18s; display:inline-block}
 .btn--solid{background:var(--accent); color:var(--bg); font-weight:600}
