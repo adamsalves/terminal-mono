@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Changed
+- **AEO is a module now, not 816 lines of this theme.** `llms.txt`,
+  `llms-full.txt`, the markdown twins, `robots.txt`, the sitemap templates and
+  the JSON-LD graph move to [aeo-hugo][aeo], which this theme imports — so a
+  site using the theme gets all of it transitively and installs nothing. The
+  templates were built and battle-tested here; they left because a second theme
+  wanting the same thing had no way to get it without copying them, and because
+  a bug fixed in one copy stays broken in the other. Ten files and the
+  `[outputFormats]` block are gone from the theme; `head.html` calls
+  `aeo-schema.html` and `aeo-indexable.html` instead of its own.
+
+  The published output is unchanged: of the 118 files the `exampleSite` builds,
+  116 are byte-identical to the pre-migration build, minified and not. The two
+  that differ are `llms.txt` and `pt/llms.txt`, by one line each — this theme
+  printed its `[params.hero]` subtitle under the description, and a component
+  cannot know where a theme keeps its hero.
+
+  **Migrating a site:** two config moves, both because the module reads its own
+  namespace rather than this theme's params.
+
+  - `[params] allowIndexing` → `[params.aeo] allowIndexing`. The old spelling
+    still works and warns once.
+  - Publisher identity, which the theme used to read from `[params.hero]
+    subtitle` and `[params.footer.socialNetworks]`, is stated directly:
+
+    ```toml
+    [params.aeo.publisher]
+      type = "Person"
+      sameAs = ["https://github.com/you", "https://linkedin.com/in/you"]
+
+    [languages.en.params.aeo.publisher]
+      jobTitle = "Front-End Developer"
+    ```
+
+  A site that skips the second one keeps its whole JSON-LD graph and loses
+  `Person.jobTitle` and `Person.sameAs`.
+
+  The module warns at build time when it finds itself unwired — another
+  component's `robots.txt` winning the `theme` array, or `[outputs]` missing —
+  but only for a site that wrote a `[params.aeo]` table, so a site not using
+  AEO hears nothing. `ignoreLogs = ['aeo-no-llms']` silences one,
+  `[params.aeo] quiet = true` all of them.
+
+  The theme's README AEO section shrinks from 208 lines to 60: what stays is
+  the `[outputs]` block a site must write itself, the publisher config, and
+  where to read the rest. `scripts/check_aeo.py` stays — it asserts this
+  theme's published output, which is worth checking whoever wrote the
+  templates.
+
+[aeo]: https://github.com/adamsalves/aeo-hugo
+
 - **The bundled `exampleSite` now demonstrates the fused headline** rather than
   only documenting it. v0.8.0 shipped `fuseSubtitle`, `tagline` and the removable
   `intro` commented out, so the demo and `images/screenshot.png` kept showing the

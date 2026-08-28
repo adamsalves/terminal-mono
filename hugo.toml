@@ -36,38 +36,25 @@
     source = "i18n"
     target = "data/terminal_mono_i18n"
 
-# ── AEO output formats ──────────────────────────────────────────────────────
-# llms.txt is an index an answer engine can read in one request instead of
-# crawling: title, description, and every page as a linked list. llms-full.txt
-# is the content behind those links, in markdown, in one file. The per-page
-# Markdown output is the same content addressed the way a citation would want
-# it — /blogs/foo/index.md next to /blogs/foo/.
-#
-# All three are Hugo output formats, which is what keeps this a template change
-# rather than a dependency: the aeo.js package that generates these elsewhere is
-# 6.5MB of npm and has no Hugo integration, and its widget injects third-party
-# JS into a theme whose README promises none.
-#
-# notAlternative on all three: head.html renders a <link rel=alternate> for
-# every AlternativeOutputFormats entry, which is right for the RSS feed and
-# wrong for a plain-text index — it would advertise llms.txt to feed readers.
-[outputFormats]
-  [outputFormats.LLMS]
-    mediaType = "text/plain"
-    baseName = "llms"
-    isPlainText = true
-    notAlternative = true
-  [outputFormats.LLMSFULL]
-    mediaType = "text/plain"
-    baseName = "llms-full"
-    isPlainText = true
-    notAlternative = true
-  [outputFormats.MARKDOWN]
-    mediaType = "text/markdown"
-    baseName = "index"
-    isPlainText = true
-    notAlternative = true
+  # The AEO module. Imported here rather than by the consuming site, so a site
+  # using this theme gets llms.txt, the markdown twins, robots.txt, the sitemap
+  # and the JSON-LD graph transitively and writes no extra config. The LLMS,
+  # LLMSFULL and MARKDOWN output formats come from it too.
+  [[module.imports]]
+    path = "github.com/adamsalves/aeo-hugo"
 
+# ── AEO ─────────────────────────────────────────────────────────────────────
+# Answer Engine Optimization comes from a module rather than from this theme.
+# aeo-hugo publishes llms.txt, llms-full.txt, a markdown twin per page, a
+# robots.txt that names the AI crawlers, a flat multilingual sitemap option and
+# the JSON-LD graph — the same templates this theme carried, extracted so they
+# can be fixed and tested in one place instead of drifting between themes.
+#
+# It is imported here rather than by the consuming site, so a site using this
+# theme gets it transitively and writes no extra config. The [outputs] block
+# below is still the site's own to restate: Hugo does not merge it from a
+# component, and neither this theme nor the module can supply it.
+#
 # HTML and RSS are the defaults for home, and naming any of them replaces the
 # whole list — so the feed has to be restated here or it stops being generated.
 #

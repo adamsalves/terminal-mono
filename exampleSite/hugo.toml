@@ -141,8 +141,8 @@ summaryLength = 30
   #   [params.theme.colors]
   #     accent = "#00ffd5"
   terminalUser = "robin@portfolio"
-  allowIndexing = true       # allow indexing even outside production (a real
-                             # boolean — "true" as a string warns and is ignored)
+                             # allowIndexing moved to [params.aeo] when the AEO
+                             # templates became a module — see below.
   # Both paths are relative to the baseURL, and written without a leading
   # slash on purpose: a rooted "/img/og.png" is rooted at the *host*, so on a
   # site published under a sub-path — this demo is one — it resolves outside
@@ -283,6 +283,20 @@ summaryLength = 30
       github = "https://github.com/robinvale"
       linkedin = "https://linkedin.com/in/robinvale"
 
+# ── AEO ─────────────────────────────────────────────────────────────────────
+# The AEO templates come from the aeo-hugo module, which this theme imports.
+# It reads its configuration from its own [params.aeo] namespace rather than
+# from the theme's params: a component cannot know where a theme keeps its
+# hero or its social links, so the publisher identity this theme used to read
+# from [params.hero] and [params.footer.socialNetworks] is restated here.
+# sameAs is site-wide; jobTitle is translated, so it lives per language below.
+[params.aeo]
+  allowIndexing = true      # allow indexing even outside production (a real
+                            # boolean — "true" as a string warns and is ignored)
+  [params.aeo.publisher]
+    type = "Person"
+    sameAs = ["https://github.com/robinvale", "https://linkedin.com/in/robinvale"]
+
 # ============================================================
 #  English (default) — text is illustrative; swap in your data.
 # ============================================================
@@ -295,6 +309,9 @@ summaryLength = 30
   [languages.en.params]
     title = "Robin Vale"
     description = "Front-End developer based in Berlin — JavaScript, Vue.js and React. I build interfaces that work well and are pleasant to use."
+
+    [languages.en.params.aeo.publisher]
+      jobTitle = "Front-End Developer"   # the schema Person's jobTitle; matches hero.subtitle
 
     [languages.en.params.hero]
       # Dropped on purpose: the headline below fuses, and "hi, my name is" does
@@ -380,6 +397,9 @@ Right now I'm sharpening my skills in React, GraphQL and testing (TDD) in JavaSc
   [languages.pt.params]
     title = "Robin Vale"
     description = "Desenvolvedor Front-End de Berlim — JavaScript, Vue.js e React. Construo interfaces que funcionam bem e são agradáveis de usar."
+
+    [languages.pt.params.aeo.publisher]
+      jobTitle = "Desenvolvedor Front-End"   # the schema Person's jobTitle; matches hero.subtitle
 
     [languages.pt.params.hero]
       intro = ""

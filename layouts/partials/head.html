@@ -47,7 +47,7 @@
 <meta name="author" content="{{ or .Params.author $siteName }}">
 {{ hugo.Generator }}
 <link rel="canonical" href="{{ .Permalink }}">
-{{- if not (partial "indexable.html" .) }}
+{{- if not (partial "aeo-indexable.html" .) }}
 <meta name="robots" content="noindex, nofollow">
 {{- end }}
 <link rel="icon" href="{{ $favicon | relURL }}" type="image/svg+xml">
@@ -157,15 +157,11 @@
 <style>:root:root{ {{ . | safeCSS }} }</style>
 {{- end }}
 
-{{/* JSON-LD — see schema.html. Everything it needs has already been resolved
-     and guarded above, so it is handed the values rather than reading the
-     params a second time. */}}
-{{ partial "schema.html" (dict
-  "page" .
-  "siteName" $siteName
-  "siteDesc" $siteDesc
-  "desc" $desc
-  "image" $img
-  "hero" $hero) }}
+{{/* JSON-LD — from the aeo-hugo module, which reads the page and the params
+     itself rather than being handed them. Publisher identity comes from
+     [params.aeo.publisher]: a component cannot know where a theme keeps its
+     hero or its social links, so the values this theme used to pass in are
+     restated there. See the AEO section of the README. */}}
+{{ partial "aeo-schema.html" . }}
 
 {{ if templates.Exists "partials/extend-head.html" }}{{ partial "extend-head.html" . }}{{ end }}

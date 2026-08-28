@@ -38,51 +38,6 @@ jobs:
       # with the listing completely broken — so the JS gets its own suite.
       - name: Test the terminal script
         run: node scripts/test_terminal_js.js
-      # The README table is what a consumer reads before deciding whether to
-      # switch a group off. It listed seven crawlers the template never names,
-      # which is worse than listing none: turning allowTraining off while
-      # believing AI2Bot was in it is a block that did not happen.
-      - name: Assert the README names the crawlers the template does
-        run: |
-          python3 - <<'PY'
-          import pathlib, re, sys
-
-          tpl = pathlib.Path('layouts/robots.txt').read_text(encoding='utf-8')
-          readme = pathlib.Path('README.md').read_text(encoding='utf-8')
-          bad = []
-
-          def slice_names(var):
-              m = re.search(r'\$%s := slice(.*?)-\}\}' % var, tpl, re.S)
-              if not m:
-                  sys.exit('robots.txt no longer declares $%s' % var)
-              return set(re.findall(r'"([^"]+)"', m.group(1)))
-
-          def row_names(switch):
-              m = re.search(r'^\|\s*`%s`\s*\|(.*?)\|' % switch, readme, re.M)
-              if not m:
-                  sys.exit('README has no table row for `%s`' % switch)
-              return set(re.findall(r'`([^`]+)`', m.group(1)))
-
-          for var, switch in (('answerEngines', 'allowAI'),
-                              ('trainingCrawlers', 'allowTraining')):
-              in_tpl, in_doc = slice_names(var), row_names(switch)
-              for name in sorted(in_doc - in_tpl):
-                  bad.append('%s: README lists %s, which the template does not send'
-                             % (switch, name))
-              for name in sorted(in_tpl - in_doc):
-                  bad.append('%s: the template sends %s, which the README does not list'
-                             % (switch, name))
-
-          if bad:
-              sys.exit('\n'.join('crawlers: ' + b for b in bad))
-          print('crawlers: the README table and layouts/robots.txt name the same bots')
-          PY
-      # The palettes are the one feature whose correctness a build cannot show:
-      # five sets of hex values all render, and all five shipped a --dim
-      # that failed WCAG AA on every ground. The suite above already covers the
-      # checker; this runs it against the stylesheet on its own so the failure
-      # arrives named, with the ratio and the ground that produced it, rather
-      # than as one assertion inside a unittest summary.
       - name: Assert every palette clears WCAG AA
         run: python3 scripts/check_contrast.py
       # The other half of the same PR, and the half a build cannot show: the
@@ -159,9 +114,23 @@ jobs:
       HUGO_VERSION: ${{ matrix.hugo-version }}
       HUGO_ENV: production
       TZ: UTC
+      # The AEO templates come from a module this theme imports. CI resolves it
+      # to a local clone rather than the module proxy: the ref is pinned here,
+      # every fixture in this job inherits the replacement without a line of its
+      # own, and a build never depends on the proxy being reachable.
+      AEO_HUGO_REF: v0.1.0
+      HUGO_MODULE_REPLACEMENTS: "github.com/adamsalves/aeo-hugo -> /tmp/aeo-hugo"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      # The theme imports aeo-hugo, so every build in this job needs it present.
+      # HUGO_MODULE_REPLACEMENTS above points the import at this clone.
+      - name: Fetch the AEO module
+        run: |
+          git clone --depth 1 --branch "$AEO_HUGO_REF" \
+            https://github.com/adamsalves/aeo-hugo.git /tmp/aeo-hugo
+          git -C /tmp/aeo-hugo log --oneline -1
+
       - name: Install Hugo (extended)
         run: |
           wget -O /tmp/hugo.deb "https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_extended_${HUGO_VERSION}_linux-amd64.deb"
@@ -527,7 +496,10 @@ jobs:
             d="/tmp/aeo-$1"; shift
             rm -rf "$d"; mkdir -p "$d/themes"
             ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
-            printf 'baseURL = "https://example.com/t/"\ntitle = "AEO"\ntheme = "terminal-mono"\nenableRobotsTXT = true\n%b' "$1" > "$d/hugo.toml"
+            # This fixture is about robots.txt, so it declares no [outputs] and
+          # says so: the module reports a site that configured [params.aeo] and
+          # publishes none of it, and ignoreLogs is the documented answer.
+          printf 'baseURL = "https://example.com/t/"\ntitle = "AEO"\ntheme = "terminal-mono"\nenableRobotsTXT = true\nignoreLogs = ["aeo-no-llms", "aeo-no-markdown"]\n%b' "$1" > "$d/hugo.toml"
             shift
             HUGO_ENV="${1:-production}" hugo --source "$d" --gc --minify --panicOnWarning > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
             echo "$d/public"
@@ -573,7 +545,12 @@ jobs:
           # names a bot, because a bot that matched its own name never reads the
           # `*` group. This is the assertion that catches the inheritance error.
           d=$(build disallow '[params.aeo]\n  disallow = ["/drafts/"]\n' production)
-          n=$(grep -c '^Disallow: /drafts/$' "$d/robots.txt")
+          # The Disallow line is rooted at the *host*, which is what the standard
+          # means and what the module writes: [params.aeo] disallow is a path from
+          # the site root, so under this fixture's sub-path baseURL it comes out
+          # /t/drafts/. Matching the bare /drafts/ was matching a line that
+          # excluded nothing on exactly this deploy shape.
+          n=$(grep -c '^Disallow: /t/drafts/$' "$d/robots.txt")
           g=$(grep -c '^Allow: /$' "$d/robots.txt")
           if [ "$n" != "$g" ]; then
             echo "aeo: /drafts/ is excluded from $n of $g allowed groups"
@@ -649,22 +626,13 @@ jobs:
         run: |
           set -eo pipefail
           d=/tmp/aeo-sitemap
-          bare=/tmp/aeo-sitemap-bare
-          rm -rf "$d" "$bare"; mkdir -p "$d/themes" "$d/content/blogs" "$bare"
+          rm -rf "$d"; mkdir -p "$d/themes" "$d/content/blogs"
           ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
-          # The same theme minus this template: what Hugo emits on its own.
-          # hugo.toml comes along because it carries the theme's [module.mounts]
-          # — including the second view of i18n at data/terminal_mono_i18n that
-          # i18n-en.html reads, without which this copy aborts on its own warning.
-          for p in layouts assets static i18n archetypes theme.toml hugo.toml go.mod; do
-            [ -e "$GITHUB_WORKSPACE/$p" ] && cp -r "$GITHUB_WORKSPACE/$p" "$bare/"
-          done
-          rm -f "$bare/layouts/sitemapindex.xml"
           # $1 is spliced in where [params.aeo] goes, so a case that wants no
           # param passes an empty string rather than a differently shaped config.
           # %b, not %s: a literal newline here would end the YAML block scalar.
           conf() {
-            printf 'baseURL = "https://example.com/"\ntitle = "S"\ntheme = "terminal-mono"\ndefaultContentLanguage = "en"\ndefaultContentLanguageInSubdir = false\n%b[languages.en]\n  locale = "en-US"\n  weight = 1\n[languages.pt]\n  locale = "pt-BR"\n  weight = 2\n' "$1" > "$d/hugo.toml"
+            printf 'baseURL = "https://example.com/"\ntitle = "S"\ntheme = "terminal-mono"\ndefaultContentLanguage = "en"\ndefaultContentLanguageInSubdir = false\nignoreLogs = ["aeo-no-llms", "aeo-no-markdown", "aeo-no-robots"]\n%b[languages.en]\n  locale = "en-US"\n  weight = 1\n[languages.pt]\n  locale = "pt-BR"\n  weight = 2\n' "$1" > "$d/hugo.toml"
           }
           # Each case starts from an empty public/: the shapes differ in which
           # files they write, and a stale one from the case before is a fixture
@@ -686,15 +654,12 @@ jobs:
             cat "$d/public/sitemap.xml"
             exit 1
           fi
-          cp "$d/public/sitemap.xml" "$d/ours.xml"
-          ln -sfn "$bare" "$d/themes/terminal-mono"
-          build --panicOnWarning
-          if ! cmp -s "$d/ours.xml" "$d/public/sitemap.xml"; then
-            echo 'sitemap: the default branch no longer reproduces Hugo built-in'
-            diff <(cat "$d/ours.xml") <(cat "$d/public/sitemap.xml") || true
-            exit 1
-          fi
-          ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          # The bare-theme diff against Hugo's own sitemapindex used to live
+          # here. It was the right guard while this theme owned the template, and
+          # it became a test of nothing the moment the theme imported the module:
+          # the bare copy carries this hugo.toml, which pulls the template
+          # straight back in. aeo-hugo's CI runs that diff against the partial
+          # that owns it now, on both of its sitemap overrides.
 
           # 2. flatSitemap: one urlset that is exactly the union of the
           #    per-language sitemaps, alternates and lastmod included.
@@ -814,7 +779,7 @@ jobs:
           # 5. One language: Hugo never renders sitemapindex.xml at all, so the
           #    param has nothing to act on and the site still gets its urlset.
           #    The README says the param is inert here; this is what says so too.
-          printf 'baseURL = "https://example.com/"\ntitle = "S"\ntheme = "terminal-mono"\n[params.aeo]\n  flatSitemap = true\n' > "$d/hugo.toml"
+          printf 'baseURL = "https://example.com/"\ntitle = "S"\ntheme = "terminal-mono"\nignoreLogs = ["aeo-no-llms", "aeo-no-markdown", "aeo-no-robots"]\n[params.aeo]\n  flatSitemap = true\n' > "$d/hugo.toml"
           build --panicOnWarning
           if ! grep -q '<urlset' "$d/public/sitemap.xml"; then
             echo 'sitemap: a single-language site lost its urlset'
@@ -831,7 +796,7 @@ jobs:
           rm -rf "$d"; mkdir -p "$d/themes" "$d/static/img"
           ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
           printf 'logo' > "$d/static/img/logo.png"
-          printf 'baseURL = "https://example.com/t/"\ntitle = "ACME"\ntheme = "terminal-mono"\n[params]\n  [params.hero]\n    subtitle = "Studio"\n  [params.schema]\n    type = "Organization"\n    logo = "/img/logo.png"\n' > "$d/hugo.toml"
+          printf 'baseURL = "https://example.com/t/"\ntitle = "ACME"\ntheme = "terminal-mono"\n[params]\n  [params.hero]\n    subtitle = "Studio"\n  [params.aeo]\n    quiet = true\n    [params.aeo.publisher]\n      type = "Organization"\n      logo = "/img/logo.png"\n' > "$d/hugo.toml"
           HUGO_ENV=production hugo --source "$d" --gc --minify --panicOnWarning > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
           python3 - <<'PY'
           import json, pathlib, re, sys
@@ -844,7 +809,7 @@ jobs:
           bad = []
           org = by_type.get('Organization')
           if org is None:
-              bad.append('[params.schema] type = "Organization" did not change the type: %s'
+              bad.append('[params.aeo.publisher] type = "Organization" did not change the type: %s'
                          % list(by_type))
           else:
               # The leading slash is the part that used to break. absURL reads a
@@ -1939,8 +1904,12 @@ jobs:
           # rather than one template. [params.aeo] gets the same assertion in
           # "Assert the AEO switches", where the fixture can set enableRobotsTXT
           # — without it robots.txt never renders and the param is never read.
-          run_case schema      bare  '  schema = "x"' \
-                   '[params.schema] must be a table'
+          # No schema case here any more. The publisher belongs to the aeo-hugo
+          # module now, its guard warns under that module's own prefix, and this
+          # helper counts `terminal-mono:` lines — so the case could only report
+          # a warning this theme does not emit. aeo-hugo's CI asserts
+          # `[params.aeo.publisher] must be a table` against the partial that
+          # owns it.
           # Same story as navbar: head.html reads it on every page, so a scalar
           # here is the whole site rather than one template.
           run_case fonts       bare  '  fonts = "x"' \
