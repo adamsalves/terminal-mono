@@ -539,212 +539,64 @@ Put it back without giving up the rest of the palette:
 
 ## AEO (Answer Engine Optimization)
 
-Answer engines — ChatGPT search, Claude, Perplexity, Gemini, DuckAssist — read a site
-the way a crawler does and then *cite* it back to a reader. Two things decide whether
-they can: whether `robots.txt` lets them in, and whether the page says what it is in
-structured data. The theme now ships both, in Hugo templates, with no build dependency:
-`hugo` is still the only requirement.
+The AEO half of this theme is a module: [aeo-hugo][aeo]. It publishes
+`llms.txt` and `llms-full.txt`, a markdown twin beside every page, a
+`robots.txt` that names the answer engines and the training crawlers as two
+groups with a switch each, a flat multilingual sitemap option, and the
+`Person`/`WebSite`/`BlogPosting`/`BreadcrumbList` JSON-LD graph.
 
-### `robots.txt`
+Those templates were built and battle-tested here, and they left because a
+second theme wanting the same thing had no way to get it without copying 800
+lines. **You do not have to install it** — this theme imports it, so a site
+using this theme gets all of it transitively.
 
-**Your site must set `enableRobotsTXT = true`.** It is a root config key, and Hugo does
-not merge a theme's config for it — so the theme can ship the template and cannot switch
-it on. Without the flag, Hugo publishes no `robots.txt` at all and none of this applies.
+[aeo]: https://github.com/adamsalves/aeo-hugo
+
+Two things stay the site's own, and neither can be supplied by a theme or a
+module.
+
+**`[outputs]`**, because Hugo does not merge it from a component:
 
 ```toml
-# hugo.toml
 enableRobotsTXT = true
-```
 
-What comes out: a `Sitemap:` line pointing at the real sitemap (Hugo's built-in
-`robots.txt` has none), a `User-agent: *` group, and two named groups of AI crawlers.
-
-```toml
-[params.aeo]
-  allowAI = true        # answer engines — fetch, answer, cite. Default true.
-  allowTraining = true  # dataset crawlers — no citation, no referral. Default true.
-  disallow = ["/drafts/"]
-```
-
-The split matters, and one switch would have hidden it:
-
-| | what it covers | what you get from it |
-|---|---|---|
-| `allowAI` | `OAI-SearchBot`, `ChatGPT-User`, `Claude-SearchBot`, `Claude-User`, `PerplexityBot`, `Perplexity-User`, `DuckAssistBot`, `MistralAI-User`, `Amazonbot`, `Applebot` | citations and referral traffic |
-| `allowTraining` | `GPTBot`, `ClaudeBot`, `Google-Extended`, `Applebot-Extended`, `meta-externalagent`, `CCBot`, `Bytespider`, `cohere-ai` | nothing back |
-
-These two lists are the ones in `layouts/robots.txt`, and CI asserts they stay that way:
-a name that is here and not there is a crawler you believe you blocked and did not.
-
-Both default to `true`, which is what the bare `User-agent: *` already meant — a theme
-upgrade should not quietly change what your site publishes. `allowTraining = false` is
-the common choice for people who want to be cited but not harvested.
-
-`Applebot` and `Applebot-Extended` sit on opposite sides on purpose: the first crawls
-for Siri and Spotlight, the second is Apple's opt-out token for training.
-`Google-Extended` is a token too — no crawler fetches under that name.
-
-`disallow` paths are repeated into **every** allowed group. robots.txt groups do not
-inherit: a bot matched by its own `User-agent` line never reads the `*` group, so a path
-excluded only there would stay open to exactly the crawlers you named.
-
-A build that is not for indexing — not production, and no `allowIndexing` — publishes
-`Disallow: /` instead, matching the `noindex` meta the theme already puts on every page.
-A deploy preview that says one thing in the `<head>` and the opposite in `robots.txt` is
-worse than either alone; both read the same condition from one partial so they cannot
-drift. `allowIndexing` has to be a real boolean: `allowIndexing = "false"` is a string,
-and the theme warns and keeps the build out of the index rather than reading it as the
-`true` a bare `if` would.
-
-Want something else entirely? Drop your own `layouts/robots.txt` in the project; Hugo
-prefers it over the theme's.
-
-### Sitemap
-
-On a site with more than one language, Hugo makes `/sitemap.xml` a `<sitemapindex>`:
-a list pointing at `/en/sitemap.xml` and `/pt/sitemap.xml`, which hold the real URLs.
-That is the standard shape and Google follows it.
-
-Plenty of smaller crawlers do not. They read `/sitemap.xml`, take every `<loc>` in it
-and fetch each one *as a page* — so what they audit is two XML files with no `<title>`,
-no JSON-LD and no prose, and your actual pages are never opened. `npx aeo.js check` is
-one of these; on a bilingual site it reports three pages crawled, two of which are
-sitemaps.
-
-```toml
-[params.aeo]
-  flatSitemap = true
-```
-
-publishes one flat `<urlset>` at the root instead, listing every page of every language
-with its `hreflang` alternates intact. The per-language sitemaps are still built and
-still served at their own URLs — nothing that already has one in an index starts
-404ing. The 50,000-URL ceiling that makes an index necessary is not one a site built on
-this theme is going to reach.
-
-It is **off by default**, for the same reason `allowTraining` is on: `/sitemap.xml` is a
-published contract with every crawler that already knows your site, and a theme upgrade
-should not quietly change it. On a single-language site the param does nothing at all —
-Hugo never builds an index there, so `/sitemap.xml` is already a flat `<urlset>`.
-
-Like the other switches, it has to be a real boolean; `flatSitemap = "true"` is a string,
-and the theme warns and leaves the sitemap alone.
-
-**Write it at the root, in `[params.aeo]`.** Unlike the section and hero params, this one
-is not per language: `/sitemap.xml` is a single file for the whole site, so it can only be
-flat or not, and a `[languages.pt.params.aeo] flatSitemap` is a statement the file cannot
-honour. It is read from the first language by weight, and any other language that
-disagrees is named in a build warning rather than ignored quietly.
-
-### Structured data (JSON-LD)
-
-Emitted on every page, with no configuration, as one `<script>` per node:
-
-| type | where | notable fields |
-|---|---|---|
-| `Person` or `Organization` | every page | `name`, `url`, `sameAs`, `jobTitle` / `logo` |
-| `WebSite` | every page | `name`, `url`, `inLanguage`, `publisher` |
-| `BlogPosting` | posts | `headline`, `datePublished`, `dateModified`, `author`, `image`, `keywords`, `wordCount`, `inLanguage` |
-| `WebPage` | other single pages | `name`, `url`, `description` |
-| `BreadcrumbList` | everything but the home page | built from the real content tree |
-
-They are linked rather than repeated: the publisher gets an `@id`, and the post's
-`author` and `publisher` point at it. A consumer merges every `ld+json` block on a page
-into one graph before resolving anything, so separate `<script>` tags and a single
-`@graph` are equivalent to one — and separate tags are additionally readable by the
-simpler tools, several of which look at `["@type"]` without descending into `@graph`.
-
-One thing is configurable, because it is a statement about the site rather than a lever:
-
-```toml
-[params.schema]
-  type = "Organization"   # default "Person"
-  logo = "img/logo.png"   # required by Google before it will use an Organization
-```
-
-Leave it alone for a portfolio. Set `Organization` only if the site genuinely is one —
-an agency, a studio, a company blog. The two carry different fields: `jobTitle` (from
-`[params.hero] subtitle`) belongs to a person and `logo` to an organization, and each is
-dropped for the other type.
-
-### `llms.txt`, `llms-full.txt` and the markdown twins
-
-An answer engine reading a site does two things badly: it crawls page by page to
-find out what is there, and it strips a page's chrome back off to get at the words.
-These three files answer both in one request each.
-
-| file | what it is |
-|---|---|
-| `/llms.txt` | the index — the site's title and summary, then every post as a linked list with a line of context. [Spec](https://llmstxt.org). |
-| `/llms-full.txt` | the content behind those links, in markdown, in one file, each post preceded by its canonical URL |
-| `…/index.md` | each post's markdown twin, published next to its HTML |
-
-**Your site must declare the outputs.** The theme defines the three formats in its
-own config, but Hugo's default config merge does not bring a theme's `[outputs]` into
-the site's — so this block is yours to write, the same way `enableRobotsTXT` is:
-
-```toml
-# hugo.toml
 [outputs]
   home = ["HTML", "RSS", "LLMS", "LLMSFULL"]
   page = ["HTML", "MARKDOWN"]
 ```
 
-Naming any format for a page kind **replaces the whole default list for that kind**.
-That is why `RSS` is restated above: leave it out and the feed stops being generated.
-Leave the block out entirely and nothing breaks — you simply get no `llms.txt` and no
-markdown twins.
+**Publisher identity**, in the module's own namespace. The module cannot know
+where a theme keeps its hero or its social links, so the `Person` behind the
+JSON-LD is stated directly. `jobTitle` is translated, so it goes per language:
 
-**One exception, and it is the one worth knowing:** a site that sets `_merge = "deep"`
-*does* inherit the theme's `[outputs]`, which is what that setting is for. Such a site
-publishes `llms.txt`, `llms-full.txt` and a twin per post without asking for them — and
-if it declares its own `[outputs]` too, the theme's `page = ["HTML", "MARKDOWN"]` merges
-in and every page gets a twin. If that is not what you want, name the kinds you do want
-explicitly, or drop the deep merge.
+```toml
+[params.aeo]
+  allowAI = true            # answer engines: fetch a page, answer, cite it
+  allowTraining = true      # dataset crawlers: no citation, no referral
+  disallow = ["/drafts/"]   # excluded from robots.txt, the sitemap, and every AEO file
+  postSections = ["blogs"]  # which sections are posts
+  allowIndexing = false     # open a non-production build to crawlers
+  [params.aeo.publisher]
+    type = "Person"
+    sameAs = ["https://github.com/you", "https://linkedin.com/in/you"]
 
-Everything is per language. A bilingual site publishes `/llms.txt` and `/pt/llms.txt`,
-each listing its own posts and naming its own language, and each post's twin sits
-next to the translation it belongs to. `llms.txt` links to the twins rather than to
-the HTML, which is what the spec asks for — the canonical URL is the first line
-inside each twin, so a citation that follows the link still knows where to point.
+[languages.en.params.aeo.publisher]
+  jobTitle = "Front-End Developer"
+```
 
-The content in both is `.RawContent`: the markdown as written, headings and code
-fences intact. `.Plain` — the rendered HTML with the tags taken out — is what is
-left after throwing that structure away, which is the opposite of the point.
+The module's README documents every key, the crawlers each switch names, the
+preview gate, and `scripts/check_aeo.py` — which asserts a built site's AEO
+output and is worth running in your own CI.
 
 ### Checking it
 
-```bash
-npx aeo.js check https://your-site.example/
-```
+The module warns at build time when it finds itself unwired — `aeo-no-robots`
+when another component's `robots.txt` won the `theme` array, `aeo-no-llms` and
+`aeo-no-markdown` when `[outputs]` is missing. It only speaks to a site that
+wrote a `[params.aeo]` table, so a site not using AEO hears nothing. Silence
+one with Hugo's own `ignoreLogs = ['aeo-no-llms']`, or all of them with
+`[params.aeo] quiet = true`.
 
-Four things about that checker are worth knowing before you read its score, all
-verified against v0.0.16:
-
-- **It scans the origin, not your URL's path.** It fetches `robots.txt`, `llms.txt` and
-  `sitemap.xml` from `https://host/`, so a site published under a sub-path — a GitHub
-  Pages project site, for one — is scored on files it cannot see.
-- **Its regexes require quoted attributes**, and `hugo --minify` emits valid unquoted
-  HTML5. It therefore reports no meta description, no canonical and no JSON-LD on a
-  minified Hugo site regardless of what is on the page — 12 of its 100 points. If you
-  want it scored correctly, keep the quotes:
-  ```toml
-  [minify]
-    [minify.tdewolff.html]
-      keepQuotes = true
-  ```
-  Measured on the exampleSite home page: 11,762 → 12,198 bytes raw, and 3,489 →
-  3,518 gzipped. The quotes are 436 bytes of the most compressible text there is,
-  so what actually goes over the wire is **29 bytes**.
-- **It does not follow a `<sitemapindex>`**, so on a multilingual site it audits your
-  sub-sitemaps as if they were pages. Another 12 points, and `flatSitemap = true`
-  above is the answer.
-- **`Organization name` and `Organization logo` are 8 of its 20 schema points**, and a
-  personal site cannot earn them without claiming to be a company. That is a limit of
-  the rubric, not of your site.
-
-With both switches set, a bilingual portfolio that blocks training crawlers scores
-around 77 — the 11 points under `AI Access` are `allowTraining = false`, priced.
 ## Fonts
 
 JetBrains Mono ships **with the theme**, in `static/fonts/`, and is declared by an
