@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-08-28
+
 ### Fixed
 - **v0.9.0 only built if you installed the theme as a Hugo module.** It made
   the AEO module its own `[[module.imports]]`, which reads as tidy and is
@@ -1064,7 +1066,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   switcher, `hreflang` alternates and locale-aware dates.
 - Complete bilingual `exampleSite/` and Hugo Modules support.
 
-[Unreleased]: https://github.com/adamsalves/terminal-mono/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/adamsalves/terminal-mono/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/adamsalves/terminal-mono/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/adamsalves/terminal-mono/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/adamsalves/terminal-mono/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/adamsalves/terminal-mono/compare/v0.7.0...v0.7.1
