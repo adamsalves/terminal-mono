@@ -4,6 +4,3 @@
 module github.com/adamsalves/terminal-mono
 
 go 1.21
-
-// The AEO templates come from a module rather than from this theme.
-require github.com/adamsalves/aeo-hugo v0.1.0

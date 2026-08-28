@@ -35,14 +35,6 @@
   [[module.mounts]]
     source = "i18n"
     target = "data/terminal_mono_i18n"
-
-  # The AEO module. Imported here rather than by the consuming site, so a site
-  # using this theme gets llms.txt, the markdown twins, robots.txt, the sitemap
-  # and the JSON-LD graph transitively and writes no extra config. The LLMS,
-  # LLMSFULL and MARKDOWN output formats come from it too.
-  [[module.imports]]
-    path = "github.com/adamsalves/aeo-hugo"
-
 # ── AEO ─────────────────────────────────────────────────────────────────────
 # Answer Engine Optimization comes from a module rather than from this theme.
 # aeo-hugo publishes llms.txt, llms-full.txt, a markdown twin per page, a

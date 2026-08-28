@@ -29,6 +29,9 @@ jobs:
       HUGO_VERSION: 0.163.3
       HUGO_ENV: production
       TZ: UTC
+      # The AEO templates come from a module the site declares. Keep in sync
+      # with ci.yml and netlify.toml.
+      AEO_HUGO_REF: v0.1.0
     steps:
       - name: Install Hugo (extended)
         run: |
@@ -41,10 +44,18 @@ jobs:
       - name: Setup Pages
         id: pages
         uses: actions/configure-pages@v5
-      - name: Inject theme into exampleSite
+      # Both components. The theme does not declare the module — Hugo only
+      # resolves a module import when the project is module-based, and this
+      # build injects the theme as a directory — so exampleSite/hugo.toml names
+      # both in `theme` and both have to be here. v0.9.0 shipped without this
+      # and the deploy stopped building.
+      - name: Inject theme and AEO module into exampleSite
         run: |
           mkdir -p exampleSite/themes
           ln -sfn "$GITHUB_WORKSPACE" exampleSite/themes/terminal-mono
+          git clone --depth 1 --branch "$AEO_HUGO_REF" \
+            https://github.com/adamsalves/aeo-hugo.git exampleSite/themes/aeo-hugo
+          git -C exampleSite/themes/aeo-hugo log --oneline -1
       - name: Build exampleSite
         run: hugo --source exampleSite --gc --minify --baseURL "${{ steps.pages.outputs.base_url }}/"
       # The structural half of the AEO check, run on the bytes that are about to

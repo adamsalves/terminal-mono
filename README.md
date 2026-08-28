@@ -27,9 +27,17 @@ Requires **Hugo extended ≥ 0.158**.
 The theme ships with a ready-to-run example site:
 
 ```bash
+git clone --branch v0.1.0 https://github.com/adamsalves/aeo-hugo.git ../aeo-hugo
 cd exampleSite
 hugo server --themesDir ../..
 ```
+
+The clone is the AEO module, which the example site lists in `theme` alongside
+this one — see [Why two components](#why-two-components). It goes *beside* the
+checkout rather than inside it: `--themesDir ../..` tells Hugo the repository's
+parent directory is a themes directory, and both components are looked up there
+by name. It is a one-off — once `../aeo-hugo` exists, the `hugo server` line
+alone is enough.
 
 Open <http://localhost:1313>. The `exampleSite/hugo.toml` documents **every** available `param`.
 
@@ -47,22 +55,48 @@ hugo mod get github.com/adamsalves/terminal-mono
 [module]
   [[module.imports]]
     path = "github.com/adamsalves/terminal-mono"
+  # The AEO templates. See the AEO section below for what they publish.
+  [[module.imports]]
+    path = "github.com/adamsalves/aeo-hugo"
 ```
 
 ### Via Git submodule
 
 ```bash
 git submodule add https://github.com/adamsalves/terminal-mono themes/terminal-mono
+git submodule add https://github.com/adamsalves/aeo-hugo themes/aeo-hugo
 ```
 
 ```toml
 # hugo.toml
-theme = "terminal-mono"
+theme = ["aeo-hugo", "terminal-mono"]
 ```
 
 ### Manual copy
 
-Copy the folder into `themes/terminal-mono/` and set `theme = "terminal-mono"` in your config.
+Copy both folders into `themes/` and set `theme = ["aeo-hugo", "terminal-mono"]`
+in your config.
+
+### Why two components
+
+The AEO half of this theme lives in [aeo-hugo][aeo] — see [AEO](#aeo-answer-engine-optimization)
+for what that is and why. **Your site names it, not this theme.** A theme can
+declare a module import of its own, and for a site installing this theme *as a
+module* that would be tidier — but Hugo only resolves such an import when the
+consuming project is module-based. With the theme sitting in `themes/` as a
+directory, which is what a submodule, a manual copy and `--themesDir` all
+produce, Hugo looks for the import on disk under
+`themes/github.com/adamsalves/aeo-hugo` and fails the build outright when it is
+not there. v0.9.0 shipped that way and broke every installation path but one.
+
+The order matters: `aeo-hugo` goes **first**. The theme array is precedence
+order, left to right, and the module ships a `robots.txt` and sitemap templates
+this theme no longer carries — anything to their left wins. aeo-hugo also warns
+at build time if it finds itself outvoted; see [Checking it](#checking-it).
+
+`theme` and `[[module.imports]]` are the same list to Hugo, so a site mixing
+the two — the theme as a module, the AEO component as a submodule — works as
+long as `aeo-hugo` comes first.
 
 ## Structure
 
@@ -547,12 +581,14 @@ groups with a switch each, a flat multilingual sitemap option, and the
 
 Those templates were built and battle-tested here, and they left because a
 second theme wanting the same thing had no way to get it without copying 800
-lines. **You do not have to install it** — this theme imports it, so a site
-using this theme gets all of it transitively.
+lines. **Your site installs it alongside this theme** — one more
+`[[module.imports]]`, or one more submodule. See
+[Why two components](#why-two-components) for the reason it is not this
+theme's import to make.
 
 [aeo]: https://github.com/adamsalves/aeo-hugo
 
-Two things stay the site's own, and neither can be supplied by a theme or a
+Three things stay the site's own, and none can be supplied by a theme or a
 module.
 
 **`[outputs]`**, because Hugo does not merge it from a component:

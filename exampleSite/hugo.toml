@@ -1,7 +1,10 @@
 baseURL = "https://example.com/"
 defaultContentLanguage = "en"
 defaultContentLanguageInSubdir = false   # en at /, pt at /pt/
-theme = "terminal-mono"
+# Both components, in precedence order. aeo-hugo carries the AEO templates and
+# the LLMS/LLMSFULL/MARKDOWN output formats; the theme does not declare it, so
+# every site names it here — see the AEO section of the README.
+theme = ["aeo-hugo", "terminal-mono"]
 enableRobotsTXT = true
 enableEmoji = true
 summaryLength = 30
