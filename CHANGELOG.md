@@ -35,9 +35,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   theme = ["aeo-hugo", "terminal-mono"]
   ```
 
-  Sites already on v0.9.0 by Hugo Modules keep building either way; adding the
-  import explicitly costs nothing and is what the README now documents. Sites
-  on any other installation path were not building at all.
+  **This is a breaking change for a site that installed v0.9.0 as a Hugo
+  module**, which is why it is a minor and not a patch. That site had the AEO
+  module transitively and never named it; upgrading without adding the import
+  fails at config time, with a message that does not say why:
+
+  ```
+  ERROR failed to create config from modules config:
+  unknown output format "llmsfull" for kind "home"
+  ```
+
+  The `LLMS`, `LLMSFULL` and `MARKDOWN` output formats come from the module, so
+  the `[outputs]` block is left naming formats nothing defines. Add the second
+  import and it builds. Sites on any other installation path were not building
+  at all on v0.9.0, so there is nothing there to break.
 
   All five paths are now built in CI or by hand before release: modules,
   submodule, manual copy, `--themesDir`, and the two demo deploys.
