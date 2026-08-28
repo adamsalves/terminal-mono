@@ -114,12 +114,11 @@ jobs:
       HUGO_VERSION: ${{ matrix.hugo-version }}
       HUGO_ENV: production
       TZ: UTC
-      # The AEO templates come from a module this theme imports. CI resolves it
-      # to a local clone rather than the module proxy: the ref is pinned here,
-      # every fixture in this job inherits the replacement without a line of its
-      # own, and a build never depends on the proxy being reachable.
+      # The AEO templates come from a module the *site* declares, so every
+      # fixture lists it in `theme` and links it in beside this theme. Pinned to
+      # a clone rather than the module proxy, so a build never depends on the
+      # proxy being reachable.
       AEO_HUGO_REF: v0.1.0
-      HUGO_MODULE_REPLACEMENTS: "github.com/adamsalves/aeo-hugo -> /tmp/aeo-hugo"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -139,6 +138,7 @@ jobs:
         run: |
           mkdir -p exampleSite/themes
           ln -sfn "$GITHUB_WORKSPACE" exampleSite/themes/terminal-mono
+          ln -sfn /tmp/aeo-hugo exampleSite/themes/aeo-hugo
       # Build under a sub-path: the demo is served from one, and under a root
       # baseURL the nav/404 sub-path handling renders identically whether or
       # not it is correct (see 33a5de8), leaving that path unexercised.
@@ -219,7 +219,8 @@ jobs:
           d=/tmp/aeo-nooutputs
           rm -rf "$d"; mkdir -p "$d/themes" "$d/content/blogs"
           ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
-          printf 'baseURL = "https://example.com/t/"\ntitle = "No outputs"\ntheme = "terminal-mono"\nenableRobotsTXT = true\n' > "$d/hugo.toml"
+          ln -sfn /tmp/aeo-hugo "$d/themes/aeo-hugo"
+          printf 'baseURL = "https://example.com/t/"\ntitle = "No outputs"\ntheme = ["aeo-hugo", "terminal-mono"]\nenableRobotsTXT = true\n' > "$d/hugo.toml"
           printf -- '---\ntitle: "P"\ndate: 2026-01-01\n---\nbody\n' > "$d/content/blogs/p.md"
           HUGO_ENV=production hugo --source "$d" --gc --minify --panicOnWarning > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
           for f in llms.txt llms-full.txt blogs/p/index.md; do
@@ -249,7 +250,8 @@ jobs:
             d="/tmp/aeo-merge-$1"; shift
             rm -rf "$d"; mkdir -p "$d/themes" "$d/content/blogs"
             ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
-            printf 'baseURL = "https://example.com/t/"\ntitle = "Merge"\ntheme = "terminal-mono"\n_merge = "deep"\n%b' "$1" > "$d/hugo.toml"
+            ln -sfn /tmp/aeo-hugo "$d/themes/aeo-hugo"
+            printf 'baseURL = "https://example.com/t/"\ntitle = "Merge"\ntheme = ["aeo-hugo", "terminal-mono"]\n_merge = "deep"\n%b' "$1" > "$d/hugo.toml"
             printf -- '---\ntitle: "P"\ndate: 2026-01-01\n---\nbody\n' > "$d/content/blogs/p.md"
             HUGO_ENV=production hugo --source "$d" --gc --minify --panicOnWarning > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
             echo "$d/public"
@@ -281,10 +283,11 @@ jobs:
           d=/tmp/aeo-gate
           rm -rf "$d"; mkdir -p "$d/themes" "$d/content/blogs"
           ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          ln -sfn /tmp/aeo-hugo "$d/themes/aeo-hugo"
           cat > "$d/hugo.toml" <<'TOML'
           baseURL = "https://example.com/t/"
           title = "Gate"
-          theme = "terminal-mono"
+          theme = ["aeo-hugo", "terminal-mono"]
           enableRobotsTXT = true
           [params.aeo]
             disallow = ["/blogs/hidden/"]
@@ -326,7 +329,8 @@ jobs:
             d="/tmp/idx-$1"
             rm -rf "$d"; mkdir -p "$d/themes" "$d/content/blogs"
             ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
-            printf 'baseURL = "https://example.com/t/"\ntitle = "Idx"\ntheme = "terminal-mono"\nenableRobotsTXT = true\n%b' "$2" > "$d/hugo.toml"
+            ln -sfn /tmp/aeo-hugo "$d/themes/aeo-hugo"
+            printf 'baseURL = "https://example.com/t/"\ntitle = "Idx"\ntheme = ["aeo-hugo", "terminal-mono"]\nenableRobotsTXT = true\n%b' "$2" > "$d/hugo.toml"
             printf -- '---\ntitle: "P"\ndate: 2026-01-01\n---\nbody\n' > "$d/content/blogs/p.md"
             hugo --source "$d" --gc --minify --environment development > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
             echo "$d"
@@ -381,10 +385,11 @@ jobs:
           d=/tmp/aeo-title
           rm -rf "$d"; mkdir -p "$d/themes" "$d/content/blogs"
           ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          ln -sfn /tmp/aeo-hugo "$d/themes/aeo-hugo"
           cat > "$d/hugo.toml" <<'TOML'
           baseURL = "https://example.com/t/"
           title = "Titles"
-          theme = "terminal-mono"
+          theme = ["aeo-hugo", "terminal-mono"]
           enableRobotsTXT = true
           [outputs]
             home = ["HTML", "RSS", "LLMS", "LLMSFULL"]
@@ -496,10 +501,11 @@ jobs:
             d="/tmp/aeo-$1"; shift
             rm -rf "$d"; mkdir -p "$d/themes"
             ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+            ln -sfn /tmp/aeo-hugo "$d/themes/aeo-hugo"
             # This fixture is about robots.txt, so it declares no [outputs] and
           # says so: the module reports a site that configured [params.aeo] and
           # publishes none of it, and ignoreLogs is the documented answer.
-          printf 'baseURL = "https://example.com/t/"\ntitle = "AEO"\ntheme = "terminal-mono"\nenableRobotsTXT = true\nignoreLogs = ["aeo-no-llms", "aeo-no-markdown"]\n%b' "$1" > "$d/hugo.toml"
+          printf 'baseURL = "https://example.com/t/"\ntitle = "AEO"\ntheme = ["aeo-hugo", "terminal-mono"]\nenableRobotsTXT = true\nignoreLogs = ["aeo-no-llms", "aeo-no-markdown"]\n%b' "$1" > "$d/hugo.toml"
             shift
             HUGO_ENV="${1:-production}" hugo --source "$d" --gc --minify --panicOnWarning > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
             echo "$d/public"
@@ -572,7 +578,8 @@ jobs:
           d=/tmp/aeo-noflag
           rm -rf "$d"; mkdir -p "$d/themes"
           ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
-          printf 'baseURL = "https://example.com/t/"\ntitle = "AEO"\ntheme = "terminal-mono"\n' > "$d/hugo.toml"
+          ln -sfn /tmp/aeo-hugo "$d/themes/aeo-hugo"
+          printf 'baseURL = "https://example.com/t/"\ntitle = "AEO"\ntheme = ["aeo-hugo", "terminal-mono"]\n' > "$d/hugo.toml"
           HUGO_ENV=production hugo --source "$d" --gc --minify --panicOnWarning > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
           if [ -f "$d/public/robots.txt" ]; then
             echo 'aeo: robots.txt was published without enableRobotsTXT'
@@ -583,7 +590,8 @@ jobs:
           d=/tmp/aeo-scalar
           rm -rf "$d"; mkdir -p "$d/themes"
           ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
-          printf 'baseURL = "https://example.com/t/"\ntitle = "AEO"\ntheme = "terminal-mono"\nenableRobotsTXT = true\n[params]\n  aeo = "x"\n' > "$d/hugo.toml"
+          ln -sfn /tmp/aeo-hugo "$d/themes/aeo-hugo"
+          printf 'baseURL = "https://example.com/t/"\ntitle = "AEO"\ntheme = ["aeo-hugo", "terminal-mono"]\nenableRobotsTXT = true\n[params]\n  aeo = "x"\n' > "$d/hugo.toml"
           HUGO_ENV=production hugo --source "$d" --gc --minify > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
           if ! grep -qF '[params.aeo] must be a table' "$d.log"; then
             echo 'aeo: a scalar [params.aeo] did not warn'
@@ -598,7 +606,7 @@ jobs:
           # And a boolean written as a string, which is the failure params-bool
           # exists for: "false" is a non-empty string, so an `if` reads it true
           # and the switch turns the thing on.
-          printf 'baseURL = "https://example.com/t/"\ntitle = "AEO"\ntheme = "terminal-mono"\nenableRobotsTXT = true\n[params.aeo]\n  allowTraining = "false"\n' > "$d/hugo.toml"
+          printf 'baseURL = "https://example.com/t/"\ntitle = "AEO"\ntheme = ["aeo-hugo", "terminal-mono"]\nenableRobotsTXT = true\n[params.aeo]\n  allowTraining = "false"\n' > "$d/hugo.toml"
           HUGO_ENV=production hugo --source "$d" --gc --minify > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
           if ! grep -qF '[params.aeo] allowTraining must be true or false' "$d.log"; then
             echo 'aeo: allowTraining = "false" did not warn'
@@ -628,11 +636,12 @@ jobs:
           d=/tmp/aeo-sitemap
           rm -rf "$d"; mkdir -p "$d/themes" "$d/content/blogs"
           ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          ln -sfn /tmp/aeo-hugo "$d/themes/aeo-hugo"
           # $1 is spliced in where [params.aeo] goes, so a case that wants no
           # param passes an empty string rather than a differently shaped config.
           # %b, not %s: a literal newline here would end the YAML block scalar.
           conf() {
-            printf 'baseURL = "https://example.com/"\ntitle = "S"\ntheme = "terminal-mono"\ndefaultContentLanguage = "en"\ndefaultContentLanguageInSubdir = false\nignoreLogs = ["aeo-no-llms", "aeo-no-markdown", "aeo-no-robots"]\n%b[languages.en]\n  locale = "en-US"\n  weight = 1\n[languages.pt]\n  locale = "pt-BR"\n  weight = 2\n' "$1" > "$d/hugo.toml"
+            printf 'baseURL = "https://example.com/"\ntitle = "S"\ntheme = ["aeo-hugo", "terminal-mono"]\ndefaultContentLanguage = "en"\ndefaultContentLanguageInSubdir = false\nignoreLogs = ["aeo-no-llms", "aeo-no-markdown", "aeo-no-robots"]\n%b[languages.en]\n  locale = "en-US"\n  weight = 1\n[languages.pt]\n  locale = "pt-BR"\n  weight = 2\n' "$1" > "$d/hugo.toml"
           }
           # Each case starts from an empty public/: the shapes differ in which
           # files they write, and a stale one from the case before is a fixture
@@ -779,7 +788,7 @@ jobs:
           # 5. One language: Hugo never renders sitemapindex.xml at all, so the
           #    param has nothing to act on and the site still gets its urlset.
           #    The README says the param is inert here; this is what says so too.
-          printf 'baseURL = "https://example.com/"\ntitle = "S"\ntheme = "terminal-mono"\nignoreLogs = ["aeo-no-llms", "aeo-no-markdown", "aeo-no-robots"]\n[params.aeo]\n  flatSitemap = true\n' > "$d/hugo.toml"
+          printf 'baseURL = "https://example.com/"\ntitle = "S"\ntheme = ["aeo-hugo", "terminal-mono"]\nignoreLogs = ["aeo-no-llms", "aeo-no-markdown", "aeo-no-robots"]\n[params.aeo]\n  flatSitemap = true\n' > "$d/hugo.toml"
           build --panicOnWarning
           if ! grep -q '<urlset' "$d/public/sitemap.xml"; then
             echo 'sitemap: a single-language site lost its urlset'
@@ -795,8 +804,9 @@ jobs:
           d=/tmp/aeo-org
           rm -rf "$d"; mkdir -p "$d/themes" "$d/static/img"
           ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          ln -sfn /tmp/aeo-hugo "$d/themes/aeo-hugo"
           printf 'logo' > "$d/static/img/logo.png"
-          printf 'baseURL = "https://example.com/t/"\ntitle = "ACME"\ntheme = "terminal-mono"\n[params]\n  [params.hero]\n    subtitle = "Studio"\n  [params.aeo]\n    quiet = true\n    [params.aeo.publisher]\n      type = "Organization"\n      logo = "/img/logo.png"\n' > "$d/hugo.toml"
+          printf 'baseURL = "https://example.com/t/"\ntitle = "ACME"\ntheme = ["aeo-hugo", "terminal-mono"]\n[params]\n  [params.hero]\n    subtitle = "Studio"\n  [params.aeo]\n    quiet = true\n    [params.aeo.publisher]\n      type = "Organization"\n      logo = "/img/logo.png"\n' > "$d/hugo.toml"
           HUGO_ENV=production hugo --source "$d" --gc --minify --panicOnWarning > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
           python3 - <<'PY'
           import json, pathlib, re, sys
@@ -921,7 +931,8 @@ jobs:
           d=/tmp/fonts-ext
           rm -rf "$d"; mkdir -p "$d/themes"
           ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
-          printf 'baseURL = "https://example.com/t/"\ntitle = "Ext"\ntheme = "terminal-mono"\n[params.fonts]\n  latinExt = true\n' > "$d/hugo.toml"
+          ln -sfn /tmp/aeo-hugo "$d/themes/aeo-hugo"
+          printf 'baseURL = "https://example.com/t/"\ntitle = "Ext"\ntheme = ["aeo-hugo", "terminal-mono"]\n[params.fonts]\n  latinExt = true\n' > "$d/hugo.toml"
           hugo --source "$d" --gc --minify --panicOnWarning > "$d.log" 2>&1 || { cat "$d.log"; exit 1; }
           n=$(grep -o '<link[^>]*rel=preload[^>]*as=font[^>]*>' "$d/public/index.html" | wc -l)
           if [ "$n" != 2 ]; then
@@ -943,7 +954,8 @@ jobs:
         run: |
           mkdir -p /tmp/bare/themes
           ln -sfn "$GITHUB_WORKSPACE" /tmp/bare/themes/terminal-mono
-          printf 'baseURL = "https://example.com/terminal-mono/"\ntitle = "Bare Site"\ntheme = "terminal-mono"\n' > /tmp/bare/hugo.toml
+          ln -sfn /tmp/aeo-hugo /tmp/bare/themes/aeo-hugo
+          printf 'baseURL = "https://example.com/terminal-mono/"\ntitle = "Bare Site"\ntheme = ["aeo-hugo", "terminal-mono"]\n' > /tmp/bare/hugo.toml
           hugo --source /tmp/bare --gc --minify --panicOnWarning
           # A param the site never set must not reach the page as Go's printf
           # garbage. --panicOnWarning cannot catch this: nothing warns, the
@@ -974,13 +986,14 @@ jobs:
           d=/tmp/subpath
           rm -rf "$d"; mkdir -p "$d/themes" "$d/static/img" "$d/content/blogs"
           ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          ln -sfn /tmp/aeo-hugo "$d/themes/aeo-hugo"
           printf 'x' > "$d/static/my-favicon.svg"
           printf 'x' > "$d/static/img/og.png"
           printf 'x' > "$d/static/img/banner.png"
           # $1 is the leading slash, or nothing — the two spellings a person
           # writes. $2 is where the build lands.
           build() {
-            printf 'baseURL = "https://example.com/t/"\ntitle = "Sub"\ntheme = "terminal-mono"\n[params]\n  favicon = "%smy-favicon.svg"\n  ogImage = "%simg/og.png"\n' "$1" "$1" > "$d/hugo.toml"
+            printf 'baseURL = "https://example.com/t/"\ntitle = "Sub"\ntheme = ["aeo-hugo", "terminal-mono"]\n[params]\n  favicon = "%smy-favicon.svg"\n  ogImage = "%simg/og.png"\n' "$1" "$1" > "$d/hugo.toml"
             printf -- '---\ntitle: "P"\ndate: 2026-01-01\nimage: "%simg/banner.png"\n---\nbody\n' "$1" > "$d/content/blogs/p.md"
             hugo --source "$d" --gc --minify --panicOnWarning --destination "$2"
           }
@@ -993,7 +1006,7 @@ jobs:
           # so a trim that ran unguarded would hand them /cdn.example/x and they
           # would rewrite it onto this site. $1 is the host prefix.
           offsite() {
-            printf 'baseURL = "https://example.com/t/"\ntitle = "Sub"\ntheme = "terminal-mono"\n[params]\n  favicon = "%sfav.svg"\n  ogImage = "%sog.png"\n' "$1" "$1" > "$d/hugo.toml"
+            printf 'baseURL = "https://example.com/t/"\ntitle = "Sub"\ntheme = ["aeo-hugo", "terminal-mono"]\n[params]\n  favicon = "%sfav.svg"\n  ogImage = "%sog.png"\n' "$1" "$1" > "$d/hugo.toml"
             printf -- '---\ntitle: "P"\ndate: 2026-01-01\nimage: "%sbanner.png"\n---\nbody\n' "$1" > "$d/content/blogs/p.md"
             hugo --source "$d" --gc --minify --panicOnWarning --destination "$2"
           }
@@ -1112,10 +1125,11 @@ jobs:
           d=/tmp/untranslated
           rm -rf "$d"; mkdir -p "$d/themes" "$d/content/blogs"
           ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          ln -sfn /tmp/aeo-hugo "$d/themes/aeo-hugo"
           cat > "$d/hugo.toml" <<'TOML'
           baseURL = "https://example.com/"
           title = "Sin Traducir"
-          theme = "terminal-mono"
+          theme = ["aeo-hugo", "terminal-mono"]
           defaultContentLanguage = "es"
           [languages.es]
             locale = "es-ES"
@@ -1166,10 +1180,11 @@ jobs:
           d=/tmp/second-language
           rm -rf "$d"; mkdir -p "$d/themes"
           ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          ln -sfn /tmp/aeo-hugo "$d/themes/aeo-hugo"
           cat > "$d/hugo.toml" <<'TOML'
           baseURL = "https://example.com/"
           title = "Two Languages"
-          theme = "terminal-mono"
+          theme = ["aeo-hugo", "terminal-mono"]
           defaultContentLanguage = "en"
           [languages.en]
             weight = 1
@@ -1204,10 +1219,11 @@ jobs:
           d=/tmp/site-english
           rm -rf "$d"; mkdir -p "$d/themes" "$d/i18n"
           ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          ln -sfn /tmp/aeo-hugo "$d/themes/aeo-hugo"
           cat > "$d/hugo.toml" <<'TOML'
           baseURL = "https://example.com/"
           title = "Own English"
-          theme = "terminal-mono"
+          theme = ["aeo-hugo", "terminal-mono"]
           defaultContentLanguage = "es"
           [languages.es]
             weight = 1
@@ -1259,10 +1275,11 @@ jobs:
           d=/tmp/partial-i18n
           rm -rf "$d"; mkdir -p "$d/themes" "$d/i18n"
           ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          ln -sfn /tmp/aeo-hugo "$d/themes/aeo-hugo"
           cat > "$d/hugo.toml" <<'TOML'
           baseURL = "https://example.com/"
           title = "Parcial"
-          theme = "terminal-mono"
+          theme = ["aeo-hugo", "terminal-mono"]
           defaultContentLanguage = "es"
           [languages.es]
             weight = 1
@@ -1298,10 +1315,11 @@ jobs:
           d=/tmp/strict-i18n
           rm -rf "$d"; mkdir -p "$d/themes"
           ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          ln -sfn /tmp/aeo-hugo "$d/themes/aeo-hugo"
           cat > "$d/hugo.toml" <<'TOML'
           baseURL = "https://example.com/"
           title = "Strict"
-          theme = "terminal-mono"
+          theme = ["aeo-hugo", "terminal-mono"]
           [[menu.main]]
             identifier = "portfolio"
             url = "#projects"
@@ -1343,8 +1361,9 @@ jobs:
           d=/tmp/palette
           rm -rf "$d"; mkdir -p "$d/themes"
           ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          ln -sfn /tmp/aeo-hugo "$d/themes/aeo-hugo"
           for p in lime amber cyberpunk ice mono; do
-            printf 'baseURL = "https://example.com/t/"\ntitle = "Palette"\ntheme = "terminal-mono"\n[params.theme]\n  palette = "%s"\n' "$p" > "$d/hugo.toml"
+            printf 'baseURL = "https://example.com/t/"\ntitle = "Palette"\ntheme = ["aeo-hugo", "terminal-mono"]\n[params.theme]\n  palette = "%s"\n' "$p" > "$d/hugo.toml"
             if ! hugo --source "$d" --gc --minify --panicOnWarning --destination "$d/out-$p" > "$d.log" 2>&1; then
               cat "$d.log"
               echo "$p: a palette this theme ships failed to build"
@@ -1415,10 +1434,11 @@ jobs:
           d=/tmp/override
           rm -rf "$d"; mkdir -p "$d/themes"
           ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
+          ln -sfn /tmp/aeo-hugo "$d/themes/aeo-hugo"
           cat > "$d/hugo.toml" <<'TOML'
           baseURL = "https://example.com/t/"
           title = "Override"
-          theme = "terminal-mono"
+          theme = ["aeo-hugo", "terminal-mono"]
           [params.theme]
             palette = "cyberpunk"
             [params.theme.colors]
@@ -1514,7 +1534,8 @@ jobs:
           mk() {
             mkdir -p "/tmp/$1/themes"
             ln -sfn "$GITHUB_WORKSPACE" "/tmp/$1/themes/terminal-mono"
-            printf 'baseURL = "https://example.com/terminal-mono/"\ntitle = "Fixture %s"\ntheme = "terminal-mono"\n' "$1" > "/tmp/$1/hugo.toml"
+            ln -sfn /tmp/aeo-hugo "/tmp/$1/themes/aeo-hugo"
+            printf 'baseURL = "https://example.com/terminal-mono/"\ntitle = "Fixture %s"\ntheme = ["aeo-hugo", "terminal-mono"]\n' "$1" > "/tmp/$1/hugo.toml"
           }
 
           # params, no menu — the v0.3.0 layout, which must not move
@@ -1624,7 +1645,8 @@ jobs:
           for f in $WARNS; do
             mkdir -p "/tmp/$f/themes"
             ln -sfn "$GITHUB_WORKSPACE" "/tmp/$f/themes/terminal-mono"
-            printf 'baseURL = "https://example.com/terminal-mono/"\ntitle = "Fixture %s"\ntheme = "terminal-mono"\n' "$f" > "/tmp/$f/hugo.toml"
+            ln -sfn /tmp/aeo-hugo "/tmp/$f/themes/aeo-hugo"
+            printf 'baseURL = "https://example.com/terminal-mono/"\ntitle = "Fixture %s"\ntheme = ["aeo-hugo", "terminal-mono"]\n' "$f" > "/tmp/$f/hugo.toml"
             cat /tmp/params.toml >> "/tmp/$f/hugo.toml"
           done
           printf '  [params.sections]\n    order = ["about", "bogus"]\n' >> /tmp/invalid-unknown/hugo.toml
@@ -1799,7 +1821,8 @@ jobs:
             d="/tmp/mistyped-$name"
             rm -rf "$d"; mkdir -p "$d/themes"
             ln -sfn "$GITHUB_WORKSPACE" "$d/themes/terminal-mono"
-            printf 'baseURL = "https://example.com/terminal-mono/"\ntitle = "Fixture %s"\ntheme = "terminal-mono"\n' "$name" > "$d/hugo.toml"
+            ln -sfn /tmp/aeo-hugo "$d/themes/aeo-hugo"
+            printf 'baseURL = "https://example.com/terminal-mono/"\ntitle = "Fixture %s"\ntheme = ["aeo-hugo", "terminal-mono"]\n' "$name" > "$d/hugo.toml"
             cat /tmp/mistyped-base.toml >> "$d/hugo.toml"
             case "$pos" in
               bare)  sed -i "0,/^\[params\]$/s//[params]\n$frag/" "$d/hugo.toml" ;;
@@ -2358,9 +2381,13 @@ jobs:
       - name: Assert the headline shape follows fuseSubtitle
         run: |
           set -e
+          # This one reaches the theme through --themesDir rather than a themes/
+          # symlink, so the AEO module has to be a sibling of the checkout for
+          # the same lookup to find it.
+          ln -sfn /tmp/aeo-hugo "$PWD/../aeo-hugo"
           mkfix() {
             d="/tmp/hl-$1"; rm -rf "$d"; mkdir -p "$d/content"
-            printf 'baseURL = "https://example.com/"\ntitle = "ACME"\ntheme = "terminal-mono"\n[params]\n  title = "ACME"\n  [params.hero]\n%b\n' "$2" > "$d/hugo.toml"
+            printf 'baseURL = "https://example.com/"\ntitle = "ACME"\ntheme = ["aeo-hugo", "terminal-mono"]\n[params]\n  title = "ACME"\n  [params.hero]\n%b\n' "$2" > "$d/hugo.toml"
             # No --quiet: it suppresses the warnings two of these fixtures exist
             # to assert, which is the same reason the section fixtures build loud.
             hugo -s "$d" --themesDir "$PWD/.." > "/tmp/hl-$1.log" 2>&1 || true
@@ -2507,7 +2534,8 @@ jobs:
           set -e
           mkdir -p /tmp/weighted/themes /tmp/weighted/content/blogs
           ln -sfn "$GITHUB_WORKSPACE" /tmp/weighted/themes/terminal-mono
-          printf 'baseURL = "https://example.com/"\ntitle = "Weighted"\ntheme = "terminal-mono"\n' > /tmp/weighted/hugo.toml
+          ln -sfn /tmp/aeo-hugo /tmp/weighted/themes/aeo-hugo
+          printf 'baseURL = "https://example.com/"\ntitle = "Weighted"\ntheme = ["aeo-hugo", "terminal-mono"]\n' > /tmp/weighted/hugo.toml
           printf -- '---\ntitle: "Old"\ndate: 2020-01-01\nweight: 1\n---\nx\n'      > /tmp/weighted/content/blogs/old.md
           printf -- '---\ntitle: "Mid"\ndate: 2023-06-06\nweight: 5\n---\nx\n'      > /tmp/weighted/content/blogs/mid.md
           printf -- '---\ntitle: "Newest"\ndate: 2026-08-01\nweight: 9\n---\nx\n'   > /tmp/weighted/content/blogs/newest.md

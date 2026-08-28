@@ -1,13 +1,17 @@
 # Demo deploy of the exampleSite on Netlify.
 # The symlink injects the theme (repo root) into exampleSite/themes/terminal-mono,
-# so it works regardless of the cloned directory name.
+# so it works regardless of the cloned directory name. The AEO templates come
+# from a module the site declares — the theme does not, because Hugo only
+# resolves a module import when the project is module-based and this build
+# injects the theme as a directory — so it is cloned in beside it.
 [build]
   publish = "exampleSite/public"
-  command = "mkdir -p exampleSite/themes && ln -sfn \"$PWD\" exampleSite/themes/terminal-mono && hugo --source exampleSite --gc --minify -b \"$DEPLOY_PRIME_URL\""
+  command = "mkdir -p exampleSite/themes && ln -sfn \"$PWD\" exampleSite/themes/terminal-mono && git clone --depth 1 --branch \"$AEO_HUGO_REF\" https://github.com/adamsalves/aeo-hugo.git exampleSite/themes/aeo-hugo && hugo --source exampleSite --gc --minify -b \"$DEPLOY_PRIME_URL\""
 
 [build.environment]
   # Keep in sync with .github/workflows/ci.yml and pages.yml.
   HUGO_VERSION = "0.163.3"
+  AEO_HUGO_REF = "v0.1.0"
   HUGO_ENV = "production"
 
 [context.production.environment]

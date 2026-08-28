@@ -6,6 +6,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- **v0.9.0 only built if you installed the theme as a Hugo module.** It made
+  the AEO module its own `[[module.imports]]`, which reads as tidy and is
+  wrong: Hugo resolves a module import only when the *consuming project* is
+  module-based. With the theme sitting in `themes/` as a directory — which is
+  what a git submodule, a manual copy, `--themesDir` and both demo deploys all
+  produce — Hugo looked for the import on disk under
+  `themes/github.com/adamsalves/aeo-hugo` and failed the build outright. The
+  GitHub Pages and Netlify demos stopped deploying, and so did
+  `hugo server --themesDir ../..`.
+
+  **The site declares the module now, not the theme.** One more
+  `[[module.imports]]`, or one more submodule, and every installation path
+  works the same way:
+
+  ```toml
+  # Hugo Modules
+  [module]
+    [[module.imports]]
+      path = "github.com/adamsalves/terminal-mono"
+    [[module.imports]]
+      path = "github.com/adamsalves/aeo-hugo"
+  ```
+
+  ```toml
+  # submodule or manual copy — aeo-hugo first, the array is precedence order
+  theme = ["aeo-hugo", "terminal-mono"]
+  ```
+
+  **This is a breaking change for a site that installed v0.9.0 as a Hugo
+  module**, which is why it is a minor and not a patch. That site had the AEO
+  module transitively and never named it; upgrading without adding the import
+  fails at config time, with a message that does not say why:
+
+  ```
+  ERROR failed to create config from modules config:
+  unknown output format "llmsfull" for kind "home"
+  ```
+
+  The `LLMS`, `LLMSFULL` and `MARKDOWN` output formats come from the module, so
+  the `[outputs]` block is left naming formats nothing defines. Add the second
+  import and it builds. Sites on any other installation path were not building
+  at all on v0.9.0, so there is nothing there to break.
+
+  All five paths are now built in CI or by hand before release: modules,
+  submodule, manual copy, `--themesDir`, and the two demo deploys.
+
 ## [0.9.0] — 2026-08-28
 
 ### Changed
