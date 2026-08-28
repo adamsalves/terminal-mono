@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-08-28
+
 ### Changed
 - **AEO is a module now, not 816 lines of this theme.** `llms.txt`,
   `llms-full.txt`, the markdown twins, `robots.txt`, the sitemap templates and
@@ -1015,7 +1017,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   switcher, `hreflang` alternates and locale-aware dates.
 - Complete bilingual `exampleSite/` and Hugo Modules support.
 
-[Unreleased]: https://github.com/adamsalves/terminal-mono/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/adamsalves/terminal-mono/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/adamsalves/terminal-mono/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/adamsalves/terminal-mono/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/adamsalves/terminal-mono/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/adamsalves/terminal-mono/compare/v0.6.0...v0.7.0
